@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS identites (
+    id      SERIAL PRIMARY KEY,
+    nom     TEXT NOT NULL UNIQUE,
+    cree_le TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE transcripts
+    ADD COLUMN IF NOT EXISTS identite_id INTEGER REFERENCES identites(id) ON DELETE SET NULL;
+
+ALTER TABLE transcripts
+    ALTER COLUMN titre DROP NOT NULL;

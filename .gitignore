@@ -1,0 +1,21 @@
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# Frontend
+ui/node_modules/
+ui/dist/
+
+# IDE
+.idea/
+
+# Claude Code
+.claude/settings.local.json

@@ -1,0 +1,51 @@
+[project]
+name = "rula"
+version = "0.1.0"
+description = "Research User Listening & Analysis — POC"
+requires-python = ">=3.13.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "psycopg2-binary",
+    "pydantic",
+    "python-multipart",
+    "httpx",
+    "slowapi",
+    "starlette",
+]
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "types-psycopg2",
+]
+
+[tool.mypy]
+files = ["src/**/*.py", "tests/**/*.py"]
+explicit_package_bases = true
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=100"
+
+[tool.coverage.run]
+omit = [
+    "src/infra/connexion_base_de_donnees.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.uv]
+exclude-newer = "1 week"

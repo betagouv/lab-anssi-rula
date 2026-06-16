@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd C:\\Users\\pleroy\\PycharmProjects\\RULA && uv run ruff check src/ tests/ --quiet 2>&1 && echo '[ruff] OK'"
+          }
+        ]
+      }
+    ]
+  }
+}
