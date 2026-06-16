@@ -31,22 +31,30 @@
       <nav class="fr-nav" aria-label="Menu principal" role="navigation">
         <ul class="fr-nav__list">
           <li class="fr-nav__item">
-            <button
+            <a
+              href="#transcripts"
               class="fr-nav__link"
               aria-current={domaine === 'transcripts' ? 'page' : undefined}
-              onclick={() => onnaviquer({ nom: 'transcripts:liste' })}
+              onclick={(e) => {
+                e.preventDefault();
+                onnaviquer({ nom: 'transcripts:liste' });
+              }}
             >
               Transcripts
-            </button>
+            </a>
           </li>
           <li class="fr-nav__item">
-            <button
+            <a
+              href="#analyses"
               class="fr-nav__link"
               aria-current={domaine === 'analyses' ? 'page' : undefined}
-              onclick={() => onnaviquer({ nom: 'analyses' })}
+              onclick={(e) => {
+                e.preventDefault();
+                onnaviquer({ nom: 'analyses' });
+              }}
             >
               Analyses
-            </button>
+            </a>
           </li>
         </ul>
       </nav>

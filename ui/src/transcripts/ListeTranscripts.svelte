@@ -28,10 +28,9 @@
 <div class="fr-container fr-py-4w">
   <div class="en-tete">
     <h1 class="fr-h2">Transcripts</h1>
-    <dsfr-button
-      label="Ajouter un transcript"
-      onclick={() => onnaviquer({ nom: 'transcripts:ajout' })}
-    ></dsfr-button>
+    <button class="fr-btn" type="button" onclick={() => onnaviquer({ nom: 'transcripts:ajout' })}>
+      Ajouter un transcript
+    </button>
   </div>
 
   {#if chargement}

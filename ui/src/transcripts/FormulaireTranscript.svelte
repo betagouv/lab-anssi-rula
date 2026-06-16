@@ -42,6 +42,8 @@
       .then(([ids, prods]) => {
         identites = versOptions(ids, '+ Nouvelle identité');
         produits = versOptions(prods, '+ Nouveau projet');
+        if (!identiteId) identiteId = NOUVEAU;
+        if (!produitId) produitId = NOUVEAU;
       });
   });
 
@@ -192,10 +194,9 @@
         type="button"
         onclick={() => onnaviquer({ nom: 'transcripts:liste' })}
       ></dsfr-button>
-      <dsfr-button
-        label={id ? 'Enregistrer les modifications' : 'Enregistrer le transcript'}
-        type="submit"
-      ></dsfr-button>
+      <button class="fr-btn" type="submit">
+        {id ? 'Enregistrer les modifications' : 'Enregistrer le transcript'}
+      </button>
     </div>
   </form>
 </div>
