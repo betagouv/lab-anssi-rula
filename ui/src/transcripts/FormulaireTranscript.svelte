@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import type { Vue } from '../types';
+  import {
+    obtenirTranscript,
+    ajouterTranscript,
+    modifierTranscript,
+  } from '../api/transcripts';
 
   const NOUVEAU = '__nouveau__';
 
   type Option = { value: string; label: string };
   type Ressource = { id: number; nom: string };
+
+  let { id = undefined, onnaviquer }: { id?: number; onnaviquer: (v: Vue) => void } =
+    $props();
 
   let identites = $state<Option[]>([]);
   let produits = $state<Option[]>([]);
@@ -14,7 +22,6 @@
   let nouveauProduit = $state('');
   let dateEntretien = $state('');
   let contenu = $state('');
-  let succes = $state(false);
   let erreur = $state('');
 
   function versOptions(ressources: Ressource[], libelle: string): Option[] {
@@ -24,16 +31,29 @@
     ];
   }
 
-  async function chargerOptions() {
-    const [ri, rp] = await Promise.all([
-      fetch('/api/identites'),
-      fetch('/api/produits'),
-    ]);
-    identites = versOptions(await ri.json(), '+ Nouvelle identité');
-    produits = versOptions(await rp.json(), '+ Nouveau projet');
-  }
+  $effect(() => {
+    Promise.all([fetch('/api/identites'), fetch('/api/produits')])
+      .then(([ri, rp]) =>
+        Promise.all([
+          ri.json() as Promise<Ressource[]>,
+          rp.json() as Promise<Ressource[]>,
+        ])
+      )
+      .then(([ids, prods]) => {
+        identites = versOptions(ids, '+ Nouvelle identité');
+        produits = versOptions(prods, '+ Nouveau projet');
+      });
+  });
 
-  onMount(chargerOptions);
+  $effect(() => {
+    if (!id) return;
+    obtenirTranscript(id).then((t) => {
+      identiteId = String(t.identite_id);
+      produitId = String(t.produit_id);
+      dateEntretien = t.date_entretien;
+      contenu = t.contenu;
+    });
+  });
 
   async function creerSiNouveau(
     valeur: string,
@@ -46,7 +66,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nom }),
     });
-    return (await r.json()).id;
+    return ((await r.json()) as { id: number }).id;
   }
 
   async function soumettre(e: SubmitEvent) {
@@ -57,42 +77,41 @@
         creerSiNouveau(identiteId, nouvelleIdentite, '/api/identites'),
         creerSiNouveau(produitId, nouveauProduit, '/api/produits'),
       ]);
-      await fetch('/api/transcripts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identite_id: iId,
-          produit_id: pId,
-          date_entretien: dateEntretien,
-          contenu,
-        }),
-      });
-      succes = true;
-      await chargerOptions();
+      const payload = {
+        identite_id: iId,
+        produit_id: pId,
+        date_entretien: dateEntretien,
+        contenu,
+      };
+      await (id ? modifierTranscript(id, payload) : ajouterTranscript(payload));
+      onnaviquer({ nom: 'transcripts:liste' });
     } catch {
       erreur = 'Une erreur est survenue, veuillez réessayer.';
     }
   }
-
-  function recommencer() {
-    succes = false;
-    identiteId = '';
-    nouvelleIdentite = '';
-    produitId = '';
-    nouveauProduit = '';
-    dateEntretien = '';
-    contenu = '';
-  }
 </script>
 
-{#if succes}
-  <p class="confirmation">Transcript enregistré.</p>
-  <dsfr-button
-    label="Ajouter un autre transcript"
-    kind="secondary"
-    onclick={recommencer}
-  ></dsfr-button>
-{:else}
+<div class="fr-container fr-py-4w">
+  <nav class="fr-breadcrumb" aria-label="vous êtes ici :">
+    <ol class="fr-breadcrumb__list">
+      <li>
+        <a
+          href="#transcripts"
+          class="fr-breadcrumb__link"
+          onclick={(e) => {
+            e.preventDefault();
+            onnaviquer({ nom: 'transcripts:liste' });
+          }}
+        >
+          Transcripts
+        </a>
+      </li>
+      <li><span aria-current="page">{id ? 'Modifier' : 'Ajouter'}</span></li>
+    </ol>
+  </nav>
+
+  <h1 class="fr-h2">{id ? 'Modifier le transcript' : 'Ajouter un transcript'}</h1>
+
   <form onsubmit={soumettre}>
     <dsfr-select
       id="identite"
@@ -166,9 +185,20 @@
       <p class="erreur">{erreur}</p>
     {/if}
 
-    <dsfr-button label="Enregistrer le transcript" type="submit"></dsfr-button>
+    <div class="boutons">
+      <dsfr-button
+        label="Annuler"
+        kind="secondary"
+        type="button"
+        onclick={() => onnaviquer({ nom: 'transcripts:liste' })}
+      ></dsfr-button>
+      <dsfr-button
+        label={id ? 'Enregistrer les modifications' : 'Enregistrer le transcript'}
+        type="submit"
+      ></dsfr-button>
+    </div>
   </form>
-{/if}
+</div>
 
 <style>
   form {
@@ -177,9 +207,9 @@
     gap: 1.5rem;
     max-width: 720px;
   }
-  .confirmation {
-    color: var(--green-emeraude-main-632, #00a95f);
-    font-weight: 700;
+  .boutons {
+    display: flex;
+    gap: 1rem;
   }
   .erreur {
     color: var(--error-425-625, #ce0500);

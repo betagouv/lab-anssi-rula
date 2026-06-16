@@ -1,15 +1,30 @@
 <script lang="ts">
-  import FormulaireTranscript from './formulaires/FormulaireTranscript.svelte';
+  import type { Vue } from './types';
+  import NavigationPrincipale from './navigation/NavigationPrincipale.svelte';
+  import ListeTranscripts from './transcripts/ListeTranscripts.svelte';
+  import FormulaireTranscript from './transcripts/FormulaireTranscript.svelte';
+  import DetailTranscript from './transcripts/DetailTranscript.svelte';
+  import PlaceholderAnalyses from './analyses/PlaceholderAnalyses.svelte';
+
+  let vue = $state<Vue>({ nom: 'transcripts:liste' });
+
+  function naviguer(v: Vue) {
+    vue = v;
+  }
 </script>
 
-<main>
-  <h1>Ajouter un transcript</h1>
-  <FormulaireTranscript />
-</main>
+<NavigationPrincipale {vue} onnaviquer={naviguer} />
 
-<style>
-  main {
-    font-family: var(--font-family-main, Marianne, sans-serif);
-    padding: 2rem;
-  }
-</style>
+<main>
+  {#if vue.nom === 'transcripts:liste'}
+    <ListeTranscripts onnaviquer={naviguer} />
+  {:else if vue.nom === 'transcripts:ajout'}
+    <FormulaireTranscript onnaviquer={naviguer} />
+  {:else if vue.nom === 'transcripts:detail'}
+    <DetailTranscript id={vue.id} onnaviquer={naviguer} />
+  {:else if vue.nom === 'transcripts:modification'}
+    <FormulaireTranscript id={vue.id} onnaviquer={naviguer} />
+  {:else if vue.nom === 'analyses'}
+    <PlaceholderAnalyses />
+  {/if}
+</main>
