@@ -37,7 +37,8 @@
     transcripts.filter((t) => {
       if (dateDebut && t.date_entretien < dateDebut) return false;
       if (dateFin && t.date_entretien > dateFin) return false;
-      if (filtreIdentiteId && t.identite_id !== Number(filtreIdentiteId)) return false;
+      if (filtreIdentiteId && t.identite_id !== Number(filtreIdentiteId))
+        return false;
       if (filtreProjetId && t.produit_id !== Number(filtreProjetId)) return false;
       return true;
     })
@@ -47,7 +48,11 @@
 <div class="fr-container fr-py-4w">
   <div class="en-tete">
     <h1 class="fr-h2">Transcripts</h1>
-    <button class="fr-btn" type="button" onclick={() => onnaviquer({ nom: 'transcripts:ajout' })}>
+    <button
+      class="fr-btn"
+      type="button"
+      onclick={() => onnaviquer({ nom: 'transcripts:ajout' })}
+    >
       Ajouter un transcript
     </button>
   </div>
@@ -94,7 +99,9 @@
   {:else if transcripts.length === 0}
     <p class="fr-text--lg">Aucun transcript pour l'instant.</p>
   {:else if transcriptsFiltres.length === 0}
-    <p class="fr-text--lg">Aucun transcript ne correspond aux filtres sélectionnés.</p>
+    <p class="fr-text--lg">
+      Aucun transcript ne correspond aux filtres sélectionnés.
+    </p>
   {:else}
     <div class="fr-table fr-table--bordered">
       <table>
@@ -121,7 +128,8 @@
                 <dsfr-button
                   label="Modifier"
                   kind="secondary"
-                  onclick={() => onnaviquer({ nom: 'transcripts:modification', id: t.id })}
+                  onclick={() =>
+                    onnaviquer({ nom: 'transcripts:modification', id: t.id })}
                 ></dsfr-button>
               </td>
             </tr>

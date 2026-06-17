@@ -10,6 +10,6 @@ class AdaptateurAlbertDeTest(AdaptateurAlbert):
         self._reponse = reponse
         return self
 
-    def completer(self, messages: list[dict[str, str]]) -> str:
+    def completer(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str:
         self.messages_recus.append(messages)
         return self._reponse

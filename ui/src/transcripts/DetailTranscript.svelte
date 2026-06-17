@@ -1,6 +1,8 @@
 <script lang="ts">
-  import type { Vue, Transcript } from '../types';
+  import { marked } from 'marked';
+  import type { Vue, Transcript, Analyse } from '../types';
   import { obtenirTranscript, supprimerTranscript } from '../api/transcripts';
+  import { obtenirAnalyse, genererAnalyse } from '../api/analyses';
 
   let { id, onnaviquer }: { id: number; onnaviquer: (v: Vue) => void } = $props();
 
@@ -11,6 +13,10 @@
   let produitNom = $state('');
   let confirmerSuppression = $state(false);
   let dialog = $state<HTMLDialogElement | null>(null);
+
+  let analyse = $state<Analyse | null>(null);
+  let analyseChargee = $state(false);
+  let analyseEnCours = $state(false);
 
   $effect(() => {
     Promise.all([
@@ -27,6 +33,13 @@
   });
 
   $effect(() => {
+    obtenirAnalyse(id).then((a) => {
+      analyse = a;
+      analyseChargee = true;
+    });
+  });
+
+  $effect(() => {
     if (!dialog) return;
     if (confirmerSuppression) dialog.showModal();
     else dialog.close();
@@ -35,6 +48,15 @@
   async function supprimer() {
     await supprimerTranscript(id);
     onnaviquer({ nom: 'transcripts:liste' });
+  }
+
+  async function generer() {
+    analyseEnCours = true;
+    try {
+      analyse = await genererAnalyse(id);
+    } finally {
+      analyseEnCours = false;
+    }
   }
 </script>
 
@@ -91,6 +113,24 @@
         onclick={() => (confirmerSuppression = true)}
       ></dsfr-button>
     </div>
+
+    <section class="fr-mt-6w">
+      <h2 class="fr-h3">Analyse</h2>
+      {#if !analyseChargee}
+        <p>Chargement…</p>
+      {:else if analyse !== null}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        <div class="analyse-contenu">{@html marked.parse(analyse.contenu)}</div>
+      {:else if analyseEnCours}
+        <p class="fr-text--sm fr-text--mention-grey">
+          Analyse en cours, cela peut prendre quelques secondes…
+        </p>
+      {:else}
+        <button class="fr-btn" type="button" onclick={generer}>
+          Générer l'analyse
+        </button>
+      {/if}
+    </section>
   {:else}
     <p>Chargement…</p>
   {/if}
@@ -148,5 +188,24 @@
     white-space: pre-wrap;
     font-family: var(--font-family-main, Marianne, sans-serif);
     margin-top: 0.5rem;
+  }
+  .analyse-contenu {
+    background: var(--background-alt-grey, #f6f6f6);
+    padding: 1.5rem;
+    border-radius: 4px;
+  }
+  .analyse-contenu :global(h1),
+  .analyse-contenu :global(h2),
+  .analyse-contenu :global(h3) {
+    font-weight: bold;
+    margin: 1rem 0 0.5rem;
+  }
+  .analyse-contenu :global(ul),
+  .analyse-contenu :global(ol) {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+  }
+  .analyse-contenu :global(p) {
+    margin: 0.5rem 0;
   }
 </style>

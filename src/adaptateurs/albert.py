@@ -7,14 +7,14 @@ from configuration import Albert
 
 class AdaptateurAlbert(ABC):
     @abstractmethod
-    def completer(self, messages: list[dict[str, str]]) -> str: ...
+    def completer(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str: ...
 
 
 class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
     def __init__(self, config: Albert) -> None:
         self._config = config
 
-    def completer(self, messages: list[dict[str, str]]) -> str:
+    def completer(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str:
         with httpx.Client(timeout=120) as client:
             reponse = client.post(
                 f"{self._config.url}/v1/chat/completions",
@@ -25,7 +25,7 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                 json={
                     "model": self._config.modele,
                     "messages": messages,
-                    "response_format": {"type": "json_object"},
+                    "temperature": temperature,
                 },
             )
             reponse.raise_for_status()

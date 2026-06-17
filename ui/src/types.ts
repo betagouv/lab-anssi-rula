@@ -14,3 +14,17 @@ export type Transcript = {
   cree_le: string;
   modifie_le: string;
 };
+
+export type Analyse = {
+  id: number;
+  transcript_id: number;
+  contenu: string;
+  cree_le: string;
+};
+
+export type Fonctionnalite = {
+  id: number;
+  transcript_id: number;
+  contenu: string;
+  cree_le: string;
+};
