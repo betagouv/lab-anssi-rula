@@ -8,10 +8,9 @@ export type Vue =
 
 export type Idee = {
   id: number;
-  id_externe: string;
   titre: string;
   nb_votes: number;
-  sync_le: string;
+  importe_le: string;
 };
 
 export type Transcript = {

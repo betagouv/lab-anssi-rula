@@ -4,7 +4,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from adaptateurs.albert import AdaptateurAlbert
-from adaptateurs.featurebase import AdaptateurFeatureBase, IdeeBrute
 from analyses.service import ServiceAnalyse
 from api.analyses import fabrique_service_analyse
 from api.fonctionnalites import fabrique_service_fonctionnalites
@@ -33,11 +32,6 @@ class _AlbertFonctionnalitesDeTest(AdaptateurAlbert):
         return '["Fonctionnalité A", "Fonctionnalité B"]'
 
 
-class _FeatureBaseDeTest(AdaptateurFeatureBase):
-    def lister_idees(self) -> list[IdeeBrute]:
-        return [IdeeBrute(id_externe="id-1", titre="Idée A", nb_votes=10), IdeeBrute(id_externe="id-2", titre="Idée B", nb_votes=5)]
-
-
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
     depot_identites = DepotIdentitesMemoire()
@@ -48,7 +42,7 @@ def client() -> Generator[TestClient, None, None]:
     depot_idees = DepotIdeesMemoire()
     service_analyse = ServiceAnalyse(depot_transcripts, depot_analyses, _AlbertAnalyseDeTest(), "prompt test")
     service_fonctionnalites = ServiceFonctionnalites(depot_transcripts, depot_fonctionnalites, _AlbertFonctionnalitesDeTest(), "prompt test")
-    service_idees = ServiceIdees(depot=depot_idees, featurebase=_FeatureBaseDeTest())
+    service_idees = ServiceIdees(depot=depot_idees)
     app.dependency_overrides[fabrique_depot_identites] = lambda: depot_identites
     app.dependency_overrides[fabrique_depot_produits] = lambda: depot_produits
     app.dependency_overrides[fabrique_depot_transcripts] = lambda: depot_transcripts

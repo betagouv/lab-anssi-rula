@@ -1,7 +1,5 @@
-import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
-from adaptateurs.featurebase import AdaptateurFeatureBaseReel
 from configuration import charge_configuration
 from idees.depot import DepotIdees
 from idees.service import ServiceIdees
@@ -15,17 +13,16 @@ def fabrique_depot_idees() -> DepotIdees:  # pragma: no cover
 
 
 def fabrique_service_idees(depot: DepotIdees = Depends(fabrique_depot_idees)) -> ServiceIdees:  # pragma: no cover
-    return ServiceIdees(depot=depot, featurebase=AdaptateurFeatureBaseReel(charge_configuration().featurebase))
+    return ServiceIdees(depot=depot)
 
 
-@routeur.post("/idees/sync")
-def synchroniser(service: ServiceIdees = Depends(fabrique_service_idees)) -> list[dict]:
+@routeur.post("/idees/import")
+def importer_csv(fichier: UploadFile, service: ServiceIdees = Depends(fabrique_service_idees)) -> list[dict]:
     try:
-        return [i._asdict() for i in service.synchroniser()]
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=503, detail=f"FeatureBase API : {e.response.status_code} {e.response.reason_phrase}")
+        contenu = fichier.file.read().decode("utf-8-sig")
+        return [i._asdict() for i in service.importer(contenu)]
+    except (KeyError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"CSV invalide : {e}")
 
 
 @routeur.get("/idees")

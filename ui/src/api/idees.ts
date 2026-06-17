@@ -8,8 +8,13 @@ async function json<T>(r: Response): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-export const synchroniserIdees = (): Promise<Idee[]> =>
-  fetch('/api/idees/sync', { method: 'POST' }).then((r) => json<Idee[]>(r));
+export const importerIdees = (fichier: File): Promise<Idee[]> => {
+  const form = new FormData();
+  form.append('fichier', fichier);
+  return fetch('/api/idees/import', { method: 'POST', body: form }).then((r) =>
+    json<Idee[]>(r)
+  );
+};
 
 export const listerIdees = (): Promise<Idee[]> =>
   fetch('/api/idees').then((r) => json<Idee[]>(r));
