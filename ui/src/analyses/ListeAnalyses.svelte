@@ -61,6 +61,7 @@
       const analyse = await genererAnalyse(lignes[index].transcript.id);
       lignes[index] = { ...lignes[index], analyse, enCoursAnalyse: false };
       analyseOuverte = lignes[index].transcript.id;
+      fonctionnalitesOuverte = null;
     } catch {
       lignes[index] = { ...lignes[index], enCoursAnalyse: false };
     }
@@ -78,6 +79,7 @@
         enCoursFonctionnalites: false,
       };
       fonctionnalitesOuverte = lignes[index].transcript.id;
+      analyseOuverte = null;
     } catch {
       lignes[index] = { ...lignes[index], enCoursFonctionnalites: false };
     }
@@ -85,11 +87,13 @@
 
   function toggleAnalyse(transcriptId: number) {
     analyseOuverte = analyseOuverte === transcriptId ? null : transcriptId;
+    fonctionnalitesOuverte = null;
   }
 
   function toggleFonctionnalites(transcriptId: number) {
     fonctionnalitesOuverte =
       fonctionnalitesOuverte === transcriptId ? null : transcriptId;
+    analyseOuverte = null;
   }
 </script>
 
