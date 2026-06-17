@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from adaptateurs.featurebase import AdaptateurFeatureBaseReel
@@ -23,6 +24,8 @@ def synchroniser(service: ServiceIdees = Depends(fabrique_service_idees)) -> lis
         return [i._asdict() for i in service.synchroniser()]
     except ValueError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=503, detail=f"FeatureBase API : {e.response.status_code} {e.response.reason_phrase}")
 
 
 @routeur.get("/idees")

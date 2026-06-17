@@ -8,22 +8,35 @@ from infra.memoire.depot_idees import DepotIdeesMemoire
 from serveur import app
 
 
-class _FeatureBaseErreurDeTest(AdaptateurFeatureBase):
+class _FeatureBaseErreurValeurDeTest(AdaptateurFeatureBase):
     def lister_idees(self) -> list[IdeeBrute]:
         raise ValueError("FEATUREBASE_CLE_API non configurée")
 
 
-@pytest.fixture
-def client_sans_cle(client: TestClient) -> TestClient:
-    service = ServiceIdees(depot=DepotIdeesMemoire(), featurebase=_FeatureBaseErreurDeTest())
+class _FeatureBaseErreurHttpDeTest(AdaptateurFeatureBase):
+    def lister_idees(self) -> list[IdeeBrute]:
+        import httpx
+
+        response = httpx.Response(403, request=httpx.Request("GET", "https://example.com"))
+        raise httpx.HTTPStatusError("403", request=response.request, response=response)
+
+
+def _client_avec(client: TestClient, featurebase: AdaptateurFeatureBase) -> TestClient:
+    service = ServiceIdees(depot=DepotIdeesMemoire(), featurebase=featurebase)
     app.dependency_overrides[fabrique_service_idees] = lambda: service
     return client
 
 
-def test_sync_retourne_503_si_cle_manquante(client_sans_cle: TestClient) -> None:
-    r = client_sans_cle.post("/api/idees/sync")
+def test_sync_retourne_503_si_cle_manquante(client: TestClient) -> None:
+    r = _client_avec(client, _FeatureBaseErreurValeurDeTest()).post("/api/idees/sync")
     assert r.status_code == 503
     assert "FEATUREBASE_CLE_API" in r.json()["detail"]
+
+
+def test_sync_retourne_503_si_api_inaccessible(client: TestClient) -> None:
+    r = _client_avec(client, _FeatureBaseErreurHttpDeTest()).post("/api/idees/sync")
+    assert r.status_code == 503
+    assert "403" in r.json()["detail"]
 
 
 def test_lister_vide(client: TestClient) -> None:

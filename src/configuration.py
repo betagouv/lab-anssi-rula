@@ -25,6 +25,7 @@ class Rula(NamedTuple):
 class FeatureBase(NamedTuple):
     cle_api: str
     board_name: str
+    api_url: str
 
 
 class Configuration(NamedTuple):
@@ -56,5 +57,6 @@ def charge_configuration() -> Configuration:
         featurebase=FeatureBase(
             cle_api=os.environ.get("FEATUREBASE_CLE_API", ""),
             board_name=os.environ.get("FEATUREBASE_BOARD_NAME", ""),
+            api_url=os.environ.get("FEATUREBASE_API_URL", "https://do.featurebase.app/v2"),
         ),
     )
