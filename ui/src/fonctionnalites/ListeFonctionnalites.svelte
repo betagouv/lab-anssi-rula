@@ -5,6 +5,7 @@
   let idees = $state<Idee[]>([]);
   let chargement = $state(true);
   let enCours = $state(false);
+  let erreur = $state<string | null>(null);
 
   $effect(() => {
     listerIdees().then((data) => {
@@ -15,8 +16,11 @@
 
   async function synchroniser() {
     enCours = true;
+    erreur = null;
     try {
       idees = await synchroniserIdees();
+    } catch (e) {
+      erreur = e instanceof Error ? e.message : 'Erreur lors de la synchronisation';
     } finally {
       enCours = false;
     }
@@ -39,6 +43,12 @@
       </button>
     </div>
   </div>
+
+  {#if erreur}
+    <div class="fr-alert fr-alert--error fr-mb-3w">
+      <p>{erreur}</p>
+    </div>
+  {/if}
 
   {#if chargement}
     <p>Chargement…</p>

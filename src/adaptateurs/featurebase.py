@@ -24,6 +24,8 @@ class AdaptateurFeatureBaseReel(AdaptateurFeatureBase):  # pragma: no cover
         self._config = config
 
     def lister_idees(self) -> list[IdeeBrute]:
+        if not self._config.cle_api:
+            raise ValueError("FEATUREBASE_CLE_API non configurée")
         headers = {"Authorization": f"Bearer {self._config.cle_api}"}
         with httpx.Client(timeout=30) as client:
             board_id = self._trouver_board_id(client, headers)

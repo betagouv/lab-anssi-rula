@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from adaptateurs.featurebase import AdaptateurFeatureBaseReel
 from configuration import charge_configuration
@@ -19,7 +19,10 @@ def fabrique_service_idees(depot: DepotIdees = Depends(fabrique_depot_idees)) ->
 
 @routeur.post("/idees/sync")
 def synchroniser(service: ServiceIdees = Depends(fabrique_service_idees)) -> list[dict]:
-    return [i._asdict() for i in service.synchroniser()]
+    try:
+        return [i._asdict() for i in service.synchroniser()]
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @routeur.get("/idees")
