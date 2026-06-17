@@ -3,7 +3,16 @@ export type Vue =
   | { nom: 'transcripts:ajout' }
   | { nom: 'transcripts:detail'; id: number }
   | { nom: 'transcripts:modification'; id: number }
-  | { nom: 'analyses' };
+  | { nom: 'analyses' }
+  | { nom: 'fonctionnalites' };
+
+export type Idee = {
+  id: number;
+  id_externe: string;
+  titre: string;
+  nb_votes: number;
+  sync_le: string;
+};
 
 export type Transcript = {
   id: number;

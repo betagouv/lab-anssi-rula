@@ -5,6 +5,7 @@
   import FormulaireTranscript from './transcripts/FormulaireTranscript.svelte';
   import DetailTranscript from './transcripts/DetailTranscript.svelte';
   import ListeAnalyses from './analyses/ListeAnalyses.svelte';
+  import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
 
   let vue = $state<Vue>({ nom: 'transcripts:liste' });
 
@@ -26,5 +27,7 @@
     <FormulaireTranscript id={vue.id} onnaviquer={naviguer} />
   {:else if vue.nom === 'analyses'}
     <ListeAnalyses onnaviquer={naviguer} />
+  {:else if vue.nom === 'fonctionnalites'}
+    <ListeFonctionnalites />
   {/if}
 </main>

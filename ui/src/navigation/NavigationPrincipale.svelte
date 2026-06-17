@@ -56,6 +56,19 @@
               Analyses
             </a>
           </li>
+          <li class="fr-nav__item">
+            <a
+              href="#fonctionnalites"
+              class="fr-nav__link"
+              aria-current={domaine === 'fonctionnalites' ? 'page' : undefined}
+              onclick={(e) => {
+                e.preventDefault();
+                onnaviquer({ nom: 'fonctionnalites' });
+              }}
+            >
+              Fonctionnalités
+            </a>
+          </li>
         </ul>
       </nav>
     </div>
