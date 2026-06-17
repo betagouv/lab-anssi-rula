@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-CSV_SIMPLE = "Title,Content,Upvote Count,Date\nIdée A,,10,2024-01-01\nIdée B,,5,2024-01-02\n"
+CSV_SIMPLE = "Title,Content,Upvote Count,Date\nIdée A,Description A,10,2024-01-01\nIdée B,,5,2024-01-02\n"
 CSV_VIDE = "Title,Content,Upvote Count,Date\n"
 
 
@@ -14,7 +14,7 @@ def test_import_retourne_les_idees(client: TestClient) -> None:
     r = client.post("/api/idees/import", files={"fichier": ("export.csv", CSV_SIMPLE.encode(), "text/csv")})
     assert r.status_code == 200
     assert len(r.json()) == 2
-    assert r.json()[0]["titre"] == "Idée A"
+    assert r.json()[0]["titre"] == "Idée A: Description A"
     assert r.json()[0]["nb_votes"] == 10
     assert r.json()[1]["titre"] == "Idée B"
     assert r.json()[1]["nb_votes"] == 5

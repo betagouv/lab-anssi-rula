@@ -10,7 +10,13 @@ class ServiceIdees:
 
     def importer(self, contenu_csv: str) -> list[Idee]:
         reader = csv.DictReader(io.StringIO(contenu_csv.lstrip("﻿")))
-        idees = [IdeeBrute(titre=r["Title"], nb_votes=int(r["Upvote Count"] or 0)) for r in reader]
+        idees = [
+            IdeeBrute(
+                titre=f"{r['Title']}: {r['Content']}" if r["Content"].strip() else r["Title"],
+                nb_votes=int(r["Upvote Count"] or 0),
+            )
+            for r in reader
+        ]
         return self._depot.remplacer_toutes(idees)
 
     def lister(self) -> list[Idee]:
