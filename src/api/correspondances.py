@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends
 
 from adaptateurs.albert import AdaptateurAlbertReel
@@ -6,6 +8,8 @@ from correspondance.depot import DepotCorrespondance, DepotCorrespondancesCalcul
 from correspondance.service import ServiceCorrespondance
 from infra.postgres.depot_correspondance import DepotCorrespondancePostgres
 from infra.postgres.depot_correspondances_calculees import DepotCorrespondancesCalculeesPostgres
+
+_prompt_libelle = (Path(__file__).parent.parent / "prompts" / "libelle_cluster.md").read_text()
 
 routeur = APIRouter()
 
@@ -26,7 +30,7 @@ def fabrique_service_correspondance(  # pragma: no cover
     depot_calcule: DepotCorrespondancesCalculees = Depends(fabrique_depot_correspondances_calculees),
 ) -> ServiceCorrespondance:
     config = charge_configuration()
-    return ServiceCorrespondance(depot, depot_calcule, AdaptateurAlbertReel(config.albert), config.correspondance.seuil)
+    return ServiceCorrespondance(depot, depot_calcule, AdaptateurAlbertReel(config.albert), config.correspondance.seuil, _prompt_libelle)
 
 
 @routeur.get("/correspondances")

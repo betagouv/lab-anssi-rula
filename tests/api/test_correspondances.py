@@ -7,6 +7,7 @@ def test_analyser_regroupe_les_proches(client: TestClient) -> None:
     clusters = r.json()
     assert len(clusters) == 3
     assert clusters[0]["occurrences"] == 2
+    assert clusters[0]["libelle"] == "Libellé généré"
     assert {m["texte"] for m in clusters[0]["membres"]} == {"Accès prestataire", "Accès spécifique prestataire"}
     assert clusters[1]["occurrences"] == 1
     assert clusters[1]["membres"][0]["texte"] == "Export PDF"
@@ -17,7 +18,7 @@ def test_analyser_regroupe_les_proches(client: TestClient) -> None:
 
 def test_analyser_libelle_et_source(client: TestClient) -> None:
     clusters = client.post("/api/correspondances/analyser").json()
-    assert clusters[0]["libelle"] in {"Accès prestataire", "Accès spécifique prestataire"}
+    assert clusters[0]["libelle"] == "Libellé généré"
     assert {m["source"] for m in clusters[0]["membres"]} == {"transcript"}
     assert clusters[1]["membres"][0]["source"] == "idee"
 

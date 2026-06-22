@@ -11,11 +11,13 @@ class ServiceCorrespondance:
         depot_calcule: DepotCorrespondancesCalculees,
         albert: AdaptateurAlbert,
         seuil: float,
+        prompt_libelle: str,
     ) -> None:
         self._depot = depot
         self._depot_calcule = depot_calcule
         self._albert = albert
         self._seuil = seuil
+        self._prompt_libelle = prompt_libelle
 
     def charger(self) -> list[Cluster]:
         return self._depot_calcule.charger()
@@ -26,8 +28,26 @@ class ServiceCorrespondance:
             vecteurs = self._albert.plonger([f.texte for f in manquantes])
             self._depot.enregistrer_embeddings([(f.source, f.id, v) for f, v in zip(manquantes, vecteurs)])
         clusters = self._regrouper(self._depot.lister_features(), self._depot.paires_proches(self._seuil))
+        clusters = self._nommer(clusters)
         self._depot_calcule.sauvegarder(clusters)
         return clusters
+
+    def _nommer(self, clusters: list[Cluster]) -> list[Cluster]:
+        return [
+            Cluster(
+                libelle=self._albert.completer(
+                    [
+                        {"role": "system", "content": self._prompt_libelle},
+                        {"role": "user", "content": "\n".join(f"- {m.texte}" for m in c.membres)},
+                    ]
+                ).strip(),
+                occurrences=c.occurrences,
+                membres=c.membres,
+            )
+            if c.occurrences > 1
+            else c
+            for c in clusters
+        ]
 
     def _regrouper(self, features: list[Feature], paires: list[tuple[Cle, Cle]]) -> list[Cluster]:
         parent = {(f.source, f.id): (f.source, f.id) for f in features}

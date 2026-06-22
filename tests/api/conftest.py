@@ -61,7 +61,7 @@ class _AlbertFonctionnalitesDeTest(AdaptateurAlbert):
 
 class _AlbertEmbeddingsDeTest(AdaptateurAlbert):
     def completer(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str:
-        return "{}"
+        return "Libellé généré"
 
     def plonger(self, textes: list[str]) -> list[list[float]]:
         return [_EMBEDDINGS[t] for t in textes]
@@ -80,7 +80,7 @@ def client() -> Generator[TestClient, None, None]:
     service_fonctionnalites = ServiceFonctionnalites(depot_transcripts, depot_fonctionnalites, _AlbertFonctionnalitesDeTest(), "prompt test")
     service_idees = ServiceIdees(depot=depot_idees)
     service_retours_bizdev = ServiceRetoursBizDev(depot=depot_retours_bizdev)
-    service_correspondance = ServiceCorrespondance(DepotCorrespondanceMemoire(list(_FEATURES)), DepotCorrespondancesCalculeesMemoire(), _AlbertEmbeddingsDeTest(), 0.35)
+    service_correspondance = ServiceCorrespondance(DepotCorrespondanceMemoire(list(_FEATURES)), DepotCorrespondancesCalculeesMemoire(), _AlbertEmbeddingsDeTest(), 0.35, "prompt test")
     app.dependency_overrides[fabrique_depot_identites] = lambda: depot_identites
     app.dependency_overrides[fabrique_depot_produits] = lambda: depot_produits
     app.dependency_overrides[fabrique_depot_transcripts] = lambda: depot_transcripts
