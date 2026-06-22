@@ -32,7 +32,8 @@ class ServiceFonctionnalites:
             [{"role": "system", "content": self._systeme_prompt}, {"role": "user", "content": t.contenu}],
             temperature=0.1,
         )
-        return self._depot_fonctionnalites.ajouter_toutes(transcript_id, json.loads(reponse))
+        items = [(r["fonctionnalite"], r.get("verbatim")) for r in json.loads(reponse)]
+        return self._depot_fonctionnalites.ajouter_toutes(transcript_id, items)
 
     def obtenir(self, transcript_id: int) -> list[Fonctionnalite]:
         return self._depot_fonctionnalites.obtenir_par_transcript(transcript_id)

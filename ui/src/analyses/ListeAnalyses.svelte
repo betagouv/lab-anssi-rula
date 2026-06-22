@@ -192,11 +192,19 @@
             {#if fonctionnalitesOuverte === ligne.transcript.id && ligne.fonctionnalites}
               <tr class="ligne-detail">
                 <td colspan="5">
-                  <ul class="fonctionnalites-liste">
-                    {#each ligne.fonctionnalites as f (f.id)}
-                      <li>{f.contenu}</li>
-                    {/each}
-                  </ul>
+                  <table class="fonctionnalites-table">
+                    <thead>
+                      <tr><th>Verbatim</th><th>Fonctionnalité</th></tr>
+                    </thead>
+                    <tbody>
+                      {#each ligne.fonctionnalites as f (f.id)}
+                        <tr>
+                          <td class="verbatim">{f.verbatim ?? '—'}</td>
+                          <td>{f.contenu}</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
                 </td>
               </tr>
             {/if}
@@ -233,11 +241,24 @@
   .analyse-contenu :global(p) {
     margin: 0.5rem 0;
   }
-  .fonctionnalites-liste {
-    padding-left: 1.5rem;
-    margin: 0;
+  .fonctionnalites-table {
+    width: 100%;
+    border-collapse: collapse;
   }
-  .fonctionnalites-liste li {
-    margin: 0.25rem 0;
+  .fonctionnalites-table th {
+    text-align: left;
+    font-weight: 600;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border-color, #ddd);
+  }
+  .fonctionnalites-table td {
+    padding: 0.4rem 0.75rem;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border-color, #eee);
+  }
+  .fonctionnalites-table .verbatim {
+    font-style: italic;
+    color: var(--text-secondary, #666);
+    width: 55%;
   }
 </style>

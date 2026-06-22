@@ -6,6 +6,11 @@ class Albert(NamedTuple):
     url: str
     cle_api: str
     modele: str
+    modele_embeddings: str
+
+
+class Correspondance(NamedTuple):
+    seuil: float
 
 
 class BaseDeDonnees(NamedTuple):
@@ -26,6 +31,7 @@ class Configuration(NamedTuple):
     rula: Rula
     albert: Albert
     base_de_donnees: BaseDeDonnees
+    correspondance: Correspondance
 
 
 def charge_configuration() -> Configuration:
@@ -39,6 +45,7 @@ def charge_configuration() -> Configuration:
             url=os.environ.get("ALBERT_URL", ""),
             cle_api=os.environ.get("ALBERT_CLE_API", ""),
             modele=os.environ.get("ALBERT_MODELE", "openweight-medium"),
+            modele_embeddings=os.environ.get("ALBERT_MODELE_EMBEDDINGS", "BAAI/bge-m3"),
         ),
         base_de_donnees=BaseDeDonnees(
             hote=os.environ.get("DB_HOTE", "localhost"),
@@ -46,5 +53,8 @@ def charge_configuration() -> Configuration:
             nom=os.environ.get("DB_NOM", "rula"),
             utilisateur=os.environ.get("DB_UTILISATEUR", "rula"),
             mot_de_passe=os.environ.get("DB_MOT_DE_PASSE", ""),
+        ),
+        correspondance=Correspondance(
+            seuil=float(os.environ.get("CORRESPONDANCE_SEUIL", "0.35")),
         ),
     )

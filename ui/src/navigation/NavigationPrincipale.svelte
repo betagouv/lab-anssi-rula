@@ -69,6 +69,32 @@
               Fonctionnalités
             </a>
           </li>
+          <li class="fr-nav__item">
+            <a
+              href="#retours-bizdev"
+              class="fr-nav__link"
+              aria-current={domaine === 'retours-bizdev' ? 'page' : undefined}
+              onclick={(e) => {
+                e.preventDefault();
+                onnaviquer({ nom: 'retours-bizdev' });
+              }}
+            >
+              Retours utilisateurs BizDev
+            </a>
+          </li>
+          <li class="fr-nav__item">
+            <a
+              href="#correspondance"
+              class="fr-nav__link"
+              aria-current={domaine === 'correspondance' ? 'page' : undefined}
+              onclick={(e) => {
+                e.preventDefault();
+                onnaviquer({ nom: 'correspondance' });
+              }}
+            >
+              Correspondance de fonctionnalités
+            </a>
+          </li>
         </ul>
       </nav>
     </div>

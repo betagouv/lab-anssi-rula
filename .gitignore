@@ -13,6 +13,7 @@ __pycache__/
 # Frontend
 ui/node_modules/
 ui/dist/
+ui/.pnpm-store/
 
 # IDE
 .idea/

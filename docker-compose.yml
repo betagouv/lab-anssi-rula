@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: ${DB_NOM}
       POSTGRES_USER: ${DB_UTILISATEUR}
@@ -31,6 +31,8 @@ services:
       ALBERT_URL: ${ALBERT_URL}
       ALBERT_CLE_API: ${ALBERT_CLE_API}
       ALBERT_MODELE: ${ALBERT_MODELE:-openweight-medium}
+      ALBERT_MODELE_EMBEDDINGS: ${ALBERT_MODELE_EMBEDDINGS:-BAAI/bge-m3}
+      CORRESPONDANCE_SEUIL: ${CORRESPONDANCE_SEUIL:-0.35}
       RULA_PORT: ${RULA_PORT:-3001}
       RULA_MAX_REQUETES_PAR_MINUTE: ${RULA_MAX_REQUETES_PAR_MINUTE:-100}
     ports:

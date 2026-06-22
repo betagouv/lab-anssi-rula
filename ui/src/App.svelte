@@ -6,6 +6,8 @@
   import DetailTranscript from './transcripts/DetailTranscript.svelte';
   import ListeAnalyses from './analyses/ListeAnalyses.svelte';
   import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
+  import ListeCorrespondance from './correspondance/ListeCorrespondance.svelte';
+  import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
 
   let vue = $state<Vue>({ nom: 'transcripts:liste' });
 
@@ -29,5 +31,9 @@
     <ListeAnalyses onnaviquer={naviguer} />
   {:else if vue.nom === 'fonctionnalites'}
     <ListeFonctionnalites />
+  {:else if vue.nom === 'retours-bizdev'}
+    <ListeRetoursBizDev />
+  {:else if vue.nom === 'correspondance'}
+    <ListeCorrespondance onnaviquer={naviguer} />
   {/if}
 </main>

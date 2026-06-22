@@ -10,5 +10,6 @@ Règles :
 - N'inclus que ce qui est explicitement mentionné ou clairement sous-entendu dans le transcript.
 - Si aucune fonctionnalité n'est identifiable, retourne un tableau vide.
 
-Réponds UNIQUEMENT avec un tableau JSON valide de chaînes de caractères, sans texte avant ni après.
-Exemple : ["Filtrer par date", "Exporter en CSV", "Recevoir une notification"]
+Réponds UNIQUEMENT avec un tableau JSON valide d'objets, sans texte avant ni après.
+Chaque objet a deux clés : "fonctionnalite" (fonctionnalité identifiée) et "verbatim" (extrait exact du transcript ayant conduit à cette identification).
+Exemple : [{"fonctionnalite": "Filtrer par date", "verbatim": "je filtre toujours par date avant d'analyser"}, {"fonctionnalite": "Exporter en CSV", "verbatim": "j'ai besoin d'exporter en CSV pour mon tableur"}]

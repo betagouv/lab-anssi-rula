@@ -21,6 +21,7 @@ def test_calculer_cree_fonctionnalites(client: TestClient) -> None:
     assert len(r.json()) == 2
     assert r.json()[0]["transcript_id"] == tid
     assert r.json()[0]["contenu"] == "Fonctionnalité A"
+    assert r.json()[0]["verbatim"] == "verbatim A"
     assert r.json()[1]["contenu"] == "Fonctionnalité B"
 
 
