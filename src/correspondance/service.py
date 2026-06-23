@@ -1,3 +1,4 @@
+import json
 from collections import Counter, defaultdict
 
 from adaptateurs.albert import AdaptateurAlbert
@@ -12,12 +13,14 @@ class ServiceCorrespondance:
         albert: AdaptateurAlbert,
         seuil: float,
         prompt_libelle: str,
+        prompt_validation: str,
     ) -> None:
         self._depot = depot
         self._depot_calcule = depot_calcule
         self._albert = albert
         self._seuil = seuil
         self._prompt_libelle = prompt_libelle
+        self._prompt_validation = prompt_validation
 
     def charger(self) -> list[Cluster]:
         return self._depot_calcule.charger()
@@ -28,9 +31,31 @@ class ServiceCorrespondance:
             vecteurs = self._albert.plonger([f.texte for f in manquantes])
             self._depot.enregistrer_embeddings([(f.source, f.id, v) for f, v in zip(manquantes, vecteurs)])
         clusters = self._regrouper(self._depot.lister_features(), self._depot.paires_proches(self._seuil))
+        clusters = self._valider(clusters)
         clusters = self._nommer(clusters)
         self._depot_calcule.sauvegarder(clusters)
         return clusters
+
+    def _valider(self, clusters: list[Cluster]) -> list[Cluster]:
+        result = []
+        for c in clusters:
+            if c.occurrences < 2:
+                result.append(c)
+                continue
+            contenu = "\n".join(f"{i}. {m.texte}" for i, m in enumerate(c.membres))
+            try:
+                reponse = self._albert.completer([
+                    {"role": "system", "content": self._prompt_validation},
+                    {"role": "user", "content": contenu},
+                ])
+                sous_groupes: list[list[int]] = json.loads(reponse.strip())
+                for indices in sous_groupes:
+                    membres = [c.membres[i] for i in indices if 0 <= i < len(c.membres)]
+                    if membres:
+                        result.append(Cluster(libelle="", occurrences=len(membres), membres=membres))
+            except (json.JSONDecodeError, ValueError, IndexError):
+                result.append(c)
+        return result
 
     def _nommer(self, clusters: list[Cluster]) -> list[Cluster]:
         return [

@@ -10,6 +10,7 @@ from infra.postgres.depot_correspondance import DepotCorrespondancePostgres
 from infra.postgres.depot_correspondances_calculees import DepotCorrespondancesCalculeesPostgres
 
 _prompt_libelle = (Path(__file__).parent.parent / "prompts" / "libelle_cluster.md").read_text()
+_prompt_validation = (Path(__file__).parent.parent / "prompts" / "validation_cluster.md").read_text()
 
 routeur = APIRouter()
 
@@ -30,7 +31,7 @@ def fabrique_service_correspondance(  # pragma: no cover
     depot_calcule: DepotCorrespondancesCalculees = Depends(fabrique_depot_correspondances_calculees),
 ) -> ServiceCorrespondance:
     config = charge_configuration()
-    return ServiceCorrespondance(depot, depot_calcule, AdaptateurAlbertReel(config.albert), config.correspondance.seuil, _prompt_libelle)
+    return ServiceCorrespondance(depot, depot_calcule, AdaptateurAlbertReel(config.albert), config.correspondance.seuil, _prompt_libelle, _prompt_validation)
 
 
 @routeur.get("/correspondances")

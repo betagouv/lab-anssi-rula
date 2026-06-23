@@ -1,3 +1,4 @@
+import json
 from collections.abc import Generator
 
 import pytest
@@ -61,6 +62,10 @@ class _AlbertFonctionnalitesDeTest(AdaptateurAlbert):
 
 class _AlbertEmbeddingsDeTest(AdaptateurAlbert):
     def completer(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str:
+        user = next((m["content"] for m in messages if m["role"] == "user"), "")
+        if user.startswith("0."):
+            n = len(user.strip().split("\n"))
+            return json.dumps([list(range(n))])
         return "Libellé généré"
 
     def plonger(self, textes: list[str]) -> list[list[float]]:
@@ -80,7 +85,7 @@ def client() -> Generator[TestClient, None, None]:
     service_fonctionnalites = ServiceFonctionnalites(depot_transcripts, depot_fonctionnalites, _AlbertFonctionnalitesDeTest(), "prompt test")
     service_idees = ServiceIdees(depot=depot_idees)
     service_retours_bizdev = ServiceRetoursBizDev(depot=depot_retours_bizdev)
-    service_correspondance = ServiceCorrespondance(DepotCorrespondanceMemoire(list(_FEATURES)), DepotCorrespondancesCalculeesMemoire(), _AlbertEmbeddingsDeTest(), 0.35, "prompt test")
+    service_correspondance = ServiceCorrespondance(DepotCorrespondanceMemoire(list(_FEATURES)), DepotCorrespondancesCalculeesMemoire(), _AlbertEmbeddingsDeTest(), 0.35, "prompt test", "prompt validation test")
     app.dependency_overrides[fabrique_depot_identites] = lambda: depot_identites
     app.dependency_overrides[fabrique_depot_produits] = lambda: depot_produits
     app.dependency_overrides[fabrique_depot_transcripts] = lambda: depot_transcripts
