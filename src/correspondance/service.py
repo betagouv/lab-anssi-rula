@@ -58,21 +58,25 @@ class ServiceCorrespondance:
         return result
 
     def _nommer(self, clusters: list[Cluster]) -> list[Cluster]:
-        return [
-            Cluster(
-                libelle=self._albert.completer(
+        result = []
+        for c in clusters:
+            if c.occurrences > 1:
+                libelle = self._albert.completer(
                     [
                         {"role": "system", "content": self._prompt_libelle},
                         {"role": "user", "content": "\n".join(f"- {m.texte}" for m in c.membres)},
                     ]
-                ).strip(),
-                occurrences=c.occurrences,
-                membres=c.membres,
-            )
-            if c.occurrences > 1
-            else c
-            for c in clusters
-        ]
+                ).strip()
+            else:
+                libelle = c.libelle
+
+            # La validation peut créer un groupe unitaire avec un libellé vide.
+            # Dans ce cas, le texte du besoin reste un intitulé fiable et lisible.
+            if not libelle and c.membres:
+                libelle = c.membres[0].texte
+
+            result.append(Cluster(libelle=libelle, occurrences=c.occurrences, membres=c.membres))
+        return result
 
     def _regrouper(self, features: list[Feature], paires: list[tuple[Cle, Cle]]) -> list[Cluster]:
         parent = {(f.source, f.id): (f.source, f.id) for f in features}

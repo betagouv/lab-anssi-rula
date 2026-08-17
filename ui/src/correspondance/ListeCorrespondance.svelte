@@ -6,6 +6,7 @@
     analyserCorrespondances,
   } from '../api/correspondances';
   import { hashDepuisVue } from '../navigation/routage';
+  import { cleCluster, cleMembre } from './cles';
 
   let clusters = $state<Cluster[]>([]);
   let analyse = $state(false);
@@ -90,14 +91,14 @@
           </tr>
         </thead>
         <tbody>
-          {#each clusters as cluster (cluster.libelle)}
+          {#each clusters as cluster, clusterIndex (cleCluster(cluster, clusterIndex))}
             <tr>
               <td>
                 <details>
                   <summary>{cluster.libelle}</summary>
                   <ul class="fr-mt-1w membres-liste">
-                    {#each cluster.membres as membre (membre.source + membre.texte)}
-                      {@const cle = membre.source + membre.texte}
+                    {#each cluster.membres as membre, membreIndex (cleMembre(membre, membreIndex))}
+                      {@const cle = cleMembre(membre, membreIndex)}
                       {@const sourceLabel =
                         membre.source === 'transcript'
                           ? 'Entretien'
