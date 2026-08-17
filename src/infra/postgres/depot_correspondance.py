@@ -4,9 +4,6 @@ from configuration import BaseDeDonnees
 from correspondance.depot import Cle, DepotCorrespondance, Feature
 from infra.connexion_base_de_donnees import avec_connexion
 
-_TABLES = {"transcript": "fonctionnalites_transcripts", "idee": "idees_featurebase", "retour_bizdev": "retours_bizdev"}
-
-
 class DepotCorrespondancePostgres(DepotCorrespondance):  # pragma: no cover
     def __init__(self, config: BaseDeDonnees) -> None:
         self._config = config
@@ -23,8 +20,8 @@ class DepotCorrespondancePostgres(DepotCorrespondance):  # pragma: no cover
         with self._connexion.cursor() as cur:
             for source, id_, vecteur in items:
                 cur.execute(
-                    f"UPDATE {_TABLES[source]} SET embedding = %s::vector WHERE id = %s",
-                    (str(vecteur), id_),
+                    "UPDATE besoins_detectes SET embedding = %s::vector WHERE source = %s AND source_id = %s",
+                    (str(vecteur), source, id_),
                 )
 
     @avec_connexion

@@ -13,6 +13,7 @@
   let produitNom = $state('');
   let confirmerSuppression = $state(false);
   let dialog = $state<HTMLDialogElement | null>(null);
+  let erreur = $state<string | null>(null);
 
   let analyse = $state<Analyse | null>(null);
   let analyseChargee = $state(false);
@@ -23,20 +24,31 @@
       obtenirTranscript(id),
       fetch('/api/identites').then((r) => r.json() as Promise<Ressource[]>),
       fetch('/api/produits').then((r) => r.json() as Promise<Ressource[]>),
-    ]).then(([t, ids, prods]) => {
-      transcript = t;
-      identiteNom =
-        ids.find((i) => i.id === t.identite_id)?.nom ?? String(t.identite_id);
-      produitNom =
-        prods.find((p) => p.id === t.produit_id)?.nom ?? String(t.produit_id);
-    });
+    ])
+      .then(([t, ids, prods]) => {
+        transcript = t;
+        identiteNom =
+          ids.find((i) => i.id === t.identite_id)?.nom ?? String(t.identite_id);
+        produitNom =
+          prods.find((p) => p.id === t.produit_id)?.nom ?? String(t.produit_id);
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+      });
   });
 
   $effect(() => {
-    obtenirAnalyse(id).then((a) => {
-      analyse = a;
-      analyseChargee = true;
-    });
+    obtenirAnalyse(id)
+      .then((a) => {
+        analyse = a;
+      })
+      .catch((e) => {
+        erreur =
+          e instanceof Error ? e.message : "Erreur lors du chargement de l'analyse";
+      })
+      .finally(() => {
+        analyseChargee = true;
+      });
   });
 
   $effect(() => {
@@ -46,14 +58,22 @@
   });
 
   async function supprimer() {
-    await supprimerTranscript(id);
-    onnaviquer({ nom: 'transcripts:liste' });
+    try {
+      await supprimerTranscript(id);
+      onnaviquer({ nom: 'sources:entretiens' });
+    } catch (e) {
+      erreur = e instanceof Error ? e.message : 'Erreur lors de la suppression';
+    }
   }
 
   async function generer() {
     analyseEnCours = true;
+    erreur = null;
     try {
       analyse = await genererAnalyse(id);
+    } catch (e) {
+      erreur =
+        e instanceof Error ? e.message : "Erreur lors de la génération de l'analyse";
     } finally {
       analyseEnCours = false;
     }
@@ -64,15 +84,8 @@
   <nav class="fr-breadcrumb" aria-label="vous êtes ici :">
     <ol class="fr-breadcrumb__list">
       <li>
-        <a
-          href="#transcripts"
-          class="fr-breadcrumb__link"
-          onclick={(e) => {
-            e.preventDefault();
-            onnaviquer({ nom: 'transcripts:liste' });
-          }}
-        >
-          Transcripts
+        <a class="fr-breadcrumb__link" href="#sources/entretiens">
+          Entretiens utilisateurs
         </a>
       </li>
       <li><span aria-current="page">Détail</span></li>
@@ -80,8 +93,13 @@
   </nav>
 
   {#if transcript}
+    {#if erreur}
+      <div class="fr-alert fr-alert--error fr-mb-3w">
+        <p>{erreur}</p>
+      </div>
+    {/if}
     <div class="fr-mb-4w">
-      <h1 class="fr-h2">Transcript #{transcript.id}</h1>
+      <h1 class="fr-h2">Entretien #{transcript.id}</h1>
       <dl class="fr-grid-row fr-grid-row--gutters">
         <div class="fr-col-12 fr-col-md-4">
           <dt class="fr-text--bold">Date de l'entretien</dt>
@@ -103,15 +121,17 @@
     </div>
 
     <div class="actions">
-      <dsfr-button
-        label="Modifier"
-        onclick={() => onnaviquer({ nom: 'transcripts:modification', id })}
-      ></dsfr-button>
-      <dsfr-button
-        label="Supprimer"
-        kind="secondary"
-        onclick={() => (confirmerSuppression = true)}
-      ></dsfr-button>
+      <button
+        class="fr-btn"
+        type="button"
+        onclick={() => onnaviquer({ nom: 'sources:entretiens:modification', id })}
+        >Modifier</button
+      >
+      <button
+        class="fr-btn fr-btn--secondary"
+        type="button"
+        onclick={() => (confirmerSuppression = true)}>Supprimer</button
+      >
     </div>
 
     <section class="fr-mt-6w">
@@ -131,6 +151,10 @@
         </button>
       {/if}
     </section>
+  {:else if erreur}
+    <div class="fr-alert fr-alert--error">
+      <p>{erreur}</p>
+    </div>
   {:else}
     <p>Chargement…</p>
   {/if}

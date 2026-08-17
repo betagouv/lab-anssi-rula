@@ -1,12 +1,15 @@
 export type Vue =
-  | { nom: 'transcripts:liste' }
-  | { nom: 'transcripts:ajout' }
-  | { nom: 'transcripts:detail'; id: number }
-  | { nom: 'transcripts:modification'; id: number }
+  | { nom: 'sources:entretiens' }
+  | { nom: 'sources:entretiens:ajout' }
+  | { nom: 'sources:entretiens:detail'; id: number }
+  | { nom: 'sources:entretiens:modification'; id: number }
+  | { nom: 'sources:retours-bizdev' }
+  | { nom: 'sources:featurebase' }
   | { nom: 'analyses' }
-  | { nom: 'fonctionnalites' }
-  | { nom: 'retours-bizdev' }
-  | { nom: 'correspondance' };
+  | { nom: 'besoins' }
+  | { nom: 'correspondances' };
+
+export type SourceBesoin = 'transcript' | 'retour_bizdev' | 'idee';
 
 export type Membre = {
   source: string;

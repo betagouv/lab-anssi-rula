@@ -44,17 +44,27 @@
         produits = versOptions(prods, '+ Nouveau projet');
         if (!identiteId) identiteId = NOUVEAU;
         if (!produitId) produitId = NOUVEAU;
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
       });
   });
 
   $effect(() => {
     if (!id) return;
-    obtenirTranscript(id).then((t) => {
-      identiteId = String(t.identite_id);
-      produitId = String(t.produit_id);
-      dateEntretien = t.date_entretien;
-      contenu = t.contenu;
-    });
+    obtenirTranscript(id)
+      .then((t) => {
+        identiteId = String(t.identite_id);
+        produitId = String(t.produit_id);
+        dateEntretien = t.date_entretien;
+        contenu = t.contenu;
+      })
+      .catch((e) => {
+        erreur =
+          e instanceof Error
+            ? e.message
+            : "Erreur lors du chargement de l'entretien";
+      });
   });
 
   async function creerSiNouveau(
@@ -86,7 +96,7 @@
         contenu,
       };
       await (id ? modifierTranscript(id, payload) : ajouterTranscript(payload));
-      onnaviquer({ nom: 'transcripts:liste' });
+      onnaviquer({ nom: 'sources:entretiens' });
     } catch {
       erreur = 'Une erreur est survenue, veuillez réessayer.';
     }
@@ -97,22 +107,15 @@
   <nav class="fr-breadcrumb" aria-label="vous êtes ici :">
     <ol class="fr-breadcrumb__list">
       <li>
-        <a
-          href="#transcripts"
-          class="fr-breadcrumb__link"
-          onclick={(e) => {
-            e.preventDefault();
-            onnaviquer({ nom: 'transcripts:liste' });
-          }}
-        >
-          Transcripts
+        <a class="fr-breadcrumb__link" href="#sources/entretiens">
+          Entretiens utilisateurs
         </a>
       </li>
       <li><span aria-current="page">{id ? 'Modifier' : 'Ajouter'}</span></li>
     </ol>
   </nav>
 
-  <h1 class="fr-h2">{id ? 'Modifier le transcript' : 'Ajouter un transcript'}</h1>
+  <h1 class="fr-h2">{id ? "Modifier l'entretien" : 'Ajouter un entretien'}</h1>
 
   <form onsubmit={soumettre}>
     <dsfr-select
@@ -174,7 +177,7 @@
 
     <dsfr-textarea
       id="contenu"
-      label="Transcript"
+      label="Contenu de l'entretien"
       value={contenu}
       rows="12"
       required="true"
@@ -188,14 +191,13 @@
     {/if}
 
     <div class="boutons">
-      <dsfr-button
-        label="Annuler"
-        kind="secondary"
+      <button
+        class="fr-btn fr-btn--secondary"
         type="button"
-        onclick={() => onnaviquer({ nom: 'transcripts:liste' })}
-      ></dsfr-button>
+        onclick={() => onnaviquer({ nom: 'sources:entretiens' })}>Annuler</button
+      >
       <button class="fr-btn" type="submit">
-        {id ? 'Enregistrer les modifications' : 'Enregistrer le transcript'}
+        {id ? 'Enregistrer les modifications' : "Enregistrer l'entretien"}
       </button>
     </div>
   </form>

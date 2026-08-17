@@ -8,10 +8,16 @@
   let erreur = $state<string | null>(null);
 
   $effect(() => {
-    listerRetours().then((data) => {
-      retours = data;
-      chargement = false;
-    });
+    listerRetours()
+      .then((data) => {
+        retours = data;
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+      })
+      .finally(() => {
+        chargement = false;
+      });
   });
 
   async function handleFichier(event: Event) {
@@ -34,11 +40,14 @@
 <div class="fr-container fr-py-4w">
   <div class="fr-grid-row fr-grid-row--middle fr-mb-3w">
     <div class="fr-col">
-      <h1 class="fr-h2">Retours utilisateurs BizDev</h1>
+      <h1 class="fr-h2">Retours BizDev</h1>
+      {#if !chargement}
+        <p class="fr-text--sm fr-mb-0">{retours.length} retour(s)</p>
+      {/if}
     </div>
     <div class="fr-col-auto">
       <label class="fr-btn fr-btn--secondary" for="import-retours-csv">
-        {enCours ? 'Import…' : 'Importer CSV BizDev'}
+        {enCours ? 'Import…' : 'Importer un export BizDev'}
       </label>
       <input
         id="import-retours-csv"
@@ -55,13 +64,12 @@
     <div class="fr-alert fr-alert--error fr-mb-3w">
       <p>{erreur}</p>
     </div>
-  {/if}
-
-  {#if chargement}
+  {:else if chargement}
     <p>Chargement…</p>
   {:else if retours.length === 0}
     <p class="fr-text--lg">
-      Aucun retour importé. Cliquez sur "Importer CSV BizDev" pour charger l'export.
+      Aucun retour importé. Cliquez sur "Importer un export BizDev" pour charger
+      l'export.
     </p>
   {:else}
     <div class="fr-table fr-table--bordered">

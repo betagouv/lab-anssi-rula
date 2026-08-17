@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Vue, Transcript } from '../types';
   import { listerTranscripts } from '../api/transcripts';
+  import { hashDepuisVue } from '../navigation/routage';
 
   let { onnaviquer }: { onnaviquer: (v: Vue) => void } = $props();
 
@@ -12,6 +13,7 @@
   let identiteParId = $state<Record<number, string>>({});
   let produitParId = $state<Record<number, string>>({});
   let chargement = $state(true);
+  let erreur = $state<string | null>(null);
 
   let dateDebut = $state('');
   let dateFin = $state('');
@@ -23,14 +25,20 @@
       listerTranscripts(),
       fetch('/api/identites').then((r) => r.json() as Promise<Ressource[]>),
       fetch('/api/produits').then((r) => r.json() as Promise<Ressource[]>),
-    ]).then(([ts, ids, prods]) => {
-      transcripts = ts;
-      identites = ids;
-      produits = prods;
-      identiteParId = Object.fromEntries(ids.map((i) => [i.id, i.nom]));
-      produitParId = Object.fromEntries(prods.map((p) => [p.id, p.nom]));
-      chargement = false;
-    });
+    ])
+      .then(([ts, ids, prods]) => {
+        transcripts = ts;
+        identites = ids;
+        produits = prods;
+        identiteParId = Object.fromEntries(ids.map((i) => [i.id, i.nom]));
+        produitParId = Object.fromEntries(prods.map((p) => [p.id, p.nom]));
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+      })
+      .finally(() => {
+        chargement = false;
+      });
   });
 
   const transcriptsFiltres = $derived(
@@ -47,14 +55,24 @@
 
 <div class="fr-container fr-py-4w">
   <div class="en-tete">
-    <h1 class="fr-h2">Transcripts</h1>
-    <button
-      class="fr-btn"
-      type="button"
-      onclick={() => onnaviquer({ nom: 'transcripts:ajout' })}
-    >
-      Ajouter un transcript
-    </button>
+    <div>
+      <h1 class="fr-h2">Entretiens utilisateurs</h1>
+      {#if !chargement}
+        <p class="fr-text--sm fr-mb-0">{transcripts.length} entretien(s)</p>
+      {/if}
+    </div>
+    <div class="actions-en-tete">
+      <a class="fr-btn fr-btn--secondary" href={hashDepuisVue({ nom: 'analyses' })}
+        >Historique des analyses</a
+      >
+      <button
+        class="fr-btn"
+        type="button"
+        onclick={() => onnaviquer({ nom: 'sources:entretiens:ajout' })}
+      >
+        Ajouter un entretien
+      </button>
+    </div>
   </div>
 
   <div class="fr-grid-row fr-grid-row--gutters fr-mb-3w">
@@ -94,10 +112,14 @@
     </div>
   </div>
 
-  {#if chargement}
+  {#if erreur}
+    <div class="fr-alert fr-alert--error fr-mb-3w">
+      <p>{erreur}</p>
+    </div>
+  {:else if chargement}
     <p>Chargement…</p>
   {:else if transcripts.length === 0}
-    <p class="fr-text--lg">Aucun transcript pour l'instant.</p>
+    <p class="fr-text--lg">Aucun entretien pour l'instant.</p>
   {:else if transcriptsFiltres.length === 0}
     <p class="fr-text--lg">
       Aucun transcript ne correspond aux filtres sélectionnés.
@@ -107,7 +129,7 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Date</th>
+            <th scope="col">Date de l'entretien</th>
             <th scope="col">Identité</th>
             <th scope="col">Projet</th>
             <th scope="col">Actions</th>
@@ -120,17 +142,20 @@
               <td>{identiteParId[t.identite_id] ?? t.identite_id}</td>
               <td>{produitParId[t.produit_id] ?? t.produit_id}</td>
               <td class="actions">
-                <dsfr-button
-                  label="Voir"
-                  kind="secondary"
-                  onclick={() => onnaviquer({ nom: 'transcripts:detail', id: t.id })}
-                ></dsfr-button>
-                <dsfr-button
-                  label="Modifier"
-                  kind="secondary"
+                <button
+                  class="fr-btn fr-btn--secondary fr-btn--sm"
+                  type="button"
                   onclick={() =>
-                    onnaviquer({ nom: 'transcripts:modification', id: t.id })}
-                ></dsfr-button>
+                    onnaviquer({ nom: 'sources:entretiens:detail', id: t.id })}
+                  >Voir</button
+                >
+                <button
+                  class="fr-btn fr-btn--secondary fr-btn--sm"
+                  type="button"
+                  onclick={() =>
+                    onnaviquer({ nom: 'sources:entretiens:modification', id: t.id })}
+                  >Modifier</button
+                >
               </td>
             </tr>
           {/each}
@@ -146,6 +171,11 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
+  }
+  .actions-en-tete {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
   .actions {
     display: flex;

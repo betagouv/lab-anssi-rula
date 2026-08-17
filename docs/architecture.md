@@ -100,6 +100,8 @@ RULA/
 ├── ui/                        # Frontend Svelte
 │   ├── src/
 │   │   ├── App.svelte
+│   │   ├── navigation/        # Navigation principale et routage par hash
+│   │   ├── besoins/           # Besoins extraits des entretiens
 │   │   └── main.ts
 │   ├── index.html
 │   ├── vite.config.ts
@@ -115,6 +117,67 @@ RULA/
 ├── .dockerignore
 └── .gitignore
 ```
+
+---
+
+## Organisation fonctionnelle de l'IHM
+
+L'interface est organisée selon le parcours métier suivant :
+
+```text
+Sources → Analyse des besoins → Correspondances
+```
+
+### Données sources
+
+- **Entretiens utilisateurs** : transcripts saisis ou importés dans RULA.
+- **Retours BizDev** : retours importés depuis un export CSV BizDev.
+- **Demandes FeatureBase** : demandes importées depuis FeatureBase via un export CSV.
+
+### Analyse des besoins
+
+Cet espace remplace l'ancienne page « Fonctionnalités » et propose trois vues,
+une par source :
+
+- **Entretiens utilisateurs** : extraction des besoins et fonctionnalités à
+  partir des transcripts, avec conservation des verbatims et du lien vers
+  l'entretien d'origine.
+- **Retours BizDev** : analyse des verbatims et de leurs métadonnées pour
+  produire un nom de fonctionnalité générique.
+- **Demandes FeatureBase** : normalisation des demandes importées pour produire
+  un nom générique comparable aux deux autres sources.
+
+Les traitements peuvent donc différer selon la source. Ils convergent dans la
+table `besoins_detectes`, qui conserve le texte brut, le nom générique, le
+verbatim éventuel et l'origine de chaque résultat.
+
+L'**historique des analyses** reste accessible depuis la page des entretiens.
+Il s'agit d'un espace de suivi du traitement, et non d'un niveau principal de
+navigation.
+
+### Correspondances
+
+Les correspondances constituent la vue unifiée de sortie. L'analyse calcule
+les embeddings sur les noms génériques de `besoins_detectes`, puis regroupe les
+besoins proches entre les trois sources. Les verbatims et les liens vers les
+entretiens restent disponibles pour expliquer chaque rapprochement.
+
+Elles sont recalculées par l'API et ne portent pas encore de statut métier
+persistant de validation.
+
+La navigation frontend utilise des hashes URL, notamment :
+
+```text
+#sources/entretiens
+#sources/retours-bizdev
+#sources/featurebase
+#analyses
+#besoins
+#correspondances
+```
+
+Les anciens hashes principaux sont conservés comme alias pour les liens
+existants (`#transcripts`, `#syntheses/analyses`, `#syntheses/besoins`, etc.).
 
 ---
 

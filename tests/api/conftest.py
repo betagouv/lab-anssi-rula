@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from adaptateurs.albert import AdaptateurAlbert
 from analyses.service import ServiceAnalyse
 from api.analyses import fabrique_service_analyse
+from api.besoins import fabrique_service_besoins
 from api.correspondances import fabrique_service_correspondance
 from api.fonctionnalites import fabrique_service_fonctionnalites
 from api.idees import fabrique_service_idees
@@ -16,9 +17,11 @@ from api.retours_bizdev import fabrique_service_retours_bizdev
 from api.transcripts import fabrique_depot_transcripts
 from correspondance.depot import Feature
 from correspondance.service import ServiceCorrespondance
+from besoins.service import ServiceBesoinsDetectes
 from fonctionnalites.service import ServiceFonctionnalites
 from idees.service import ServiceIdees
 from infra.memoire.depot_analyses_transcripts import DepotAnalysesTranscriptsMemoire
+from infra.memoire.depot_besoins_detectes import DepotBesoinsDetectesMemoire
 from infra.memoire.depot_correspondance import DepotCorrespondanceMemoire
 from infra.memoire.depot_correspondances_calculees import DepotCorrespondancesCalculeesMemoire
 from infra.memoire.depot_fonctionnalites_transcripts import DepotFonctionnalitesTranscriptsMemoire
@@ -79,10 +82,22 @@ def client() -> Generator[TestClient, None, None]:
     depot_transcripts = DepotTranscriptsMemoire()
     depot_analyses = DepotAnalysesTranscriptsMemoire()
     depot_fonctionnalites = DepotFonctionnalitesTranscriptsMemoire()
+    depot_besoins = DepotBesoinsDetectesMemoire()
     depot_idees = DepotIdeesMemoire()
     depot_retours_bizdev = DepotRetoursBizDevMemoire()
     service_analyse = ServiceAnalyse(depot_transcripts, depot_analyses, _AlbertAnalyseDeTest(), "prompt test")
     service_fonctionnalites = ServiceFonctionnalites(depot_transcripts, depot_fonctionnalites, _AlbertFonctionnalitesDeTest(), "prompt test")
+    service_besoins = ServiceBesoinsDetectes(
+        depot=depot_besoins,
+        depot_transcripts=depot_transcripts,
+        depot_fonctionnalites=depot_fonctionnalites,
+        service_fonctionnalites=service_fonctionnalites,
+        depot_idees=depot_idees,
+        depot_retours=depot_retours_bizdev,
+        albert=_AlbertFonctionnalitesDeTest(),
+        prompt_featurebase="prompt featurebase",
+        prompt_bizdev="prompt bizdev",
+    )
     service_idees = ServiceIdees(depot=depot_idees)
     service_retours_bizdev = ServiceRetoursBizDev(depot=depot_retours_bizdev)
     service_correspondance = ServiceCorrespondance(DepotCorrespondanceMemoire(list(_FEATURES)), DepotCorrespondancesCalculeesMemoire(), _AlbertEmbeddingsDeTest(), 0.35, "prompt test", "prompt validation test")
@@ -91,6 +106,7 @@ def client() -> Generator[TestClient, None, None]:
     app.dependency_overrides[fabrique_depot_transcripts] = lambda: depot_transcripts
     app.dependency_overrides[fabrique_service_analyse] = lambda: service_analyse
     app.dependency_overrides[fabrique_service_fonctionnalites] = lambda: service_fonctionnalites
+    app.dependency_overrides[fabrique_service_besoins] = lambda: service_besoins
     app.dependency_overrides[fabrique_service_idees] = lambda: service_idees
     app.dependency_overrides[fabrique_service_retours_bizdev] = lambda: service_retours_bizdev
     app.dependency_overrides[fabrique_service_correspondance] = lambda: service_correspondance

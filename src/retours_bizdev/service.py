@@ -2,6 +2,7 @@ import csv
 import io
 
 from retours_bizdev.depot import DepotRetoursBizDev, Retour, RetourBrut
+from nettoyage_texte import nettoie_texte
 
 
 class ServiceRetoursBizDev:
@@ -12,12 +13,12 @@ class ServiceRetoursBizDev:
         reader = csv.DictReader(io.StringIO(contenu_csv.lstrip("﻿")))
         retours = [
             RetourBrut(
-                verbatim=r["Verbatim"],
-                categorie=r.get("Catégorie") or None,
-                item=r.get("Item") or None,
-                role=r.get("Rôle du user") or None,
-                qui=r.get("Qui ?") or None,
-                date_retour=r.get("Date") or None,
+                verbatim=nettoie_texte(r["Verbatim"]),
+                categorie=nettoie_texte(r["Catégorie"]) if r.get("Catégorie") else None,
+                item=nettoie_texte(r["Item"]) if r.get("Item") else None,
+                role=nettoie_texte(r["Rôle du user"]) if r.get("Rôle du user") else None,
+                qui=nettoie_texte(r["Qui ?"]) if r.get("Qui ?") else None,
+                date_retour=nettoie_texte(r["Date"]) if r.get("Date") else None,
             )
             for r in reader
             if r["Verbatim"].strip()

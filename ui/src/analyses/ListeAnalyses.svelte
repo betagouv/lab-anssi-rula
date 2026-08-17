@@ -1,15 +1,12 @@
 <script lang="ts">
   import { marked } from 'marked';
-  import type { Vue, Transcript, Analyse, Fonctionnalite } from '../types';
+  import type { Transcript, Analyse, Fonctionnalite } from '../types';
   import { listerAnalyses, genererAnalyse } from '../api/analyses';
   import {
     listerFonctionnalites,
     calculerFonctionnalites,
   } from '../api/fonctionnalites';
   import { listerTranscripts } from '../api/transcripts';
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let { onnaviquer }: { onnaviquer: (v: Vue) => void } = $props();
 
   type Ressource = { id: number; nom: string };
   type Ligne = {
@@ -24,6 +21,7 @@
   let identiteParId = $state<Record<number, string>>({});
   let produitParId = $state<Record<number, string>>({});
   let chargement = $state(true);
+  let erreur = $state<string | null>(null);
   let analyseOuverte = $state<number | null>(null);
   let fonctionnalitesOuverte = $state<number | null>(null);
 
@@ -34,25 +32,31 @@
       listerFonctionnalites(),
       fetch('/api/identites').then((r) => r.json() as Promise<Ressource[]>),
       fetch('/api/produits').then((r) => r.json() as Promise<Ressource[]>),
-    ]).then(([ts, as, fs, ids, prods]) => {
-      const analyseParTranscript = Object.fromEntries(
-        as.map((a) => [a.transcript_id, a])
-      );
-      const fonctionnalitesParTranscript: Record<number, Fonctionnalite[]> = {};
-      fs.forEach((f) => {
-        (fonctionnalitesParTranscript[f.transcript_id] ??= []).push(f);
+    ])
+      .then(([ts, as, fs, ids, prods]) => {
+        const analyseParTranscript = Object.fromEntries(
+          as.map((a) => [a.transcript_id, a])
+        );
+        const fonctionnalitesParTranscript: Record<number, Fonctionnalite[]> = {};
+        fs.forEach((f) => {
+          (fonctionnalitesParTranscript[f.transcript_id] ??= []).push(f);
+        });
+        lignes = ts.map((t) => ({
+          transcript: t,
+          analyse: analyseParTranscript[t.id] ?? null,
+          enCoursAnalyse: false,
+          fonctionnalites: fonctionnalitesParTranscript[t.id] ?? null,
+          enCoursFonctionnalites: false,
+        }));
+        identiteParId = Object.fromEntries(ids.map((i) => [i.id, i.nom]));
+        produitParId = Object.fromEntries(prods.map((p) => [p.id, p.nom]));
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+      })
+      .finally(() => {
+        chargement = false;
       });
-      lignes = ts.map((t) => ({
-        transcript: t,
-        analyse: analyseParTranscript[t.id] ?? null,
-        enCoursAnalyse: false,
-        fonctionnalites: fonctionnalitesParTranscript[t.id] ?? null,
-        enCoursFonctionnalites: false,
-      }));
-      identiteParId = Object.fromEntries(ids.map((i) => [i.id, i.nom]));
-      produitParId = Object.fromEntries(prods.map((p) => [p.id, p.nom]));
-      chargement = false;
-    });
   });
 
   async function analyser(index: number) {
@@ -62,8 +66,9 @@
       lignes[index] = { ...lignes[index], analyse, enCoursAnalyse: false };
       analyseOuverte = lignes[index].transcript.id;
       fonctionnalitesOuverte = null;
-    } catch {
+    } catch (e) {
       lignes[index] = { ...lignes[index], enCoursAnalyse: false };
+      erreur = e instanceof Error ? e.message : "Erreur lors de l'analyse";
     }
   }
 
@@ -80,8 +85,9 @@
       };
       fonctionnalitesOuverte = lignes[index].transcript.id;
       analyseOuverte = null;
-    } catch {
+    } catch (e) {
       lignes[index] = { ...lignes[index], enCoursFonctionnalites: false };
+      erreur = e instanceof Error ? e.message : 'Erreur lors du calcul';
     }
   }
 
@@ -98,12 +104,31 @@
 </script>
 
 <div class="fr-container fr-py-4w">
-  <h1 class="fr-h2">Analyses</h1>
+  <nav class="fr-breadcrumb" aria-label="vous êtes ici :">
+    <ol class="fr-breadcrumb__list">
+      <li>
+        <a class="fr-breadcrumb__link" href="#sources/entretiens">
+          Entretiens utilisateurs
+        </a>
+      </li>
+      <li><span aria-current="page">Historique des analyses</span></li>
+    </ol>
+  </nav>
 
-  {#if chargement}
+  <h1 class="fr-h2">Historique des analyses</h1>
+  <p class="fr-text--lg">
+    Consultez les analyses produites pour chaque entretien et relancez les
+    extractions nécessaires.
+  </p>
+
+  {#if erreur}
+    <div class="fr-alert fr-alert--error fr-mb-3w">
+      <p>{erreur}</p>
+    </div>
+  {:else if chargement}
     <p>Chargement…</p>
   {:else if lignes.length === 0}
-    <p class="fr-text--lg">Aucun transcript enregistré pour l'instant.</p>
+    <p class="fr-text--lg">Aucun entretien enregistré pour l'instant.</p>
   {:else}
     <div class="fr-table fr-table--bordered">
       <table>

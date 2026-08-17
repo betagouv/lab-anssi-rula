@@ -1,12 +1,11 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
-  import type { Cluster, Vue } from '../types';
+  import type { Cluster } from '../types';
   import {
     chargerCorrespondances,
     analyserCorrespondances,
   } from '../api/correspondances';
-
-  let { onnaviquer }: { onnaviquer: (v: Vue) => void } = $props();
+  import { hashDepuisVue } from '../navigation/routage';
 
   let clusters = $state<Cluster[]>([]);
   let analyse = $state(false);
@@ -15,12 +14,16 @@
   const verbatimsOuverts = new SvelteSet<string>();
 
   $effect(() => {
-    chargerCorrespondances().then((data) => {
-      if (data.length > 0) {
-        clusters = data;
-        analyse = true;
-      }
-    });
+    chargerCorrespondances()
+      .then((data) => {
+        if (data.length > 0) {
+          clusters = data;
+          analyse = true;
+        }
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+      });
   });
 
   function toggleVerbatim(cle: string) {
@@ -48,7 +51,11 @@
 <div class="fr-container fr-py-4w">
   <div class="fr-grid-row fr-grid-row--middle fr-mb-3w">
     <div class="fr-col">
-      <h1 class="fr-h2">Correspondance de fonctionnalités</h1>
+      <h1 class="fr-h2">Correspondances</h1>
+      <p class="fr-text--sm fr-mb-0">
+        Vue unifiée des besoins génériques issus des entretiens, de FeatureBase et de
+        BizDev, rapprochés par embeddings.
+      </p>
     </div>
     <div class="fr-col-auto">
       <button
@@ -66,21 +73,19 @@
     <div class="fr-alert fr-alert--error fr-mb-3w">
       <p>{erreur}</p>
     </div>
-  {/if}
-
-  {#if !analyse}
+  {:else if !analyse}
     <p class="fr-text--lg">
-      Lancez l'analyse pour regrouper les fonctionnalités proches issues des
-      transcripts et de FeatureBase, classées par nombre d'occurrences.
+      Lancez l'analyse pour rapprocher les noms génériques issus des trois sources.
+      Les verbatims restent consultables pour comprendre chaque rapprochement.
     </p>
   {:else if clusters.length === 0}
-    <p class="fr-text--lg">Aucune fonctionnalité à rapprocher.</p>
+    <p class="fr-text--lg">Aucune demande à rapprocher.</p>
   {:else}
     <div class="fr-table fr-table--bordered">
       <table>
         <thead>
           <tr>
-            <th scope="col">Fonctionnalité</th>
+            <th scope="col">Demande rapprochée</th>
             <th scope="col" class="col-occ">Occurrences</th>
           </tr>
         </thead>
@@ -95,23 +100,21 @@
                       {@const cle = membre.source + membre.texte}
                       {@const sourceLabel =
                         membre.source === 'transcript'
-                          ? 'Transcript'
+                          ? 'Entretien'
                           : membre.source === 'idee'
-                            ? 'Fonctionnalité'
-                            : 'Retour BizDev'}
+                            ? 'FeatureBase'
+                            : 'BizDev'}
                       <li class="membre-ligne">
                         <span class="fr-badge fr-badge--sm fr-badge--no-icon"
                           >{sourceLabel}</span
                         >
                         {#if membre.source === 'transcript' && membre.transcript_id !== null}
-                          <button
+                          <a
                             class="lien-transcript fr-btn fr-btn--tertiary-no-outline fr-btn--sm"
-                            type="button"
-                            onclick={() =>
-                              onnaviquer({
-                                nom: 'transcripts:detail',
-                                id: membre.transcript_id!,
-                              })}>transcript #{membre.transcript_id}</button
+                            href={hashDepuisVue({
+                              nom: 'sources:entretiens:detail',
+                              id: membre.transcript_id!,
+                            })}>entretien #{membre.transcript_id}</a
                           >
                         {/if}
                         {membre.texte}

@@ -8,10 +8,16 @@
   let erreur = $state<string | null>(null);
 
   $effect(() => {
-    listerIdees().then((data) => {
-      idees = data;
-      chargement = false;
-    });
+    listerIdees()
+      .then((data) => {
+        idees = data;
+      })
+      .catch((e) => {
+        erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+      })
+      .finally(() => {
+        chargement = false;
+      });
   });
 
   async function handleFichier(event: Event) {
@@ -34,11 +40,14 @@
 <div class="fr-container fr-py-4w">
   <div class="fr-grid-row fr-grid-row--middle fr-mb-3w">
     <div class="fr-col">
-      <h1 class="fr-h2">Fonctionnalités</h1>
+      <h1 class="fr-h2">Demandes FeatureBase</h1>
+      {#if !chargement}
+        <p class="fr-text--sm fr-mb-0">{idees.length} demande(s)</p>
+      {/if}
     </div>
     <div class="fr-col-auto">
       <label class="fr-btn fr-btn--secondary" for="import-csv">
-        {enCours ? 'Import…' : 'Importer CSV FeatureBase'}
+        {enCours ? 'Import…' : 'Importer un export FeatureBase'}
       </label>
       <input
         id="import-csv"
@@ -55,14 +64,12 @@
     <div class="fr-alert fr-alert--error fr-mb-3w">
       <p>{erreur}</p>
     </div>
-  {/if}
-
-  {#if chargement}
+  {:else if chargement}
     <p>Chargement…</p>
   {:else if idees.length === 0}
     <p class="fr-text--lg">
-      Aucune idée importée. Cliquez sur "Importer CSV FeatureBase" pour charger
-      l'export.
+      Aucune demande importée. Cliquez sur "Importer un export FeatureBase" pour
+      charger l'export.
     </p>
   {:else}
     <div class="fr-table fr-table--bordered">

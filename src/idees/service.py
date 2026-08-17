@@ -2,6 +2,7 @@ import csv
 import io
 
 from idees.depot import DepotIdees, Idee, IdeeBrute
+from nettoyage_texte import nettoie_texte
 
 
 class ServiceIdees:
@@ -12,7 +13,11 @@ class ServiceIdees:
         reader = csv.DictReader(io.StringIO(contenu_csv.lstrip("﻿")))
         idees = [
             IdeeBrute(
-                titre=f"{r['Title']}: {r['Content']}" if r["Content"].strip() else r["Title"],
+                titre=(
+                    f"{nettoie_texte(r['Title'])}: {nettoie_texte(r['Content'])}"
+                    if r["Content"].strip()
+                    else nettoie_texte(r["Title"])
+                ),
                 nb_votes=int(r["Upvote Count"] or 0),
             )
             for r in reader

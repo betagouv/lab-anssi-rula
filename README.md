@@ -22,6 +22,17 @@ docker compose up --build
 - Backend  : http://localhost:3001
 - API docs : http://localhost:3001/docs
 
+Si le volume PostgreSQL existe déjà lorsqu'une nouvelle migration est ajoutée,
+les scripts d'initialisation Docker ne sont pas rejoués automatiquement. Pour
+appliquer les migrations `012` et `013` du POC sur une base locale existante :
+
+```bash
+docker compose exec -T postgres psql -U rula -d rula \
+  -f /docker-entrypoint-initdb.d/012_besoins_detectes.sql
+docker compose exec -T postgres psql -U rula -d rula \
+  -f /docker-entrypoint-initdb.d/013_nettoyage_exports.sql
+```
+
 ## ⚙️ Variables d'environnement
 
 Créer un fichier `.env` à partir de `.env.template`.

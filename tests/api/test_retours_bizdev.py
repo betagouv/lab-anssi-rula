@@ -75,3 +75,15 @@ def test_ignore_verbatim_vide(client: TestClient) -> None:
     assert r.status_code == 200
     assert len(r.json()) == 1
     assert r.json()[0]["verbatim"] == "Retour valide"
+
+
+def test_import_nettoie_les_caracteres_de_controle_des_exports(client: TestClient) -> None:
+    csv_avec_controles = (
+        "Verbatim,User nom,Rôle du user,Type cible,Source,Lien,Date,Qui ?,Catégorie,Item\n"
+        "c\x19est \x1cimportant\x1d,,,,,,,\n"
+    )
+
+    r = client.post("/api/retours-bizdev/import", files={"fichier": ("retours.csv", csv_avec_controles.encode(), "text/csv")})
+
+    assert r.status_code == 200
+    assert r.json()[0]["verbatim"] == "c’est «important»"
