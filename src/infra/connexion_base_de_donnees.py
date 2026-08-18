@@ -24,3 +24,20 @@ def avec_connexion(methode: F) -> F:
             connexion.close()
 
     return enveloppe  # type: ignore
+
+
+def base_de_donnees_est_disponible(config: Any) -> bool:
+    try:
+        with psycopg2.connect(
+            host=config.hote,
+            dbname=config.nom,
+            user=config.utilisateur,
+            password=config.mot_de_passe,
+            port=config.port,
+            connect_timeout=5,
+        ) as connexion:
+            with connexion.cursor() as curseur:
+                curseur.execute("SELECT 1")
+        return True
+    except psycopg2.Error:
+        return False

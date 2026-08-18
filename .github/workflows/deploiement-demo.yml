@@ -1,0 +1,42 @@
+name: Déploiement DÉMO
+
+run-name: Déploiement DÉMO du commit ${{ github.sha }}
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verifier-main:
+    name: Vérifier la branche de déploiement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuser une branche différente de main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+
+  deploiement-demo:
+    name: Déployer sur Clever Cloud
+    needs: verifier-main
+    environment: DEMO
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Cloner main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Installer Clever Tools
+        run: npm install --global clever-tools@4.4.0
+      - name: Déployer l'application DÉMO
+        env:
+          CLEVER_SECRET: ${{ secrets.CLEVER_CLOUD_SECRET }}
+          CLEVER_TOKEN: ${{ secrets.CLEVER_CLOUD_TOKEN }}
+          ID_APP: ${{ secrets.CLEVER_CLOUD_ID_APP }}
+          ID_ORGANISATION: ${{ secrets.CLEVER_CLOUD_ID_ORGANISATION }}
+        run: |
+          clever link --org "$ID_ORGANISATION" "$ID_APP"
+          clever deploy --force --same-commit-policy=rebuild

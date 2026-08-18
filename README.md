@@ -60,3 +60,8 @@ pnpm lint:check
 pnpm format:check
 pnpm svelte:check
 ```
+
+## ☁️ Déploiement DÉMO
+
+Le déploiement sur Clever Cloud et sa configuration sont documentés dans
+[la procédure dédiée](docs/deploiement-clever-cloud.md).

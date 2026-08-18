@@ -1,0 +1,65 @@
+name: Intégration continue
+
+permissions: {}
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend Python
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Cloner le dépôt
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Installer Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.13'
+      - name: Installer uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Installer les dépendances
+        run: uv sync --locked
+      - name: Vérifier le linting
+        run: uv run ruff check .
+      - name: Vérifier les types
+        run: uv run mypy
+      - name: Exécuter les tests et la couverture
+        run: uv run pytest
+
+  frontend:
+    name: Frontend Svelte
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Cloner le dépôt
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Installer Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+      - name: Installer les dépendances
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Exécuter les tests
+        run: pnpm test
+      - name: Vérifier les types
+        run: pnpm check
+      - name: Vérifier le linting
+        run: pnpm lint:check
+      - name: Vérifier le formatage
+        run: pnpm format:check
+      - name: Construire l'interface
+        run: pnpm build
