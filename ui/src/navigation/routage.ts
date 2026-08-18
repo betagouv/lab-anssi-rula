@@ -31,8 +31,16 @@ export function vueDepuisHash(hash: string): Vue {
     if (second === 'retours-bizdev' && !troisieme) {
       return { nom: 'sources:retours-bizdev' };
     }
+    if (second === 'retours-bizdev') {
+      const id = entierPositif(troisieme);
+      if (id && !quatrieme) return { nom: 'sources:retours-bizdev:detail', id };
+    }
     if (second === 'featurebase' && !troisieme) {
       return { nom: 'sources:featurebase' };
+    }
+    if (second === 'featurebase') {
+      const id = entierPositif(troisieme);
+      if (id && !quatrieme) return { nom: 'sources:featurebase:detail', id };
     }
   }
 
@@ -78,8 +86,12 @@ export function hashDepuisVue(vue: Vue): string {
       return `#sources/entretiens/${vue.id}/modifier`;
     case 'sources:retours-bizdev':
       return '#sources/retours-bizdev';
+    case 'sources:retours-bizdev:detail':
+      return `#sources/retours-bizdev/${vue.id}`;
     case 'sources:featurebase':
       return '#sources/featurebase';
+    case 'sources:featurebase:detail':
+      return `#sources/featurebase/${vue.id}`;
     case 'analyses':
       return '#analyses';
     case 'besoins':

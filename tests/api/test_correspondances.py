@@ -11,9 +11,11 @@ def test_analyser_regroupe_les_proches(client: TestClient) -> None:
     assert {m["texte"] for m in clusters[0]["membres"]} == {"Accès prestataire", "Accès spécifique prestataire"}
     assert clusters[1]["occurrences"] == 1
     assert clusters[1]["membres"][0]["texte"] == "Export PDF"
+    assert clusters[1]["membres"][0]["source_id"] == 1
     assert clusters[2]["occurrences"] == 1
     assert clusters[2]["membres"][0]["texte"] == "Vue d'ensemble participants"
     assert clusters[2]["membres"][0]["source"] == "retour_bizdev"
+    assert clusters[2]["membres"][0]["source_id"] == 1
 
 
 def test_analyser_libelle_et_source(client: TestClient) -> None:

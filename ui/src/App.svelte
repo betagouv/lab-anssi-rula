@@ -9,6 +9,8 @@
   import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
   import ListeCorrespondance from './correspondance/ListeCorrespondance.svelte';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
+  import DetailRetourBizDev from './retours/DetailRetourBizDev.svelte';
+  import DetailFeatureBase from './fonctionnalites/DetailFeatureBase.svelte';
   import ListeBesoinsDetectes from './besoins/ListeBesoinsDetectes.svelte';
   import { hashDepuisVue, vueDepuisHash } from './navigation/routage';
 
@@ -58,7 +60,11 @@
     <ListeFonctionnalites />
   {:else if vue.nom === 'sources:retours-bizdev'}
     <ListeRetoursBizDev />
+  {:else if vue.nom === 'sources:retours-bizdev:detail'}
+    <DetailRetourBizDev id={vue.id} />
   {:else if vue.nom === 'correspondances'}
     <ListeCorrespondance />
+  {:else if vue.nom === 'sources:featurebase:detail'}
+    <DetailFeatureBase id={vue.id} />
   {/if}
 </main>

@@ -4,7 +4,9 @@ export type Vue =
   | { nom: 'sources:entretiens:detail'; id: number }
   | { nom: 'sources:entretiens:modification'; id: number }
   | { nom: 'sources:retours-bizdev' }
+  | { nom: 'sources:retours-bizdev:detail'; id: number }
   | { nom: 'sources:featurebase' }
+  | { nom: 'sources:featurebase:detail'; id: number }
   | { nom: 'analyses' }
   | { nom: 'besoins' }
   | { nom: 'correspondances' };
@@ -16,6 +18,7 @@ export type Membre = {
   texte: string;
   transcript_id: number | null;
   verbatim: string | null;
+  source_id: number | null;
 };
 
 export type Cluster = {

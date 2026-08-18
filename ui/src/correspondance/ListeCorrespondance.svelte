@@ -1,12 +1,34 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
-  import type { Cluster } from '../types';
+  import type { Cluster, Membre } from '../types';
   import {
     chargerCorrespondances,
     analyserCorrespondances,
   } from '../api/correspondances';
   import { hashDepuisVue } from '../navigation/routage';
   import { cleCluster, cleMembre } from './cles';
+
+  function lienSource(membre: Membre): string | null {
+    if (membre.source === 'transcript' && membre.transcript_id !== null) {
+      return hashDepuisVue({
+        nom: 'sources:entretiens:detail',
+        id: membre.transcript_id,
+      });
+    }
+    if (membre.source === 'retour_bizdev' && membre.source_id !== null) {
+      return hashDepuisVue({
+        nom: 'sources:retours-bizdev:detail',
+        id: membre.source_id,
+      });
+    }
+    if (membre.source === 'idee' && membre.source_id !== null) {
+      return hashDepuisVue({
+        nom: 'sources:featurebase:detail',
+        id: membre.source_id,
+      });
+    }
+    return null;
+  }
 
   let clusters = $state<Cluster[]>([]);
   let analyse = $state(false);
@@ -105,17 +127,15 @@
                           : membre.source === 'idee'
                             ? 'FeatureBase'
                             : 'BizDev'}
+                      {@const sourceLien = lienSource(membre)}
                       <li class="membre-ligne">
                         <span class="fr-badge fr-badge--sm fr-badge--no-icon"
                           >{sourceLabel}</span
                         >
-                        {#if membre.source === 'transcript' && membre.transcript_id !== null}
+                        {#if sourceLien}
                           <a
-                            class="lien-transcript fr-btn fr-btn--tertiary-no-outline fr-btn--sm"
-                            href={hashDepuisVue({
-                              nom: 'sources:entretiens:detail',
-                              id: membre.transcript_id!,
-                            })}>entretien #{membre.transcript_id}</a
+                            class="lien-source fr-btn fr-btn--tertiary-no-outline fr-btn--sm"
+                            href={sourceLien}>Voir la source</a
                           >
                         {/if}
                         {membre.texte}
@@ -162,7 +182,7 @@
     flex-wrap: wrap;
     gap: 0.4rem;
   }
-  .lien-transcript {
+  .lien-source {
     font-size: 0.75rem;
     color: var(--blue-france-sun-113-625, #000091);
     text-decoration: underline;

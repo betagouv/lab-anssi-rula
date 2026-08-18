@@ -160,7 +160,11 @@ navigation.
 Les correspondances constituent la vue unifiée de sortie. L'analyse calcule
 les embeddings sur les noms génériques de `besoins_detectes`, puis regroupe les
 besoins proches entre les trois sources. Les verbatims et les liens vers les
-entretiens restent disponibles pour expliquer chaque rapprochement.
+sources brutes restent disponibles pour expliquer chaque rapprochement :
+chaque membre conserve son identifiant d'origine et peut ouvrir directement
+l'entretien, le retour BizDev ou la demande FeatureBase correspondante.
+Pour FeatureBase, le titre importé constitue la donnée brute affichée à la
+place d'un verbatim séparé.
 
 Elles sont recalculées par l'API et ne portent pas encore de statut métier
 persistant de validation.
@@ -171,6 +175,8 @@ La navigation frontend utilise des hashes URL, notamment :
 #sources/entretiens
 #sources/retours-bizdev
 #sources/featurebase
+#sources/retours-bizdev/123
+#sources/featurebase/123
 #analyses
 #besoins
 #correspondances

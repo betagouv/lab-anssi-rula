@@ -17,6 +17,7 @@ class Membre(NamedTuple):
     texte: str
     transcript_id: int | None
     verbatim: str | None
+    source_id: int | None = None
 
 
 class Cluster(NamedTuple):

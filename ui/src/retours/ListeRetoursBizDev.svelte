@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { RetourBizDev } from '../types';
   import { importerRetours, listerRetours } from '../api/retours_bizdev';
+  import { hashDepuisVue } from '../navigation/routage';
 
   let retours = $state<RetourBizDev[]>([]);
   let chargement = $state(true);
@@ -87,7 +88,17 @@
         <tbody>
           {#each retours as retour (retour.id)}
             <tr>
-              <td>{retour.verbatim}</td>
+              <td>
+                <a
+                  class="lien-ligne"
+                  href={hashDepuisVue({
+                    nom: 'sources:retours-bizdev:detail',
+                    id: retour.id,
+                  })}
+                  aria-label={`Voir le détail du retour BizDev #${retour.id}`}
+                  >{retour.verbatim}</a
+                >
+              </td>
               <td class="col-meta">{retour.categorie ?? ''}</td>
               <td class="col-meta">{retour.item ?? ''}</td>
               <td class="col-meta">{retour.role ?? ''}</td>
@@ -114,5 +125,16 @@
   .col-meta {
     width: 8rem;
     font-size: 0.875rem;
+  }
+
+  .lien-ligne {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .lien-ligne:hover,
+  .lien-ligne:focus {
+    text-decoration: underline;
   }
 </style>

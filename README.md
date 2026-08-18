@@ -24,13 +24,15 @@ docker compose up --build
 
 Si le volume PostgreSQL existe déjà lorsqu'une nouvelle migration est ajoutée,
 les scripts d'initialisation Docker ne sont pas rejoués automatiquement. Pour
-appliquer les migrations `012` et `013` du POC sur une base locale existante :
+appliquer les migrations `012` à `014` du POC sur une base locale existante :
 
 ```bash
 docker compose exec -T postgres psql -U rula -d rula \
   -f /docker-entrypoint-initdb.d/012_besoins_detectes.sql
 docker compose exec -T postgres psql -U rula -d rula \
   -f /docker-entrypoint-initdb.d/013_nettoyage_exports.sql
+docker compose exec -T postgres psql -U rula -d rula \
+  -f /docker-entrypoint-initdb.d/014_sources_brutes_correspondances.sql
 ```
 
 ## ⚙️ Variables d'environnement

@@ -100,7 +100,16 @@ class ServiceCorrespondance:
             Cluster(
                 libelle=max(membres, key=lambda f: (degre[(f.source, f.id)], -len(f.texte))).texte,
                 occurrences=len(membres),
-                membres=[Membre(f.source, f.texte, f.transcript_id, f.verbatim) for f in membres],
+                membres=[
+                    Membre(
+                        source=f.source,
+                        texte=f.texte,
+                        transcript_id=f.transcript_id,
+                        verbatim=f.verbatim,
+                        source_id=f.id,
+                    )
+                    for f in membres
+                ],
             )
             for membres in groupes.values()
         ]

@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.template
 
 # Python
 .venv/
@@ -13,6 +15,7 @@ __pycache__/
 # Frontend
 ui/node_modules/
 ui/dist/
+ui/.svelte-kit/
 ui/.pnpm-store/
 
 # IDE

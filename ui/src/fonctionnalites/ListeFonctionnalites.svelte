@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Idee } from '../types';
   import { importerIdees, listerIdees } from '../api/idees';
+  import { hashDepuisVue } from '../navigation/routage';
 
   let idees = $state<Idee[]>([]);
   let chargement = $state(true);
@@ -83,7 +84,17 @@
         <tbody>
           {#each idees as idee (idee.id)}
             <tr>
-              <td>{idee.titre}</td>
+              <td>
+                <a
+                  class="lien-ligne"
+                  href={hashDepuisVue({
+                    nom: 'sources:featurebase:detail',
+                    id: idee.id,
+                  })}
+                  aria-label={`Voir le détail de la demande FeatureBase #${idee.id}`}
+                  >{idee.titre}</a
+                >
+              </td>
               <td class="col-votes">
                 <span class="fr-badge fr-badge--info">{idee.nb_votes}</span>
               </td>
@@ -108,5 +119,16 @@
   .col-votes {
     width: 6rem;
     text-align: center;
+  }
+
+  .lien-ligne {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .lien-ligne:hover,
+  .lien-ligne:focus {
+    text-decoration: underline;
   }
 </style>
