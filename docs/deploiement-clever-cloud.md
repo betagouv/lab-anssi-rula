@@ -24,9 +24,11 @@ RULA_PORT=9000
 ```
 
 Configurer exclusivement dans Clever Cloud les secrets `ALBERT_CLE_API` et
-`CC_HTTP_BASIC_AUTH`, ainsi que `ALBERT_URL` et les options Albert nécessaires
-à l'environnement. `CC_HTTP_BASIC_AUTH` protège l'interface et l'API avec la
-valeur `utilisateur:mot_de_passe`.
+`RULA_HTTP_BASIC_AUTH`, ainsi que `ALBERT_URL` et les options Albert nécessaires
+à l'environnement. Supprimer `CC_HTTP_BASIC_AUTH` : l'authentification est
+gérée par FastAPI. `RULA_HTTP_BASIC_AUTH` utilise la valeur
+`utilisateur:mot_de_passe`; seule la route `/api/sante` reste accessible sans
+authentification pour le healthcheck Clever Cloud.
 
 Le hook de post-build compile l'interface puis exécute les migrations SQL. La
 table `migrations_executees` empêche qu'une migration soit jouée deux fois.

@@ -1,5 +1,6 @@
 from configuration import (
     Albert,
+    Authentification,
     BaseDeDonnees,
     Configuration,
     Correspondance,
@@ -17,11 +18,34 @@ def test_valeurs_par_defaut():
     assert config.base_de_donnees.port == 5432
     assert config.base_de_donnees.nom == "rula"
     assert config.correspondance.seuil == 0.35
+    assert config.authentification is None
+
+
+def test_configuration_charge_l_authentification_basic(monkeypatch):
+    monkeypatch.setenv("RULA_HTTP_BASIC_AUTH", "demo:mot-de-passe")
+
+    config = charge_configuration()
+
+    assert config.authentification == Authentification("demo", "mot-de-passe")
+
+
+def test_configuration_refuse_une_authentification_invalide(monkeypatch):
+    monkeypatch.setenv("RULA_HTTP_BASIC_AUTH", "demo-sans-mot-de-passe")
+
+    try:
+        charge_configuration()
+    except ValueError as erreur:
+        assert str(erreur) == (
+            "RULA_HTTP_BASIC_AUTH doit être au format utilisateur:mot_de_passe"
+        )
+    else:
+        raise AssertionError("Une authentification invalide doit être refusée")
 
 
 def test_configuration_constructible_avec_valeurs_custom():
     config = Configuration(
         rula=Rula(port=4000, hote="custom", max_requetes_par_minute=50),
+        authentification=Authentification("u", "s"),
         albert=Albert(
             url="https://albert.example.com",
             cle_api="ma-cle",

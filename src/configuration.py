@@ -27,8 +27,14 @@ class Rula(NamedTuple):
     max_requetes_par_minute: int
 
 
+class Authentification(NamedTuple):
+    utilisateur: str
+    mot_de_passe: str
+
+
 class Configuration(NamedTuple):
     rula: Rula
+    authentification: Authentification | None
     albert: Albert
     base_de_donnees: BaseDeDonnees
     correspondance: Correspondance
@@ -42,6 +48,19 @@ def _variable(nom: str, defaut: str, *noms_secours: str) -> str:
     return defaut
 
 
+def _charge_authentification() -> Authentification | None:
+    valeur = os.environ.get("RULA_HTTP_BASIC_AUTH", "")
+    if not valeur:
+        return None
+
+    utilisateur, separateur, mot_de_passe = valeur.partition(":")
+    if not separateur or not utilisateur or not mot_de_passe:
+        raise ValueError(
+            "RULA_HTTP_BASIC_AUTH doit être au format utilisateur:mot_de_passe"
+        )
+    return Authentification(utilisateur, mot_de_passe)
+
+
 def charge_configuration() -> Configuration:
     return Configuration(
         rula=Rula(
@@ -51,6 +70,7 @@ def charge_configuration() -> Configuration:
                 os.environ.get("RULA_MAX_REQUETES_PAR_MINUTE", "100")
             ),
         ),
+        authentification=_charge_authentification(),
         albert=Albert(
             url=os.environ.get("ALBERT_URL", ""),
             cle_api=os.environ.get("ALBERT_CLE_API", ""),

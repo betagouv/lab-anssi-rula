@@ -7,7 +7,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from api.api import routeur
-from configuration import charge_configuration
+from api.authentification import AuthentificationBasicMiddleware
+from configuration import Authentification, charge_configuration
 
 _config = charge_configuration()
 REPERTOIRE_FRONTEND = Path(__file__).resolve().parents[1] / "ui" / "dist"
@@ -20,6 +21,21 @@ limiter = Limiter(
 app = FastAPI(title="RULA", version="0.1.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+def ajoute_authentification(
+    app_fastapi: FastAPI, authentification: Authentification | None
+) -> None:
+    if authentification is None:
+        return
+    app_fastapi.add_middleware(
+        AuthentificationBasicMiddleware,
+        utilisateur=authentification.utilisateur,
+        mot_de_passe=authentification.mot_de_passe,
+    )
+
+
+ajoute_authentification(app, _config.authentification)
 
 app.include_router(routeur, prefix="/api")
 

@@ -45,6 +45,7 @@ Créer un fichier `.env` à partir de `.env.template`.
 | `ALBERT_CLE_API` | Clé d'authentification Albert |
 | `ALBERT_MODELE` | Modèle LLM (défaut : `openweight-medium`) |
 | `DB_MOT_DE_PASSE` | Mot de passe PostgreSQL |
+| `RULA_HTTP_BASIC_AUTH` | Identifiants de démo au format `utilisateur:mot_de_passe` |
 
 ## 🧪 Comment valider ?
 
