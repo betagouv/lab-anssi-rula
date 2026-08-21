@@ -25,6 +25,7 @@
   let erreur = $state('');
   let guideOuvert = $state(false);
   let donneesVerifiees = $state(false);
+  let guide = $state<HTMLElement | null>(null);
 
   function versOptions(ressources: Ressource[], libelle: string): Option[] {
     return [
@@ -67,6 +68,12 @@
             ? e.message
             : "Erreur lors du chargement de l'entretien";
       });
+  });
+
+  $effect(() => {
+    if (!guideOuvert || !guide) return;
+    guide.focus();
+    guide.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   async function creerSiNouveau(
@@ -194,8 +201,10 @@
 
     {#if guideOuvert}
       <section
+        bind:this={guide}
         class="guide fr-alert fr-alert--info"
         aria-labelledby="guide-confidentialite-titre"
+        tabindex="-1"
       >
         <h2 id="guide-confidentialite-titre" class="fr-h5">
           Vérifiez le transcript avant de l’enregistrer
