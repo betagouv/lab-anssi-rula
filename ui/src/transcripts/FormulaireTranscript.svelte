@@ -4,6 +4,8 @@
     obtenirTranscript,
     ajouterTranscript,
     modifierTranscript,
+    TranscriptNonConforme,
+    type RaisonRefusTranscript,
   } from '../api/transcripts';
 
   const NOUVEAU = '__nouveau__';
@@ -23,9 +25,11 @@
   let dateEntretien = $state('');
   let contenu = $state('');
   let erreur = $state('');
+  let raisonsRefus = $state<RaisonRefusTranscript[]>([]);
   let guideOuvert = $state(false);
   let donneesVerifiees = $state(false);
   let guide = $state<HTMLElement | null>(null);
+  let verificationEnCours = $state(false);
 
   function versOptions(ressources: Ressource[], libelle: string): Option[] {
     return [
@@ -76,42 +80,39 @@
     guide.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
-  async function creerSiNouveau(
-    valeur: string,
-    nom: string,
-    route: string
-  ): Promise<number> {
-    if (valeur !== NOUVEAU) return Number(valeur);
-    const r = await fetch(route, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nom }),
-    });
-    return ((await r.json()) as { id: number }).id;
-  }
-
   function demanderEnregistrement() {
     donneesVerifiees = false;
+    raisonsRefus = [];
+    erreur = '';
     guideOuvert = true;
   }
 
   async function enregistrer() {
     erreur = '';
+    raisonsRefus = [];
+    verificationEnCours = true;
     try {
-      const [iId, pId] = await Promise.all([
-        creerSiNouveau(identiteId, nouvelleIdentite, '/api/identites'),
-        creerSiNouveau(produitId, nouveauProduit, '/api/produits'),
-      ]);
       const payload = {
-        identite_id: iId,
-        produit_id: pId,
+        ...(identiteId === NOUVEAU
+          ? { nouvelle_identite: nouvelleIdentite }
+          : { identite_id: Number(identiteId) }),
+        ...(produitId === NOUVEAU
+          ? { nouveau_produit: nouveauProduit }
+          : { produit_id: Number(produitId) }),
         date_entretien: dateEntretien,
         contenu,
       };
       await (id ? modifierTranscript(id, payload) : ajouterTranscript(payload));
       onnaviquer({ nom: 'sources:entretiens' });
-    } catch {
-      erreur = 'Une erreur est survenue, veuillez réessayer.';
+    } catch (e) {
+      if (e instanceof TranscriptNonConforme) {
+        raisonsRefus = e.raisons;
+      } else {
+        erreur =
+          'La vérification des données est indisponible. Le transcript n’a pas été enregistré.';
+      }
+    } finally {
+      verificationEnCours = false;
     }
   }
 </script>
@@ -251,7 +252,20 @@
       </section>
     {/if}
 
-    {#if erreur}
+    {#if raisonsRefus.length}
+      <div class="fr-alert fr-alert--error">
+        <h2 class="fr-alert__title">Transcript non enregistré</h2>
+        <p>
+          Les données ne semblent pas suffisamment anonymisées ou désensibilisées.
+          Corrigez les éléments signalés avant de réessayer.
+        </p>
+        <ul>
+          {#each raisonsRefus as raison (`${raison.categorie}-${raison.element}`)}
+            <li>{raison.element} : {raison.raison}</li>
+          {/each}
+        </ul>
+      </div>
+    {:else if erreur}
       <p class="erreur">{erreur}</p>
     {/if}
 
@@ -270,8 +284,11 @@
         <button
           class="fr-btn"
           type="button"
-          disabled={!donneesVerifiees}
-          onclick={enregistrer}>Enregistrer le transcript</button
+          disabled={!donneesVerifiees || verificationEnCours}
+          onclick={enregistrer}
+          >{verificationEnCours
+            ? 'Vérification en cours…'
+            : 'Enregistrer le transcript'}</button
         >
       {:else}
         <button class="fr-btn" type="button" onclick={demanderEnregistrement}>
