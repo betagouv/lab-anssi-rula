@@ -25,7 +25,6 @@
   let erreur = $state('');
   let guideOuvert = $state(false);
   let donneesVerifiees = $state(false);
-  let dialog = $state<HTMLDialogElement | null>(null);
 
   function versOptions(ressources: Ressource[], libelle: string): Option[] {
     return [
@@ -70,12 +69,6 @@
       });
   });
 
-  $effect(() => {
-    if (!dialog) return;
-    if (guideOuvert) dialog.showModal();
-    else dialog.close();
-  });
-
   async function creerSiNouveau(
     valeur: string,
     nom: string,
@@ -90,8 +83,7 @@
     return ((await r.json()) as { id: number }).id;
   }
 
-  async function soumettre(e: SubmitEvent) {
-    e.preventDefault();
+  function demanderEnregistrement() {
     donneesVerifiees = false;
     guideOuvert = true;
   }
@@ -131,7 +123,7 @@
 
   <h1 class="fr-h2">{id ? "Modifier l'entretien" : 'Ajouter un entretien'}</h1>
 
-  <form onsubmit={soumettre}>
+  <form>
     <dsfr-select
       id="identite"
       label="Identité"
@@ -200,6 +192,56 @@
       }}
     ></dsfr-textarea>
 
+    {#if guideOuvert}
+      <section
+        class="guide fr-alert fr-alert--info"
+        aria-labelledby="guide-confidentialite-titre"
+      >
+        <h2 id="guide-confidentialite-titre" class="fr-h5">
+          Vérifiez le transcript avant de l’enregistrer
+        </h2>
+        <p>
+          Les informations saisies seront enregistrées dans la base de données. Ne
+          transmettez que des données préparées pour cet usage.
+        </p>
+        <h3 class="fr-h6">Guide de préparation</h3>
+        <ol>
+          <li>
+            <strong>Anonymisez les personnes et les organisations.</strong> Remplacez les
+            noms, adresses e-mail, numéros de téléphone, noms d’entreprise et tout élément
+            permettant d’identifier quelqu’un par un terme générique, comme « une participante
+            » ou « une collectivité ».
+          </li>
+          <li>
+            <strong>Désensibilisez le contenu.</strong> Retirez les identifiants, liens
+            internes, données d’accès, informations de sécurité, données personnelles et
+            tout détail qui ne serait pas nécessaire pour comprendre le besoin exprimé.
+          </li>
+          <li>
+            <strong>Généralisez les technologies et les produits.</strong> Ne citez aucun
+            nom de logiciel, de service, d’équipement ou de produit. Utilisez par exemple
+            « un outil de visioconférence » ou « une solution métier ». Ces précisions
+            pourraient faciliter une attaque ciblée.
+          </li>
+        </ol>
+        <p>
+          Appliquez ces vérifications au contenu de l’entretien, ainsi qu’aux champs
+          « Identité » et « Projet » si vous en créez de nouveaux.
+        </p>
+        <div class="fr-checkbox-group">
+          <input
+            id="donnees-verifiees"
+            type="checkbox"
+            bind:checked={donneesVerifiees}
+          />
+          <label class="fr-label" for="donnees-verifiees">
+            Je confirme avoir anonymisé et désensibilisé les données, et retiré les
+            noms de technologies et de produits.
+          </label>
+        </div>
+      </section>
+    {/if}
+
     {#if erreur}
       <p class="erreur">{erreur}</p>
     {/if}
@@ -210,106 +252,26 @@
         type="button"
         onclick={() => onnaviquer({ nom: 'sources:entretiens' })}>Annuler</button
       >
-      <button class="fr-btn" type="submit">
-        {id ? 'Enregistrer les modifications' : "Enregistrer l'entretien"}
-      </button>
+      {#if guideOuvert}
+        <button
+          class="fr-btn fr-btn--secondary"
+          type="button"
+          onclick={() => (guideOuvert = false)}>Revenir au formulaire</button
+        >
+        <button
+          class="fr-btn"
+          type="button"
+          disabled={!donneesVerifiees}
+          onclick={enregistrer}>Enregistrer le transcript</button
+        >
+      {:else}
+        <button class="fr-btn" type="button" onclick={demanderEnregistrement}>
+          {id ? 'Enregistrer les modifications' : "Enregistrer l'entretien"}
+        </button>
+      {/if}
     </div>
   </form>
 </div>
-
-<dialog
-  bind:this={dialog}
-  class="fr-modal"
-  aria-labelledby="guide-confidentialite-titre"
-  onclose={() => (guideOuvert = false)}
->
-  <div class="fr-container fr-container--fluid fr-container-md">
-    <div class="fr-grid-row fr-grid-row--center">
-      <div class="fr-col-12 fr-col-md-8 fr-col-lg-7">
-        <div class="fr-modal__body">
-          <div class="fr-modal__header">
-            <button
-              class="fr-btn--close fr-btn"
-              type="button"
-              onclick={() => (guideOuvert = false)}
-            >
-              Fermer
-            </button>
-          </div>
-          <div class="fr-modal__content">
-            <h1 id="guide-confidentialite-titre" class="fr-modal__title">
-              Vérifiez le transcript avant de l’enregistrer
-            </h1>
-            <p>
-              Les informations saisies seront enregistrées dans la base de données.
-              Ne transmettez que des données préparées pour cet usage.
-            </p>
-            <h2 class="fr-h6">Guide de préparation</h2>
-            <ol>
-              <li>
-                <strong>Anonymisez les personnes et les organisations.</strong> Remplacez
-                les noms, adresses e-mail, numéros de téléphone, noms d’entreprise et tout
-                élément permettant d’identifier quelqu’un par un terme générique, comme
-                « une participante » ou « une collectivité ».
-              </li>
-              <li>
-                <strong>Désensibilisez le contenu.</strong> Retirez les identifiants, liens
-                internes, données d’accès, informations de sécurité, données personnelles
-                et tout détail qui ne serait pas nécessaire pour comprendre le besoin exprimé.
-              </li>
-              <li>
-                <strong>Généralisez les technologies et les produits.</strong> Ne citez
-                aucun nom de logiciel, de service, d’équipement ou de produit. Utilisez
-                par exemple « un outil de visioconférence » ou « une solution métier ».
-                Ces précisions pourraient faciliter une attaque ciblée.
-              </li>
-            </ol>
-            <p>
-              Appliquez ces vérifications au contenu de l’entretien, ainsi qu’aux
-              champs « Identité » et « Projet » si vous en créez de nouveaux.
-            </p>
-            <div class="fr-checkbox-group">
-              <input
-                id="donnees-verifiees"
-                type="checkbox"
-                bind:checked={donneesVerifiees}
-              />
-              <label class="fr-label" for="donnees-verifiees">
-                Je confirme avoir anonymisé et désensibilisé les données, et retiré
-                les noms de technologies et de produits.
-              </label>
-            </div>
-          </div>
-          <div class="fr-modal__footer">
-            <ul
-              class="fr-btns-group fr-btns-group--right fr-btns-group--inline-reverse fr-btns-group--inline-lg"
-            >
-              <li>
-                <button
-                  class="fr-btn fr-btn--secondary"
-                  type="button"
-                  onclick={() => (guideOuvert = false)}
-                >
-                  Revenir au formulaire
-                </button>
-              </li>
-              <li>
-                <button
-                  class="fr-btn"
-                  type="button"
-                  disabled={!donneesVerifiees}
-                  onclick={enregistrer}
-                >
-                  Enregistrer le transcript
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</dialog>
 
 <style>
   form {
@@ -318,8 +280,12 @@
     gap: 1.5rem;
     max-width: 720px;
   }
+  .guide {
+    margin: 0;
+  }
   .boutons {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
   }
   .erreur {
