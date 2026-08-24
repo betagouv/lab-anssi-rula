@@ -1,12 +1,9 @@
 import json
 
 from adaptateurs.albert import AdaptateurAlbert
-from besoins.depot import BesoinDetecte, DepotBesoinsDetectes
-from fonctionnalites.depot import DepotFonctionnalitesTranscripts
-from fonctionnalites.service import FonctionnalitesDejaExistantes, ServiceFonctionnalites
-from idees.depot import DepotIdees
-from retours_bizdev.depot import DepotRetoursBizDev
-from transcripts.depot import DepotTranscripts
+from besoins.dependances import DependancesBesoins
+from besoins.depot import BesoinDetecte
+from fonctionnalites.service import FonctionnalitesDejaExistantes
 
 
 class SourceBesoinInconnue(ValueError):
@@ -16,25 +13,18 @@ class SourceBesoinInconnue(ValueError):
 class ServiceBesoinsDetectes:
     def __init__(
         self,
-        depot: DepotBesoinsDetectes,
-        depot_transcripts: DepotTranscripts,
-        depot_fonctionnalites: DepotFonctionnalitesTranscripts,
-        service_fonctionnalites: ServiceFonctionnalites,
-        depot_idees: DepotIdees,
-        depot_retours: DepotRetoursBizDev,
+        dependances: DependancesBesoins,
         albert: AdaptateurAlbert,
-        prompt_featurebase: str,
-        prompt_bizdev: str,
+        prompts: tuple[str, str],
     ) -> None:
-        self._depot = depot
-        self._depot_transcripts = depot_transcripts
-        self._depot_fonctionnalites = depot_fonctionnalites
-        self._service_fonctionnalites = service_fonctionnalites
-        self._depot_idees = depot_idees
-        self._depot_retours = depot_retours
+        self._depot = dependances.depot
+        self._depot_transcripts = dependances.depot_transcripts
+        self._depot_fonctionnalites = dependances.depot_fonctionnalites
+        self._service_fonctionnalites = dependances.service_fonctionnalites
+        self._depot_idees = dependances.depot_idees
+        self._depot_retours = dependances.depot_retours
         self._albert = albert
-        self._prompt_featurebase = prompt_featurebase
-        self._prompt_bizdev = prompt_bizdev
+        self._prompt_featurebase, self._prompt_bizdev = prompts
 
     def lister(self, source: str | None = None) -> list[BesoinDetecte]:
         return self._depot.lister(source)

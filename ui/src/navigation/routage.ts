@@ -12,91 +12,101 @@ function segmentsDepuisHash(hash: string): string[] {
   return hash.replace(/^#\/?/, '').replace(/\/+$/, '').split('/');
 }
 
-export function vueDepuisHash(hash: string): Vue {
-  const segments = segmentsDepuisHash(hash);
-  const [premier, second, troisieme, quatrieme] = segments;
-
-  if (premier === 'sources') {
-    if (second === 'entretiens') {
-      const id = entierPositif(troisieme);
-      if (id && quatrieme === 'modifier') {
-        return { nom: 'sources:entretiens:modification', id };
-      }
-      if (id && !quatrieme) return { nom: 'sources:entretiens:detail', id };
-      if (troisieme === 'ajout' && !quatrieme) {
-        return { nom: 'sources:entretiens:ajout' };
-      }
-      if (!troisieme) return { nom: 'sources:entretiens' };
-    }
-    if (second === 'retours-bizdev' && !troisieme) {
-      return { nom: 'sources:retours-bizdev' };
-    }
-    if (second === 'retours-bizdev') {
-      const id = entierPositif(troisieme);
-      if (id && !quatrieme) return { nom: 'sources:retours-bizdev:detail', id };
-    }
-    if (second === 'featurebase' && !troisieme) {
-      return { nom: 'sources:featurebase' };
-    }
-    if (second === 'featurebase') {
-      const id = entierPositif(troisieme);
-      if (id && !quatrieme) return { nom: 'sources:featurebase:detail', id };
-    }
-  }
-
-  if (premier === 'analyses' && !second) return { nom: 'analyses' };
-  if (premier === 'besoins' && !second) return { nom: 'besoins' };
-
-  // Compatibilité avec la première version de l'arborescence.
-  if (premier === 'syntheses') {
-    if (second === 'analyses' && !troisieme) return { nom: 'analyses' };
-    if (second === 'besoins' && !troisieme) return { nom: 'besoins' };
-  }
-
-  if (premier === 'correspondances' && !second) {
-    return { nom: 'correspondances' };
-  }
-
-  // Compatibilité avec les anciens liens internes et favoris.
-  if (premier === 'transcripts') {
-    const id = entierPositif(second);
-    if (id && troisieme === 'modification') {
-      return { nom: 'sources:entretiens:modification', id };
-    }
-    if (id) return { nom: 'sources:entretiens:detail', id };
-    return { nom: 'sources:entretiens' };
-  }
-  if (premier === 'analyses') return { nom: 'analyses' };
-  if (premier === 'fonctionnalites') return { nom: 'sources:featurebase' };
-  if (premier === 'retours-bizdev') return { nom: 'sources:retours-bizdev' };
-  if (premier === 'correspondance') return { nom: 'correspondances' };
-
-  return ROUTE_PAR_DEFAUT;
+function vueDepuisEntretiens(
+  troisieme: string | undefined,
+  quatrieme: string | undefined
+): Vue | undefined {
+  const id = entierPositif(troisieme);
+  if (id && quatrieme === 'modifier')
+    return { nom: 'sources:entretiens:modification', id };
+  if (id && !quatrieme) return { nom: 'sources:entretiens:detail', id };
+  if (troisieme === 'ajout' && !quatrieme)
+    return { nom: 'sources:entretiens:ajout' };
+  return !troisieme ? { nom: 'sources:entretiens' } : undefined;
 }
 
-export function hashDepuisVue(vue: Vue): string {
-  switch (vue.nom) {
-    case 'sources:entretiens':
-      return '#sources/entretiens';
-    case 'sources:entretiens:ajout':
-      return '#sources/entretiens/ajout';
-    case 'sources:entretiens:detail':
-      return `#sources/entretiens/${vue.id}`;
-    case 'sources:entretiens:modification':
-      return `#sources/entretiens/${vue.id}/modifier`;
-    case 'sources:retours-bizdev':
-      return '#sources/retours-bizdev';
-    case 'sources:retours-bizdev:detail':
-      return `#sources/retours-bizdev/${vue.id}`;
-    case 'sources:featurebase':
-      return '#sources/featurebase';
-    case 'sources:featurebase:detail':
-      return `#sources/featurebase/${vue.id}`;
-    case 'analyses':
-      return '#analyses';
-    case 'besoins':
-      return '#besoins';
-    case 'correspondances':
-      return '#correspondances';
+function vueDepuisSource(
+  nom: string | undefined,
+  troisieme: string | undefined,
+  quatrieme: string | undefined
+): Vue | undefined {
+  const routes: Record<string, Vue> = {
+    'retours-bizdev': { nom: 'sources:retours-bizdev' },
+    featurebase: { nom: 'sources:featurebase' },
+  };
+  if (!troisieme) return routes[nom ?? ''];
+  const id = entierPositif(troisieme);
+  if (id && !quatrieme && nom === 'retours-bizdev')
+    return { nom: 'sources:retours-bizdev:detail', id };
+  return id && !quatrieme && nom === 'featurebase'
+    ? { nom: 'sources:featurebase:detail', id }
+    : undefined;
+}
+
+function vueDepuisSources(segments: string[]): Vue | undefined {
+  const [premier, second, troisieme, quatrieme] = segments;
+  if (premier !== 'sources') return undefined;
+  if (second === 'entretiens') return vueDepuisEntretiens(troisieme, quatrieme);
+  return vueDepuisSource(second, troisieme, quatrieme);
+}
+
+function vueDepuisAnciensLiens(segments: string[]): Vue | undefined {
+  const [premier, second, troisieme] = segments;
+  const routes: Record<string, Vue> = {
+    analyses: { nom: 'analyses' },
+    besoins: { nom: 'besoins' },
+    correspondances: { nom: 'correspondances' },
+  };
+  if (premier === 'syntheses' && !troisieme) return routes[second ?? ''];
+  if (premier === 'transcripts') {
+    const id = entierPositif(second);
+    if (id)
+      return {
+        nom:
+          troisieme === 'modification'
+            ? 'sources:entretiens:modification'
+            : 'sources:entretiens:detail',
+        id,
+      };
+    return { nom: 'sources:entretiens' };
   }
+  return (
+    routes[premier] ??
+    {
+      fonctionnalites: { nom: 'sources:featurebase' },
+      'retours-bizdev': { nom: 'sources:retours-bizdev' },
+      correspondance: { nom: 'correspondances' },
+    }[premier ?? '']
+  );
+}
+
+export function vueDepuisHash(hash: string): Vue {
+  const segments = segmentsDepuisHash(hash);
+  return (
+    vueDepuisSources(segments) ?? vueDepuisAnciensLiens(segments) ?? ROUTE_PAR_DEFAUT
+  );
+}
+
+function idDepuisVue(vue: Vue): number {
+  return 'id' in vue ? vue.id : 0;
+}
+
+const HASH_PAR_NOM: Record<Vue['nom'], (vue: Vue) => string> = {
+  'sources:entretiens': () => '#sources/entretiens',
+  'sources:entretiens:ajout': () => '#sources/entretiens/ajout',
+  'sources:entretiens:detail': (vue) => `#sources/entretiens/${idDepuisVue(vue)}`,
+  'sources:entretiens:modification': (vue) =>
+    `#sources/entretiens/${idDepuisVue(vue)}/modifier`,
+  'sources:retours-bizdev': () => '#sources/retours-bizdev',
+  'sources:retours-bizdev:detail': (vue) =>
+    `#sources/retours-bizdev/${idDepuisVue(vue)}`,
+  'sources:featurebase': () => '#sources/featurebase',
+  'sources:featurebase:detail': (vue) => `#sources/featurebase/${idDepuisVue(vue)}`,
+  analyses: () => '#analyses',
+  besoins: () => '#besoins',
+  correspondances: () => '#correspondances',
+};
+
+export function hashDepuisVue(vue: Vue): string {
+  return HASH_PAR_NOM[vue.nom](vue);
 }

@@ -1,16 +1,7 @@
 from identites.depot import DepotIdentites, Identite
+from infra.memoire.depot_nomme import DepotNommeMemoire
 
 
-class DepotIdentitesMemoire(DepotIdentites):
+class DepotIdentitesMemoire(DepotNommeMemoire[Identite], DepotIdentites):
     def __init__(self) -> None:
-        self._identites: list[Identite] = []
-        self._prochain_id = 1
-
-    def ajouter(self, nom: str) -> Identite:
-        identite = Identite(id=self._prochain_id, nom=nom)
-        self._identites.append(identite)
-        self._prochain_id += 1
-        return identite
-
-    def lister(self) -> list[Identite]:
-        return list(self._identites)
+        super().__init__(Identite)

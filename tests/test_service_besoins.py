@@ -1,4 +1,5 @@
 from adaptateurs.albert import AdaptateurAlbert
+from besoins.dependances import DependancesBesoins
 from besoins.service import ServiceBesoinsDetectes
 from fonctionnalites.service import ServiceFonctionnalites
 from infra.memoire.depot_besoins_detectes import DepotBesoinsDetectesMemoire
@@ -24,15 +25,16 @@ def _service(albert: AdaptateurAlbert) -> ServiceBesoinsDetectes:
     fonctionnalites = DepotFonctionnalitesTranscriptsMemoire()
     service_fonctionnalites = ServiceFonctionnalites(transcripts, fonctionnalites, albert, "prompt")
     return ServiceBesoinsDetectes(
-        depot=DepotBesoinsDetectesMemoire(),
-        depot_transcripts=transcripts,
-        depot_fonctionnalites=fonctionnalites,
-        service_fonctionnalites=service_fonctionnalites,
-        depot_idees=DepotIdeesMemoire(),
-        depot_retours=DepotRetoursBizDevMemoire(),
+        dependances=DependancesBesoins(
+            depot=DepotBesoinsDetectesMemoire(),
+            depot_transcripts=transcripts,
+            depot_fonctionnalites=fonctionnalites,
+            service_fonctionnalites=service_fonctionnalites,
+            depot_idees=DepotIdeesMemoire(),
+            depot_retours=DepotRetoursBizDevMemoire(),
+        ),
         albert=albert,
-        prompt_featurebase="prompt featurebase",
-        prompt_bizdev="prompt bizdev",
+        prompts=("prompt featurebase", "prompt bizdev"),
     )
 
 

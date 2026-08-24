@@ -1,5 +1,6 @@
-from abc import ABC, abstractmethod
 from typing import NamedTuple
+
+from depot_nomme import DepotNomme
 
 
 class Identite(NamedTuple):
@@ -7,9 +8,5 @@ class Identite(NamedTuple):
     nom: str
 
 
-class DepotIdentites(ABC):
-    @abstractmethod
-    def ajouter(self, nom: str) -> Identite: ...
-
-    @abstractmethod
-    def lister(self) -> list[Identite]: ...
+class DepotIdentites(DepotNomme[Identite]):
+    pass

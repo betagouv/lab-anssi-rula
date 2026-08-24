@@ -1,6 +1,6 @@
 from adaptateurs.albert import AdaptateurAlbert
 from correspondance.depot import Cluster, Membre
-from correspondance.service import ServiceCorrespondance
+from correspondance.service import ConfigurationCorrespondance, ServiceCorrespondance
 from infra.memoire.depot_correspondance import DepotCorrespondanceMemoire
 from infra.memoire.depot_correspondances_calculees import DepotCorrespondancesCalculeesMemoire
 
@@ -20,9 +20,7 @@ def test_valider_garde_cluster_si_json_invalide() -> None:
         DepotCorrespondanceMemoire([]),
         DepotCorrespondancesCalculeesMemoire(),
         _AlbertJsonInvalideDeTest(),
-        0.35,
-        "prompt libelle",
-        "prompt validation",
+        ConfigurationCorrespondance(0.35, "prompt libelle", "prompt validation"),
     )
     assert service._valider([cluster]) == [cluster]
 
@@ -34,9 +32,7 @@ def test_nommer_donne_un_libelle_aux_groupes_unitaires() -> None:
         DepotCorrespondanceMemoire([]),
         DepotCorrespondancesCalculeesMemoire(),
         _AlbertJsonInvalideDeTest(),
-        0.35,
-        "prompt libelle",
-        "prompt validation",
+        ConfigurationCorrespondance(0.35, "prompt libelle", "prompt validation"),
     )
 
     assert service._nommer([cluster]) == [
