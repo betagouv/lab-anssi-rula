@@ -36,7 +36,7 @@ Trois services Docker orchestrés par `docker-compose.yml`. En développement, l
 | Gestionnaire paquets Python | uv | — | Venv + dépendances |
 | Base de données | PostgreSQL | 17-alpine | Stockage |
 | Driver DB | psycopg2-binary | — | SQL brut (pas d'ORM) |
-| LLM | Albert API | — | Extraction Meta-Features |
+| LLM | Albert API | — | Analyse de transcripts |
 | Client HTTP | httpx | — | Appels Albert |
 | Rate limiting | slowapi | — | Protection API |
 | Langage frontend | TypeScript | 5.x | — |
@@ -190,55 +190,43 @@ existants (`#transcripts`, `#syntheses/analyses`, `#syntheses/besoins`, etc.).
 ## Schéma de base de données
 
 ```sql
-produits (id, nom, cree_le)
+transcripts (id, titre, contenu, produit_id, date_entretien, cree_le, modifie_le)
     │
-    ├── transcripts (id, titre, contenu, produit_id, date_entretien, cree_le, modifie_le)
-    │
-    └── analyses (id, produit_id, date_debut, date_fin, cree_le)
-            │
-            └── meta_features (id, analyse_id, nom, description, occurrences, verbatims)
+    └── analyses_transcripts (id, transcript_id, contenu, cree_le)
 ```
 
-`verbatims` est stocké en `JSONB` : liste des extraits textuels sources de la Meta-Feature.
+Chaque transcript ne possède qu'une analyse. `contenu` stocke la synthèse Markdown
+générée par Albert.
 
 ---
 
 ## Flux d'analyse LLM
 
 ```
-1. POST /api/analyses
-   { produit_id, date_debut, date_fin }
+1. POST /api/analyses/transcripts/{transcript_id}
         │
         ▼
-2. Récupère tous les transcripts du produit sur la période
+2. Récupère le transcript demandé
         │
         ▼
-3. Construit un prompt avec le corpus complet
+3. Envoie le prompt d'analyse et le contenu du transcript à Albert
         │
         ▼
 4. POST Albert API /v1/chat/completions
-   → Retourne JSON : liste de Meta-Features avec occurrences + verbatims
+   → Retourne une synthèse Markdown structurée
         │
         ▼
-5. Stocke en base : INSERT analyses + meta_features
+5. Stocke en base : INSERT analyses_transcripts
         │
         ▼
-6. GET /api/analyses/{id}/meta-features → UI affiche les résultats
+6. GET /api/analyses/transcripts/{transcript_id}
+   → Retourne l'analyse associée au transcript
 ```
 
-**Format de réponse Albert attendu (JSON strict) :**
-```json
-{
-  "meta_features": [
-    {
-      "nom": "Difficulté de navigation",
-      "description": "Les utilisateurs peinent à trouver les guides thématiques",
-      "occurrences": 4,
-      "verbatims": ["je ne trouve pas...", "c'est pas clair..."]
-    }
-  ]
-}
-```
+Le prompt impose une structure Markdown en dix sections (profil, compréhension
+du sujet, besoins, points de douleur, cas concrets, contournements,
+priorisation, questions ouvertes, vocabulaire et synthèse). Le résultat reste
+consultable via `GET /api/analyses`.
 
 ---
 
