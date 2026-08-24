@@ -1,0 +1,31 @@
+config_version = "0"
+
+exclude_patterns = [
+  ".harness/**",
+  "ui/node_modules/**",
+  "ui/dist/**",
+  ".venv/**",
+]
+
+test_patterns = [
+  "tests/**",
+  "ui/**/*.test.*",
+]
+
+[[source]]
+name = "default"
+default = true
+
+
+[[plugin]]
+name = "bandit"
+
+[[exclude]]
+plugins = ["bandit"]
+file_patterns = ["tests/**"]
+
+[[triage]]
+match.plugins = ["bandit"]
+match.rules = ["bandit:B404", "bandit:B603"]
+match.file_patterns = ["scripts/harness.py"]
+set.ignored = true

@@ -12,6 +12,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 .clever.json
+.harness/
+.serena/
 
 # Frontend
 ui/node_modules/
