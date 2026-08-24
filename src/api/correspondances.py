@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from adaptateurs.albert import AdaptateurAlbertReel
 from configuration import charge_configuration
 from correspondance.depot import DepotCorrespondance, DepotCorrespondancesCalculees
-from correspondance.service import ServiceCorrespondance
+from correspondance.service import ConfigurationCorrespondance, ServiceCorrespondance
 from infra.postgres.depot_correspondance import DepotCorrespondancePostgres
 from infra.postgres.depot_correspondances_calculees import DepotCorrespondancesCalculeesPostgres
 
@@ -31,7 +31,12 @@ def fabrique_service_correspondance(  # pragma: no cover
     depot_calcule: DepotCorrespondancesCalculees = Depends(fabrique_depot_correspondances_calculees),
 ) -> ServiceCorrespondance:
     config = charge_configuration()
-    return ServiceCorrespondance(depot, depot_calcule, AdaptateurAlbertReel(config.albert), config.correspondance.seuil, _prompt_libelle, _prompt_validation)
+    return ServiceCorrespondance(
+        depot,
+        depot_calcule,
+        AdaptateurAlbertReel(config.albert),
+        ConfigurationCorrespondance(config.correspondance.seuil, _prompt_libelle, _prompt_validation),
+    )
 
 
 @routeur.get("/correspondances")

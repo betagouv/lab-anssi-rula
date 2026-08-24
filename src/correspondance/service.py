@@ -1,8 +1,16 @@
 import json
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 
 from adaptateurs.albert import AdaptateurAlbert
 from correspondance.depot import Cle, Cluster, DepotCorrespondance, DepotCorrespondancesCalculees, Feature, Membre
+
+
+@dataclass(frozen=True)
+class ConfigurationCorrespondance:
+    seuil: float
+    prompt_libelle: str
+    prompt_validation: str
 
 
 class ServiceCorrespondance:
@@ -11,16 +19,14 @@ class ServiceCorrespondance:
         depot: DepotCorrespondance,
         depot_calcule: DepotCorrespondancesCalculees,
         albert: AdaptateurAlbert,
-        seuil: float,
-        prompt_libelle: str,
-        prompt_validation: str,
+        configuration: ConfigurationCorrespondance,
     ) -> None:
         self._depot = depot
         self._depot_calcule = depot_calcule
         self._albert = albert
-        self._seuil = seuil
-        self._prompt_libelle = prompt_libelle
-        self._prompt_validation = prompt_validation
+        self._seuil = configuration.seuil
+        self._prompt_libelle = configuration.prompt_libelle
+        self._prompt_validation = configuration.prompt_validation
 
     def charger(self) -> list[Cluster]:
         return self._depot_calcule.charger()

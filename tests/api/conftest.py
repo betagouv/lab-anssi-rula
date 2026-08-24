@@ -16,7 +16,8 @@ from api.produits import fabrique_depot_produits
 from api.retours_bizdev import fabrique_service_retours_bizdev
 from api.transcripts import fabrique_depot_transcripts
 from correspondance.depot import Feature
-from correspondance.service import ServiceCorrespondance
+from correspondance.service import ConfigurationCorrespondance, ServiceCorrespondance
+from besoins.dependances import DependancesBesoins
 from besoins.service import ServiceBesoinsDetectes
 from fonctionnalites.service import ServiceFonctionnalites
 from idees.service import ServiceIdees
@@ -88,19 +89,25 @@ def client() -> Generator[TestClient, None, None]:
     service_analyse = ServiceAnalyse(depot_transcripts, depot_analyses, _AlbertAnalyseDeTest(), "prompt test")
     service_fonctionnalites = ServiceFonctionnalites(depot_transcripts, depot_fonctionnalites, _AlbertFonctionnalitesDeTest(), "prompt test")
     service_besoins = ServiceBesoinsDetectes(
-        depot=depot_besoins,
-        depot_transcripts=depot_transcripts,
-        depot_fonctionnalites=depot_fonctionnalites,
-        service_fonctionnalites=service_fonctionnalites,
-        depot_idees=depot_idees,
-        depot_retours=depot_retours_bizdev,
+        dependances=DependancesBesoins(
+            depot=depot_besoins,
+            depot_transcripts=depot_transcripts,
+            depot_fonctionnalites=depot_fonctionnalites,
+            service_fonctionnalites=service_fonctionnalites,
+            depot_idees=depot_idees,
+            depot_retours=depot_retours_bizdev,
+        ),
         albert=_AlbertFonctionnalitesDeTest(),
-        prompt_featurebase="prompt featurebase",
-        prompt_bizdev="prompt bizdev",
+        prompts=("prompt featurebase", "prompt bizdev"),
     )
     service_idees = ServiceIdees(depot=depot_idees)
     service_retours_bizdev = ServiceRetoursBizDev(depot=depot_retours_bizdev)
-    service_correspondance = ServiceCorrespondance(DepotCorrespondanceMemoire(list(_FEATURES)), DepotCorrespondancesCalculeesMemoire(), _AlbertEmbeddingsDeTest(), 0.35, "prompt test", "prompt validation test")
+    service_correspondance = ServiceCorrespondance(
+        DepotCorrespondanceMemoire(list(_FEATURES)),
+        DepotCorrespondancesCalculeesMemoire(),
+        _AlbertEmbeddingsDeTest(),
+        ConfigurationCorrespondance(0.35, "prompt test", "prompt validation test"),
+    )
     app.dependency_overrides[fabrique_depot_identites] = lambda: depot_identites
     app.dependency_overrides[fabrique_depot_produits] = lambda: depot_produits
     app.dependency_overrides[fabrique_depot_transcripts] = lambda: depot_transcripts
