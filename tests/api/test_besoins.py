@@ -2,6 +2,9 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
+from api.besoins import fabrique_dependances_besoins
+from besoins.dependances import DependancesBesoins
+
 TRANSCRIPT = {
     "identite_id": 1,
     "produit_id": 1,
@@ -15,6 +18,32 @@ BIZDEV_CSV = "Verbatim,User nom,Rôle du user,Type cible,Source,Lien,Date,Qui ?,
 def test_lister_besoins_vide_et_filtrer_source(client: TestClient) -> None:
     assert client.get("/api/besoins").json() == []
     assert client.get("/api/besoins?source=idee").json() == []
+
+
+def test_fabrique_dependances_besoins_transmet_les_dependances_injectees() -> None:
+    depot = object()
+    depot_transcripts = object()
+    depot_fonctionnalites = object()
+    service_fonctionnalites = object()
+    depot_idees = object()
+    depot_retours = object()
+
+    dependances = fabrique_dependances_besoins(
+        depot=depot,  # type: ignore[arg-type]
+        depot_transcripts=depot_transcripts,  # type: ignore[arg-type]
+        depot_fonctionnalites=depot_fonctionnalites,  # type: ignore[arg-type]
+        service_fonctionnalites=service_fonctionnalites,  # type: ignore[arg-type]
+        depot_idees=depot_idees,  # type: ignore[arg-type]
+        depot_retours=depot_retours,  # type: ignore[arg-type]
+    )
+
+    assert isinstance(dependances, DependancesBesoins)
+    assert dependances.depot is depot
+    assert dependances.depot_transcripts is depot_transcripts
+    assert dependances.depot_fonctionnalites is depot_fonctionnalites
+    assert dependances.service_fonctionnalites is service_fonctionnalites
+    assert dependances.depot_idees is depot_idees
+    assert dependances.depot_retours is depot_retours
 
 
 def test_analyser_besoins_featurebase(client: TestClient) -> None:
