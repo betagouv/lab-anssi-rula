@@ -14,6 +14,7 @@ class RetourBrut(NamedTuple):
 
 class Retour(NamedTuple):
     id: int
+    produit_id: int
     verbatim: str
     categorie: str | None
     item: str | None
@@ -25,7 +26,9 @@ class Retour(NamedTuple):
 
 class DepotRetoursBizDev(ABC):
     @abstractmethod
-    def remplacer_tous(self, retours: list[RetourBrut]) -> list[Retour]: ...
+    def remplacer_tous(
+        self, produit_id: int, retours: list[RetourBrut]
+    ) -> list[Retour]: ...
 
     @abstractmethod
-    def lister(self) -> list[Retour]: ...
+    def lister(self, produit_id: int | None = None) -> list[Retour]: ...

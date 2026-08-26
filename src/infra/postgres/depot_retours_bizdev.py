@@ -11,19 +11,48 @@ class DepotRetoursBizDevPostgres(DepotRetoursBizDev):  # pragma: no cover
         self._connexion: Any = None
 
     @avec_connexion
-    def remplacer_tous(self, retours: list[RetourBrut]) -> list[Retour]:
-        with self._connexion.cursor() as cur:
-            cur.execute("TRUNCATE TABLE retours_bizdev RESTART IDENTITY")
-            cur.executemany(
-                "INSERT INTO retours_bizdev (verbatim, categorie, item, role, qui, date_retour) VALUES (%s, %s, %s, %s, %s, %s)",
-                [(r.verbatim, r.categorie, r.item, r.role, r.qui, r.date_retour) for r in retours],
-            )
-        return self.lister()
-
-    @avec_connexion
-    def lister(self) -> list[Retour]:
+    def remplacer_tous(
+        self, produit_id: int, retours: list[RetourBrut]
+    ) -> list[Retour]:
         with self._connexion.cursor() as cur:
             cur.execute(
-                "SELECT id, verbatim, categorie, item, role, qui, date_retour, importe_le FROM retours_bizdev ORDER BY importe_le DESC"
+                "DELETE FROM retours_bizdev WHERE produit_id = %s", (produit_id,)
             )
-            return [Retour(id=r[0], verbatim=r[1], categorie=r[2], item=r[3], role=r[4], qui=r[5], date_retour=r[6], importe_le=r[7]) for r in cur.fetchall()]
+            cur.executemany(
+                "INSERT INTO retours_bizdev (produit_id, verbatim, categorie, item, role, qui, date_retour) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                [
+                    (
+                        produit_id,
+                        r.verbatim,
+                        r.categorie,
+                        r.item,
+                        r.role,
+                        r.qui,
+                        r.date_retour,
+                    )
+                    for r in retours
+                ],
+            )
+        return self.lister(produit_id)
+
+    @avec_connexion
+    def lister(self, produit_id: int | None = None) -> list[Retour]:
+        with self._connexion.cursor() as cur:
+            cur.execute(
+                "SELECT id, produit_id, verbatim, categorie, item, role, qui, date_retour, importe_le FROM retours_bizdev WHERE produit_id = COALESCE(%s, produit_id) ORDER BY importe_le DESC",
+                (produit_id,),
+            )
+            return [
+                Retour(
+                    id=r[0],
+                    produit_id=r[1],
+                    verbatim=r[2],
+                    categorie=r[3],
+                    item=r[4],
+                    role=r[5],
+                    qui=r[6],
+                    date_retour=r[7],
+                    importe_le=r[8],
+                )
+                for r in cur.fetchall()
+            ]
