@@ -11,17 +11,27 @@ class DepotIdeesPostgres(DepotIdees):  # pragma: no cover
         self._connexion: Any = None
 
     @avec_connexion
-    def remplacer_toutes(self, idees: list[IdeeBrute]) -> list[Idee]:
+    def remplacer_toutes(self, produit_id: int, idees: list[IdeeBrute]) -> list[Idee]:
         with self._connexion.cursor() as cur:
-            cur.execute("TRUNCATE TABLE idees_featurebase RESTART IDENTITY")
-            cur.executemany(
-                "INSERT INTO idees_featurebase (titre, nb_votes) VALUES (%s, %s)",
-                [(i.titre, i.nb_votes) for i in idees],
+            cur.execute(
+                "DELETE FROM idees_featurebase WHERE produit_id = %s", (produit_id,)
             )
-        return self.lister()
+            cur.executemany(
+                "INSERT INTO idees_featurebase (produit_id, titre, nb_votes) VALUES (%s, %s, %s)",
+                [(produit_id, i.titre, i.nb_votes) for i in idees],
+            )
+        return self.lister(produit_id)
 
     @avec_connexion
-    def lister(self) -> list[Idee]:
+    def lister(self, produit_id: int | None = None) -> list[Idee]:
         with self._connexion.cursor() as cur:
-            cur.execute("SELECT id, titre, nb_votes, importe_le FROM idees_featurebase ORDER BY nb_votes DESC")
-            return [Idee(id=r[0], titre=r[1], nb_votes=r[2], importe_le=r[3]) for r in cur.fetchall()]
+            cur.execute(
+                "SELECT id, produit_id, titre, nb_votes, importe_le FROM idees_featurebase WHERE produit_id = COALESCE(%s, produit_id) ORDER BY nb_votes DESC",
+                (produit_id,),
+            )
+            return [
+                Idee(
+                    id=r[0], produit_id=r[1], titre=r[2], nb_votes=r[3], importe_le=r[4]
+                )
+                for r in cur.fetchall()
+            ]

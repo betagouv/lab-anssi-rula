@@ -47,7 +47,11 @@ def test_fabrique_dependances_besoins_transmet_les_dependances_injectees() -> No
 
 
 def test_analyser_besoins_featurebase(client: TestClient) -> None:
-    client.post("/api/idees/import", files={"fichier": ("export.csv", FEATUREBASE_CSV.encode(), "text/csv")})
+    client.post(
+        "/api/idees/import",
+        data={"produit_id": "1", "confirmation": "true"},
+        files={"fichier": ("export.csv", FEATUREBASE_CSV.encode(), "text/csv")},
+    )
 
     reponse = client.post("/api/besoins/analyser/idee")
 
@@ -55,11 +59,18 @@ def test_analyser_besoins_featurebase(client: TestClient) -> None:
     assert len(reponse.json()) == 1
     assert reponse.json()[0]["source"] == "idee"
     assert reponse.json()[0]["nom_generique"] == "Fonctionnalité A"
-    assert client.get("/api/besoins?source=idee").json()[0]["texte_original"] == "Export PDF"
+    assert (
+        client.get("/api/besoins?source=idee").json()[0]["texte_original"]
+        == "Export PDF"
+    )
 
 
 def test_analyser_besoins_retours_bizdev(client: TestClient) -> None:
-    client.post("/api/retours-bizdev/import", files={"fichier": ("retours.csv", BIZDEV_CSV.encode(), "text/csv")})
+    client.post(
+        "/api/retours-bizdev/import",
+        data={"produit_id": "1", "confirmation": "true"},
+        files={"fichier": ("retours.csv", BIZDEV_CSV.encode(), "text/csv")},
+    )
 
     reponse = client.post("/api/besoins/analyser/retour_bizdev")
 
@@ -69,7 +80,9 @@ def test_analyser_besoins_retours_bizdev(client: TestClient) -> None:
     assert reponse.json()[0]["verbatim"] == "Il faut un export"
 
 
-def test_analyser_besoins_transcripts_reutilise_les_fonctionnalites(client: TestClient) -> None:
+def test_analyser_besoins_transcripts_reutilise_les_fonctionnalites(
+    client: TestClient,
+) -> None:
     transcript_id = client.post("/api/transcripts", json=TRANSCRIPT).json()["id"]
 
     reponse = client.post("/api/besoins/analyser/transcript")

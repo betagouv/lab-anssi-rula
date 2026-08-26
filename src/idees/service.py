@@ -9,7 +9,7 @@ class ServiceIdees:
     def __init__(self, depot: DepotIdees) -> None:
         self._depot = depot
 
-    def importer(self, contenu_csv: str) -> list[Idee]:
+    def importer(self, produit_id: int, contenu_csv: str) -> list[Idee]:
         reader = csv.DictReader(io.StringIO(contenu_csv.lstrip("﻿")))
         idees = [
             IdeeBrute(
@@ -22,7 +22,7 @@ class ServiceIdees:
             )
             for r in reader
         ]
-        return self._depot.remplacer_toutes(idees)
+        return self._depot.remplacer_toutes(produit_id, idees)
 
-    def lister(self) -> list[Idee]:
-        return self._depot.lister()
+    def lister(self, produit_id: int | None = None) -> list[Idee]:
+        return self._depot.lister(produit_id)
