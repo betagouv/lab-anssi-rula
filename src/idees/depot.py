@@ -10,6 +10,7 @@ class IdeeBrute(NamedTuple):
 
 class Idee(NamedTuple):
     id: int
+    produit_id: int
     titre: str
     nb_votes: int
     importe_le: datetime
@@ -17,7 +18,9 @@ class Idee(NamedTuple):
 
 class DepotIdees(ABC):
     @abstractmethod
-    def remplacer_toutes(self, idees: list[IdeeBrute]) -> list[Idee]: ...
+    def remplacer_toutes(
+        self, produit_id: int, idees: list[IdeeBrute]
+    ) -> list[Idee]: ...
 
     @abstractmethod
-    def lister(self) -> list[Idee]: ...
+    def lister(self, produit_id: int | None = None) -> list[Idee]: ...
