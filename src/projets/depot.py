@@ -77,6 +77,9 @@ class DepotProjets(ABC):
     def lister_entretiens(self, projet_id: int) -> list[Entretien]: ...
 
     @abstractmethod
+    def obtenir_entretien(self, projet_id: int, entretien_id: int) -> Entretien | None: ...
+
+    @abstractmethod
     def enregistrer_scan(self, projet_id: int, brouillon: str) -> ScanProjet: ...
 
     @abstractmethod

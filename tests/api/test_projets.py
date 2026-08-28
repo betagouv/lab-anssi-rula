@@ -92,6 +92,11 @@ def test_parcours_projet(contexte_projets) -> None:
         == 201
     )
     assert len(client.get("/api/projets/1/entretiens").json()) == 1
+    entretien = client.get("/api/projets/1/entretiens/1")
+    assert entretien.status_code == 200
+    assert entretien.json()["contenu"] == "Texte"
+    assert client.get("/api/projets/2/entretiens/1").status_code == 404
+    assert client.get("/api/projets/1/entretiens/99").status_code == 404
     assert (
         client.post(
             "/api/projets/2/entretiens",

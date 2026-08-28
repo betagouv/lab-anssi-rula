@@ -175,6 +175,18 @@ def lister_entretiens(
     return [entretien._asdict() for entretien in depot.lister_entretiens(id)]
 
 
+@routeur.get("/projets/{projet_id}/entretiens/{entretien_id}")
+def obtenir_entretien(
+    projet_id: int,
+    entretien_id: int,
+    depot: DepotProjets = Depends(fabrique_depot_projets),
+) -> dict:
+    entretien = depot.obtenir_entretien(projet_id, entretien_id)
+    if not entretien:
+        raise HTTPException(status_code=404)
+    return entretien._asdict()
+
+
 @routeur.post("/projets/{id}/entretiens", status_code=201)
 def ajouter_entretien(
     id: int,

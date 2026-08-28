@@ -248,6 +248,13 @@ produisent un brouillon éditable et une version validée ; une étape ne peut p
 être générée avant la validation de la précédente. Le garde-fou s’applique
 uniquement au contenu du transcript lors de son enregistrement.
 
+La page d’un projet est un hub indépendant de cette progression. Elle regroupe
+les transcripts, les retours BizDev, les demandes FeatureBase et les statuts des
+étapes d’analyse. Les transcripts sont consultables via
+`GET /api/projets/{projet_id}/entretiens/{entretien_id}` en lecture seule. Les
+imports restent accessibles depuis le menu du projet et sont bornés au projet
+courant.
+
 ---
 
 ## Harness de linting
