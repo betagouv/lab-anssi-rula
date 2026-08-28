@@ -12,6 +12,7 @@
   import Dashboard from './mvp/Dashboard.svelte';
   import ListeProjets from './mvp/ListeProjets.svelte';
   import NouveauProjet from './mvp/NouveauProjet.svelte';
+  import AjouterSource from './mvp/AjouterSource.svelte';
   import ProjetVue from './mvp/Projet.svelte';
   import Scan from './mvp/Scan.svelte';
   import ConfigurationAnalyse from './mvp/ConfigurationAnalyse.svelte';
@@ -98,6 +99,8 @@
   <ListeProjets {produit} {projets} />
 {:else if route?.nom === 'nouveau' && produit}
   <NouveauProjet {produit} oncree={versProjet} />
+{:else if route?.nom === 'source' && produit && route.source}
+  <AjouterSource {produit} source={route.source} />
 {:else if projet && route?.nom === 'projet'}
   <ProjetVue {projet} onscan={versConfiguration} />
 {:else if projet && route?.nom === 'configuration'}

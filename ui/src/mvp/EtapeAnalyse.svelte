@@ -27,6 +27,7 @@
         etape = configuration.etapes.find((item) => item.cle === cle) ?? null;
         contenu = etape?.brouillon ?? '';
         if (!etape) erreur = 'Étape introuvable.';
+        else if (!etape.brouillon && !etape.valide) void lancer();
       })
       .catch(
         (e) => (erreur = e instanceof Error ? e.message : 'Erreur de chargement')
@@ -77,10 +78,10 @@
     <button class="secondaire" disabled={enCours} onclick={lancer}
       >Régénérer l’étape</button
     >
-  {:else}
-    <button class="fr-btn" disabled={enCours} onclick={lancer}
-      >{enCours ? 'Analyse…' : 'Générer cette étape'}</button
-    >
+  {:else if enCours}
+    <p>Analyse en cours…</p>
+  {:else if erreur}
+    <button class="fr-btn" onclick={lancer}>Réessayer</button>
   {/if}
 </main>
 
