@@ -96,6 +96,7 @@ def test_depot_memoire_gere_les_etapes_vides_et_une_configuration_existante() ->
     bloc = BlocPrompt("role", "Rôle", "texte", 1)
     assert depot.enregistrer_configuration(1, [bloc]) == [bloc]
     assert depot.enregistrer_configuration(1, [bloc]) == [bloc]
+    assert depot.configuration_existe(1)
     depot.initialiser_etapes(1)
     assert depot.modifier_etape(1, "scan-neutre", "texte") is not None
     assert depot.modifier_etape(1, "inconnue", "texte") is None

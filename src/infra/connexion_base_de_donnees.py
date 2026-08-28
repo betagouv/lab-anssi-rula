@@ -16,10 +16,15 @@ def avec_connexion(methode: F) -> F:
             password=self._config.mot_de_passe,
             port=self._config.port,
         )
-        connexion.autocommit = True
+        connexion.autocommit = False
         self._connexion = connexion
         try:
-            return methode(self, *args, **kwargs)
+            resultat = methode(self, *args, **kwargs)
+            connexion.commit()
+            return resultat
+        except Exception:
+            connexion.rollback()
+            raise
         finally:
             connexion.close()
 

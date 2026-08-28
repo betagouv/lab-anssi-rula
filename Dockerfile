@@ -13,4 +13,4 @@ RUN uv venv && uv sync --no-dev
 COPY src/ ./src/
 COPY migrations/ ./migrations/
 
-CMD [".venv/bin/uvicorn", "serveur:app", "--host", "0.0.0.0", "--port", "3001", "--reload", "--app-dir", "src"]
+CMD ["sh", "-c", "PYTHONPATH=src .venv/bin/python -m infra.postgres.execute_migrations && exec .venv/bin/uvicorn serveur:app --host 0.0.0.0 --port 3001 --reload --app-dir src"]

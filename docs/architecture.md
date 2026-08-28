@@ -134,12 +134,11 @@ Sources → Analyse des besoins → Correspondances
 - **Retours BizDev** : retours importés depuis un export CSV BizDev.
 - **Demandes FeatureBase** : demandes importées depuis FeatureBase via un export CSV.
 
-Les trois sources sont accessibles depuis un produit. Chaque import peut cibler
-un projet existant de ce produit ou créer un projet avec son nom et son brief.
-Les retours BizDev et les demandes FeatureBase portent alors un `projet_id`
-nullable : les anciennes lignes produit-only restent compatibles. Les nouveaux
-imports remplacent uniquement le périmètre `(produit_id, projet_id)` ; les
-routes historiques conservent leur remplacement produit-only.
+Les trois sources sont accessibles depuis un produit. Les transcripts sont
+rattachés à un projet ; les retours BizDev et les demandes FeatureBase sont
+transverses au produit et conservent `projet_id` à `NULL` pour les nouveaux
+imports. Les routes historiques d'import restent compatibles avec les anciens
+appels pouvant cibler un projet.
 
 ### Analyse des besoins
 
@@ -173,8 +172,10 @@ l'entretien, le retour BizDev ou la demande FeatureBase correspondante.
 Pour FeatureBase, le titre importé constitue la donnée brute affichée à la
 place d'un verbatim séparé.
 
-Elles sont recalculées par l'API et ne portent pas encore de statut métier
-persistant de validation.
+Le dashboard produit expose une analyse transverse unique. Elle normalise tous
+les transcripts des projets du produit, les deux sources CSV du produit, puis
+calcule les correspondances. Les besoins et correspondances sont isolés par
+`produit_id` ; les anciennes API globales restent disponibles.
 
 La navigation frontend utilise des hashes URL, notamment :
 
