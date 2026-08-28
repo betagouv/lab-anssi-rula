@@ -103,6 +103,16 @@ class DepotProjetsPostgres(DepotProjets):  # pragma: no cover
             )
 
     @avec_connexion
+    def obtenir_entretien(self, projet_id: int, entretien_id: int) -> Entretien | None:
+        with self._connexion.cursor() as cur:
+            cur.execute(
+                f"SELECT {_COLONNES_ENTRETIEN} FROM transcripts WHERE projet_id = %s AND id = %s",
+                (projet_id, entretien_id),
+            )
+            row = cur.fetchone()
+            return Entretien(*row) if row else None
+
+    @avec_connexion
     def ajouter_source(
         self,
         produit_id: int,

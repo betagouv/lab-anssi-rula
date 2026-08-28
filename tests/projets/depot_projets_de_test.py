@@ -94,6 +94,16 @@ class DepotProjetsDeTest(DepotProjets):
             if entretien.projet_id == projet_id
         ]
 
+    def obtenir_entretien(self, projet_id: int, entretien_id: int) -> Entretien | None:
+        return next(
+            (
+                entretien
+                for entretien in self.entretiens
+                if entretien.projet_id == projet_id and entretien.id == entretien_id
+            ),
+            None,
+        )
+
     def enregistrer_scan(self, projet_id: int, brouillon: str) -> ScanProjet:
         scan = ScanProjet(projet_id, brouillon, None, datetime.now(), datetime.now())
         self.scans[projet_id] = scan
