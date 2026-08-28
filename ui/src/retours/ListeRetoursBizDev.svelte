@@ -1,17 +1,22 @@
 <script lang="ts">
   import type { RetourBizDev } from '../types';
   import { importerRetours, listerRetours } from '../api/retours_bizdev';
+  import { listerProduits, type Produit } from '../api/projets';
   import { hashDepuisVue } from '../navigation/routage';
+  import ImportProduit from '../mvp/ImportProduit.svelte';
 
   let retours = $state<RetourBizDev[]>([]);
   let chargement = $state(true);
   let enCours = $state(false);
   let erreur = $state<string | null>(null);
+  let produits = $state<Produit[]>([]);
+  let produitId = $state('');
+  let confirmation = $state(false);
 
   $effect(() => {
-    listerRetours()
+    listerProduits()
       .then((data) => {
-        retours = data;
+        produits = data;
       })
       .catch((e) => {
         erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
@@ -21,6 +26,19 @@
       });
   });
 
+  async function charger() {
+    if (!produitId) return;
+    chargement = true;
+    erreur = null;
+    try {
+      retours = await listerRetours(Number(produitId));
+    } catch (e) {
+      erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
+    } finally {
+      chargement = false;
+    }
+  }
+
   async function handleFichier(event: Event) {
     const input = event.target as HTMLInputElement;
     const fichier = input.files?.[0];
@@ -28,7 +46,7 @@
     enCours = true;
     erreur = null;
     try {
-      retours = await importerRetours(fichier);
+      retours = await importerRetours(fichier, Number(produitId));
     } catch (e) {
       erreur = e instanceof Error ? e.message : "Erreur lors de l'import";
     } finally {
@@ -54,12 +72,19 @@
         id="import-retours-csv"
         type="file"
         accept=".csv"
-        disabled={enCours}
+        disabled={enCours || !produitId || !confirmation}
         onchange={handleFichier}
         class="sr-only"
       />
     </div>
   </div>
+  <ImportProduit
+    {produits}
+    prefixe="bizdev"
+    bind:produitId
+    bind:confirmation
+    onchange={charger}
+  />
 
   {#if erreur}
     <div class="fr-alert fr-alert--error fr-mb-3w">
