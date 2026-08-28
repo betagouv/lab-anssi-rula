@@ -2,11 +2,15 @@ from adaptateurs.albert import AdaptateurAlbert
 from correspondance.depot import Cluster, Membre
 from correspondance.service import ConfigurationCorrespondance, ServiceCorrespondance
 from infra.memoire.depot_correspondance import DepotCorrespondanceMemoire
-from infra.memoire.depot_correspondances_calculees import DepotCorrespondancesCalculeesMemoire
+from infra.memoire.depot_correspondances_calculees import (
+    DepotCorrespondancesCalculeesMemoire,
+)
 
 
 class _AlbertJsonInvalideDeTest(AdaptateurAlbert):
-    def completer(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str:
+    def completer(
+        self, messages: list[dict[str, str]], temperature: float = 0.0
+    ) -> str:
         return "réponse non JSON"
 
     def plonger(self, textes: list[str]) -> list[list[float]]:
@@ -14,7 +18,10 @@ class _AlbertJsonInvalideDeTest(AdaptateurAlbert):
 
 
 def test_valider_garde_cluster_si_json_invalide() -> None:
-    membres = [Membre("idee", "Feature A", None, None), Membre("idee", "Feature B", None, None)]
+    membres = [
+        Membre("idee", "Feature A", None, None),
+        Membre("idee", "Feature B", None, None),
+    ]
     cluster = Cluster(libelle="test", occurrences=2, membres=membres)
     service = ServiceCorrespondance(
         DepotCorrespondanceMemoire([]),
@@ -36,5 +43,23 @@ def test_nommer_donne_un_libelle_aux_groupes_unitaires() -> None:
     )
 
     assert service._nommer([cluster]) == [
-        Cluster(libelle="Actualiser le référentiel de mesures", occurrences=1, membres=[membre])
+        Cluster(
+            libelle="Actualiser le référentiel de mesures",
+            occurrences=1,
+            membres=[membre],
+        )
     ]
+
+
+def test_expose_la_date_du_dernier_calcul_par_produit() -> None:
+    depot = DepotCorrespondancesCalculeesMemoire()
+    service = ServiceCorrespondance(
+        DepotCorrespondanceMemoire([]),
+        depot,
+        _AlbertJsonInvalideDeTest(),
+        ConfigurationCorrespondance(0.35, "prompt libelle", "prompt validation"),
+    )
+
+    assert service.dernier_calcul(1) is None
+    depot.enregistrer_calcul(1)
+    assert service.dernier_calcul(1) is not None

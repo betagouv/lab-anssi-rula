@@ -8,18 +8,18 @@ class DepotCorrespondanceMemoire(DepotCorrespondance):
         self._features = features
         self._embeddings: dict[Cle, list[float]] = {}
 
-    def features_sans_embedding(self) -> list[Feature]:
-        return [f for f in self._features if (f.source, f.id) not in self._embeddings]
+    def features_sans_embedding(self, produit_id: int | None = None) -> list[Feature]:
+        return [f for f in self._features if (produit_id is None or f.produit_id == produit_id) and (f.source, f.id) not in self._embeddings]
 
     def enregistrer_embeddings(self, items: list[tuple[str, int, list[float]]]) -> None:
         for source, id_, vecteur in items:
             self._embeddings[(source, id_)] = vecteur
 
-    def lister_features(self) -> list[Feature]:
-        return [f for f in self._features if (f.source, f.id) in self._embeddings]
+    def lister_features(self, produit_id: int | None = None) -> list[Feature]:
+        return [f for f in self._features if (produit_id is None or f.produit_id == produit_id) and (f.source, f.id) in self._embeddings]
 
-    def paires_proches(self, seuil: float) -> list[tuple[Cle, Cle]]:
-        cles = list(self._embeddings)
+    def paires_proches(self, seuil: float, produit_id: int | None = None) -> list[tuple[Cle, Cle]]:
+        cles = [(f.source, f.id) for f in self._features if (produit_id is None or f.produit_id == produit_id) and (f.source, f.id) in self._embeddings]
         return [
             (cles[i], cles[j])
             for i in range(len(cles))

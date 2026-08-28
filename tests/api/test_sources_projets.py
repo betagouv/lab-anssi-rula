@@ -6,7 +6,6 @@ from api.produits import fabrique_depot_produits
 from api.projets import fabrique_depot_projets
 from api.retours_bizdev import fabrique_depot_retours_bizdev
 from api.retours_bizdev import fabrique_service_retours_bizdev
-from api.transcripts import fabrique_service_validation_transcript
 from infra.memoire.depot_idees import DepotIdeesMemoire
 from infra.memoire.depot_produits import DepotProduitsMemoire
 from infra.memoire.depot_retours_bizdev import DepotRetoursBizDevMemoire
@@ -15,7 +14,6 @@ from idees.service import ServiceIdees
 from projets.service import ProjetDejaExistant
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.projets.depot_projets_de_test import DepotProjetsDeTest
-from validation_transcript.service import ServiceValidationTranscript
 from serveur import app
 
 CSV_BIZDEV = (
@@ -48,7 +46,6 @@ def contexte_sources():
     validation_albert = AdaptateurAlbertDeTest().avec_reponse(
         '{"valide":true,"problemes":[]}'
     )
-    validation = ServiceValidationTranscript(validation_albert, "prompt")
     app.dependency_overrides[fabrique_depot_produits] = lambda: produits
     app.dependency_overrides[fabrique_depot_projets] = lambda: projets
     app.dependency_overrides[fabrique_depot_idees] = lambda: idees
@@ -56,9 +53,6 @@ def contexte_sources():
     app.dependency_overrides[fabrique_service_idees] = lambda: ServiceIdees(idees)
     app.dependency_overrides[fabrique_service_retours_bizdev] = lambda: (
         ServiceRetoursBizDev(retours)
-    )
-    app.dependency_overrides[fabrique_service_validation_transcript] = lambda: (
-        validation
     )
     yield TestClient(app), produits, projets, validation_albert
     app.dependency_overrides.clear()
@@ -71,13 +65,13 @@ def test_import_bizdev_est_isole_par_projet(contexte_sources) -> None:
     for projet, contenu in ((premier, CSV_BIZDEV), (second, CSV_BIZDEV)):
         reponse = client.post(
             "/api/produits/1/sources/bizdev",
-            data={"projet_id": str(projet.id), "confirmation": "true"},
+            data={"projet_id": str(projet.id)},
             files={"fichier": ("retours.csv", contenu.encode(), "text/csv")},
         )
         assert reponse.status_code == 200
     remplacement = client.post(
         "/api/produits/1/sources/bizdev",
-        data={"projet_id": str(second.id), "confirmation": "true"},
+        data={"projet_id": str(second.id)},
         files={
             "fichier": (
                 "retours.csv",
@@ -94,6 +88,43 @@ def test_import_bizdev_est_isole_par_projet(contexte_sources) -> None:
     )
 
 
+def test_import_bizdev_sans_projet_est_scopé_produit(contexte_sources) -> None:
+    client, _, projets, _ = contexte_sources
+    reponse = client.post(
+        "/api/produits/1/sources/bizdev",
+        data={"produit_seul": "true"},
+        files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
+    )
+    assert reponse.status_code == 200
+    assert reponse.json()["produit_id"] == 1
+    assert reponse.json()["sources"][0]["projet_id"] is None
+    assert projets.lister(1) == []
+
+
+def test_import_featurebase_sans_projet_est_scopé_produit(contexte_sources) -> None:
+    client, _, projets, _ = contexte_sources
+    reponse = client.post(
+        "/api/produits/1/sources/featurebase",
+        data={"produit_seul": "true"},
+        files={"fichier": ("idees.csv", CSV_FEATUREBASE.encode(), "text/csv")},
+    )
+    assert reponse.status_code == 200
+    assert reponse.json()["sources"][0]["projet_id"] is None
+    assert projets.lister(1) == []
+
+
+def test_import_produit_refuse_csv_invalide_et_produit_inconnu(contexte_sources) -> None:
+    client, _, _, _ = contexte_sources
+    assert client.post(
+        "/api/produits/1/sources/featurebase",
+        data={"produit_seul": "true"},
+        files={"fichier": ("idees.csv", b"Titre,Nombre\nA,1\n", "text/csv")},
+    ).status_code == 400
+    assert client.post(
+        "/api/produits/99/sources/bizdev",
+        data={"produit_seul": "true"},
+        files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
+    ).status_code == 404
 def test_import_featurebase_cree_un_projet(contexte_sources) -> None:
     client, _, projets, _ = contexte_sources
     reponse = client.post(
@@ -101,7 +132,6 @@ def test_import_featurebase_cree_un_projet(contexte_sources) -> None:
         data={
             "nouveau_projet_nom": "Nouveau projet",
             "nouveau_projet_brief": "Brief",
-            "confirmation": "true",
         },
         files={"fichier": ("idees.csv", CSV_FEATUREBASE.encode(), "text/csv")},
     )
@@ -116,7 +146,7 @@ def test_import_refuse_un_projet_d_un_autre_produit(contexte_sources) -> None:
     projet = projets.ajouter(2, "Autre produit", "")
     reponse = client.post(
         "/api/produits/1/sources/bizdev",
-        data={"projet_id": str(projet.id), "confirmation": "true"},
+        data={"projet_id": str(projet.id)},
         files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
     )
     assert reponse.status_code == 404
@@ -128,7 +158,6 @@ def test_import_invalide_ne_cree_pas_de_projet(contexte_sources) -> None:
         "/api/produits/1/sources/featurebase",
         data={
             "nouveau_projet_nom": "Projet invalide",
-            "confirmation": "true",
         },
         files={"fichier": ("idees.csv", b"Titre,Nombre\nA,1\n", "text/csv")},
     )
@@ -136,28 +165,25 @@ def test_import_invalide_ne_cree_pas_de_projet(contexte_sources) -> None:
     assert projets.lister(1) == []
 
 
-def test_import_refuse_par_albert_ne_cree_pas_de_projet(contexte_sources) -> None:
+def test_import_ne_consulte_pas_albert(contexte_sources) -> None:
     client, _, projets, albert = contexte_sources
-    albert.avec_reponse(
-        '{"valide":false,"problemes":[{"categorie":"identite","element":"A","raison":"Donnée sensible."}]}'
-    )
+    albert.avec_erreur(RuntimeError("Albert indisponible"))
     reponse = client.post(
         "/api/produits/1/sources/bizdev",
         data={
             "nouveau_projet_nom": "Projet refusé",
-            "confirmation": "true",
         },
         files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
     )
-    assert reponse.status_code == 422
-    assert projets.lister(1) == []
+    assert reponse.status_code == 200
+    assert projets.lister(1)[0].nom == "Projet refusé"
 
 
 def test_import_refuse_produit_inconnu(contexte_sources) -> None:
     client, _, projets, _ = contexte_sources
     reponse = client.post(
         "/api/produits/99/sources/bizdev",
-        data={"nouveau_projet_nom": "Projet", "confirmation": "true"},
+        data={"nouveau_projet_nom": "Projet"},
         files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
     )
     assert reponse.status_code == 404
@@ -167,16 +193,15 @@ def test_import_refuse_produit_inconnu(contexte_sources) -> None:
 @pytest.mark.parametrize(
     ("data", "statut"),
     [
-        ({"confirmation": "true"}, 422),
+        ({}, 200),
         (
             {
                 "projet_id": "1",
                 "nouveau_projet_nom": "Projet",
-                "confirmation": "true",
             },
             422,
         ),
-        ({"nouveau_projet_nom": "   ", "confirmation": "true"}, 422),
+        ({"nouveau_projet_nom": "   "}, 422),
     ],
 )
 def test_import_refuse_selection_projet(contexte_sources, data, statut) -> None:
@@ -195,7 +220,7 @@ def test_import_refuse_nom_deja_utilise(contexte_sources) -> None:
     projets.ajouter(1, "Projet", "")
     reponse = client.post(
         "/api/produits/1/sources/bizdev",
-        data={"nouveau_projet_nom": " projet ", "confirmation": "true"},
+        data={"nouveau_projet_nom": " projet "},
         files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
     )
     assert reponse.status_code == 409
@@ -207,7 +232,7 @@ def test_import_refuse_conflit_de_creation(contexte_sources) -> None:
     app.dependency_overrides[fabrique_depot_projets] = DepotProjetEnConflit
     reponse = client.post(
         "/api/produits/1/sources/bizdev",
-        data={"nouveau_projet_nom": "Projet", "confirmation": "true"},
+        data={"nouveau_projet_nom": "Projet"},
         files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
     )
     assert reponse.status_code == 409
@@ -222,7 +247,7 @@ def test_import_en_erreur_supprime_le_nouveau_projet(contexte_sources) -> None:
     with pytest.raises(RuntimeError, match="erreur d'import"):
         client.post(
             "/api/produits/1/sources/bizdev",
-            data={"nouveau_projet_nom": "Projet", "confirmation": "true"},
+            data={"nouveau_projet_nom": "Projet"},
             files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
         )
     assert projets.lister(1) == []

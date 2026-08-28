@@ -18,7 +18,7 @@ from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.projets.depot_projets_de_test import DepotProjetsDeTest
 from infra.memoire.depot_produits import DepotProduitsMemoire
 from infra.memoire.depot_analyse import DepotAnalyseMemoire
-from projets.analyse import ConfigurationAbsente, ServiceAnalyseProjet
+from projets.analyse import ServiceAnalyseProjet
 from validation_transcript.service import ServiceValidationTranscript
 from serveur import app
 
@@ -376,6 +376,5 @@ def test_erreurs_des_routes_d_analyse() -> None:
             == 422
         )
         assert _erreur_analyse(ValueError("erreur")).status_code == 422
-        assert _erreur_analyse(ConfigurationAbsente()).status_code == 404
     finally:
         app.dependency_overrides.clear()

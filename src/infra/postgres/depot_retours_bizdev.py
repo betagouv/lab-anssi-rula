@@ -40,6 +40,7 @@ class DepotRetoursBizDevPostgres(DepotRetoursBizDev):  # pragma: no cover
                     for r in retours
                 ],
             )
+        self._connexion.commit()
         return self.lister(produit_id, projet_id)
 
     @avec_connexion

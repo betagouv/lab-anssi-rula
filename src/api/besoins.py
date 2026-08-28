@@ -59,15 +59,15 @@ def fabrique_service_besoins(
 
 
 @routeur.get("/besoins")
-def lister_besoins(source: str | None = None, service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins)) -> list[dict]:
+def lister_besoins(source: str | None = None, produit_id: int | None = None, service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins)) -> list[dict]:
     if source not in {None, "transcript", "idee", "retour_bizdev"}:
         raise HTTPException(status_code=400, detail=f"Source inconnue : {source}")
-    return [besoin._asdict() for besoin in service.lister(source)]
+    return [besoin._asdict() for besoin in service.lister(source, produit_id)]
 
 
 @routeur.post("/besoins/analyser/{source}")
-def analyser_besoins(source: str, service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins)) -> list[dict]:
+def analyser_besoins(source: str, produit_id: int | None = None, service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins)) -> list[dict]:
     try:
-        return [besoin._asdict() for besoin in service.analyser(source)]
+        return [besoin._asdict() for besoin in service.analyser(source, produit_id)]
     except SourceBesoinInconnue:
         raise HTTPException(status_code=400, detail=f"Source inconnue : {source}")

@@ -102,3 +102,17 @@ def test_depot_memoire_gere_les_etapes_vides_et_une_configuration_existante() ->
     assert depot.modifier_etape(1, "inconnue", "texte") is None
     assert depot.valider_etape(1, "inconnue") is None
     assert depot.valider_etape(1, "scan-neutre") is not None
+
+
+def test_configuration_vide_reste_vide_apres_sauvegarde() -> None:
+    projets = DepotProjetsDeTest()
+    projet = projets.ajouter(1, "Recherche", "")
+    depot = DepotAnalyseMemoire()
+    depot.enregistrer_configuration(1, [])
+    assert depot.configuration_existe(1)
+    assert (
+        ServiceAnalyseProjet(projets, depot, AdaptateurAlbertDeTest())
+        .configuration(projet.id)
+        .blocs
+        == []
+    )
