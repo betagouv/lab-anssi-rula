@@ -104,3 +104,19 @@ def test_projets_uniques_reinitialise_la_base_locale() -> None:
     assert "scans_projets" in contenu
     assert "lower(btrim(nom))" in contenu
     assert "INSERT INTO produits (nom) VALUES ('MQC'), ('MSC'), ('MSS')" in contenu
+
+
+def test_prompts_et_etapes_sont_migres() -> None:
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "017_prompts_etapes.sql"
+    ).read_text()
+
+    assert "CREATE TABLE prompts_produits" in contenu
+    assert "CREATE TABLE prompts_projets" in contenu
+    assert "CREATE TABLE etapes_analyses" in contenu
+    assert "contexte_produit" in contenu
+
+    statut = (
+        Path(__file__).parents[1] / "migrations" / "018_statut_etapes.sql"
+    ).read_text()
+    assert "ADD COLUMN IF NOT EXISTS statut" in statut

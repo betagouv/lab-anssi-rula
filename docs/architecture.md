@@ -228,6 +228,19 @@ du sujet, besoins, points de douleur, cas concrets, contournements,
 priorisation, questions ouvertes, vocabulaire et synthèse). Le résultat reste
 consultable via `GET /api/analyses`.
 
+## Parcours d’analyse par projet
+
+Les projets de recherche disposent d’une copie modifiable des blocs de prompt du
+produit : rôle, contextes produit/brief/projet, règles, consignes d’étape et
+instructions de sortie. Albert reçoit ces blocs assemblés dans cet ordre, puis
+les transcripts et les résultats validés des étapes précédentes comme données.
+
+Le parcours comporte six étapes : import, configuration, scan neutre, points à
+retenir, thématisation et consultation de l’analyse. Les trois étapes Albert
+produisent un brouillon éditable et une version validée ; une étape ne peut pas
+être générée avant la validation de la précédente. Le garde-fou s’applique
+uniquement au contenu du transcript lors de son enregistrement.
+
 ---
 
 ## Harness de linting
