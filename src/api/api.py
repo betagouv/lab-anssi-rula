@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from api.analyses import routeur as routeur_analyses
+from api.analyse_transverse import routeur as routeur_analyse_transverse
 from api.besoins import routeur as routeur_besoins
 from api.correspondances import routeur as routeur_correspondances
 from api.fonctionnalites import routeur as routeur_fonctionnalites
@@ -25,6 +26,7 @@ routeur.include_router(routeur_fonctionnalites)
 routeur.include_router(routeur_idees)
 routeur.include_router(routeur_retours_bizdev)
 routeur.include_router(routeur_correspondances)
+routeur.include_router(routeur_analyse_transverse)
 
 
 @routeur.get("/sante")
