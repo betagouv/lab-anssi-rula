@@ -52,12 +52,8 @@ function vueDepuisSources(segments: string[]): Vue | undefined {
 
 function vueDepuisAnciensLiens(segments: string[]): Vue | undefined {
   const [premier, second, troisieme] = segments;
-  const routes: Record<string, Vue> = {
-    analyses: { nom: 'analyses' },
-    besoins: { nom: 'besoins' },
-    correspondances: { nom: 'correspondances' },
-  };
-  if (premier === 'syntheses' && !troisieme) return routes[second ?? ''];
+  if (premier === 'syntheses' && second === 'analyses' && !troisieme)
+    return { nom: 'analyses' };
   if (premier === 'transcripts') {
     const id = entierPositif(second);
     if (id)
@@ -70,14 +66,11 @@ function vueDepuisAnciensLiens(segments: string[]): Vue | undefined {
       };
     return { nom: 'sources:entretiens' };
   }
-  return (
-    routes[premier] ??
-    {
-      fonctionnalites: { nom: 'sources:featurebase' },
-      'retours-bizdev': { nom: 'sources:retours-bizdev' },
-      correspondance: { nom: 'correspondances' },
-    }[premier ?? '']
-  );
+  const aliases: Record<string, Vue> = {
+    analyses: { nom: 'analyses' },
+    'retours-bizdev': { nom: 'sources:retours-bizdev' },
+  };
+  return aliases[premier ?? ''];
 }
 
 export function vueDepuisHash(hash: string): Vue {
@@ -103,8 +96,6 @@ const HASH_PAR_NOM: Record<Vue['nom'], (vue: Vue) => string> = {
   'sources:featurebase': () => '#sources/featurebase',
   'sources:featurebase:detail': (vue) => `#sources/featurebase/${idDepuisVue(vue)}`,
   analyses: () => '#analyses',
-  besoins: () => '#besoins',
-  correspondances: () => '#correspondances',
 };
 
 export function hashDepuisVue(vue: Vue): string {

@@ -3,9 +3,10 @@
     analyserTransverse,
     obtenirAnalyseTransverse,
     type AnalyseTransverse,
+    type PassageTransverse,
   } from '../api/analyse_transverse';
   import type { Produit } from '../api/projets';
-  import type { Membre } from '../types';
+
   let { produit }: { produit: Produit } = $props();
   let resultat = $state<AnalyseTransverse | null>(null);
   let chargement = $state(true);
@@ -33,20 +34,26 @@
     }
   }
 
-  function lien(membre: Membre) {
-    return membre.source === 'transcript' && membre.transcript_id
-      ? `#/transcripts/${membre.transcript_id}`
-      : membre.source === 'idee'
-        ? '#/fonctionnalites'
-        : '#/retours-bizdev';
+  function lien(passage: PassageTransverse) {
+    if (
+      passage.source === 'transcript' &&
+      passage.projet_id &&
+      passage.transcript_id
+    )
+      return `#/projets/${passage.projet_id}/entretiens/${passage.transcript_id}`;
+    if (passage.source === 'idee' && passage.source_id)
+      return `#/sources/featurebase/${passage.source_id}`;
+    if (passage.source === 'retour_bizdev' && passage.source_id)
+      return `#/sources/retours-bizdev/${passage.source_id}`;
+    return null;
   }
 
-  function lienBesoin(besoin: AnalyseTransverse['besoins'][number]) {
-    return besoin.source === 'transcript' && besoin.transcript_id
-      ? `#/transcripts/${besoin.transcript_id}`
-      : besoin.source === 'idee'
-        ? '#/fonctionnalites'
-        : '#/retours-bizdev';
+  function libelleSource(source: PassageTransverse['source']) {
+    return source === 'transcript'
+      ? 'Transcript'
+      : source === 'idee'
+        ? 'FeatureBase'
+        : 'BizDev';
   }
 </script>
 
@@ -59,9 +66,7 @@
   </div>
   {#if chargement}<p>Chargement de l’analyse transverse…</p>
   {:else if erreur}<p class="erreur" role="alert">{erreur}</p>
-  {:else if !resultat?.besoins.length && !resultat?.correspondances.length}<p
-      class="vide"
-    >
+  {:else if !resultat?.groupes.length}<p class="vide">
       Aucune analyse transverse. Lancez l’analyse pour rapprocher les données du
       produit.
     </p>
@@ -69,25 +74,27 @@
     {#if resultat?.calcule_le}<p class="date-calcul">
         Dernier calcul : {new Date(resultat.calcule_le).toLocaleString('fr-FR')}
       </p>{/if}
-    <h3>Besoins normalisés</h3>
-    {#if resultat?.besoins.length}<ul class="besoins">
-        {#each resultat.besoins as besoin (besoin.id)}<li>
-            <a href={lienBesoin(besoin)}><strong>{besoin.nom_generique}</strong></a
-            ><span>{besoin.source}</span>
-          </li>{/each}
-      </ul>{:else}<p class="vide">Aucun besoin détecté.</p>{/if}
-    <h3>Correspondances</h3>
-    {#if resultat?.correspondances.length}<div class="clusters">
-        {#each resultat.correspondances as cluster (cluster.libelle)}<details>
-            <summary>{cluster.libelle} ({cluster.occurrences})</summary>
-            <ul>
-              {#each cluster.membres as membre (membre.source + membre.source_id)}<li
-                >
-                  <a href={lien(membre)}>{membre.texte}</a>
-                </li>{/each}
-            </ul>
-          </details>{/each}
-      </div>{:else}<p class="vide">Aucune correspondance détectée.</p>{/if}
+    <h3>Idées normalisées</h3>
+    <div class="groupes">
+      {#each resultat?.groupes ?? [] as groupe, index (groupe.nom_generique + ':' + index)}
+        <details>
+          <summary>{groupe.nom_generique} ({groupe.occurrences})</summary>
+          <ul>
+            {#each groupe.passages as passage (passage.source + ':' + passage.source_id)}
+              {@const sourceLien = lien(passage)}
+              <li>
+                <span class="source">{libelleSource(passage.source)}</span>
+                {#if sourceLien}
+                  <a href={sourceLien}>{passage.verbatim}</a>
+                {:else}
+                  <span>{passage.verbatim}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </details>
+      {/each}
+    </div>
   {/if}
 </section>
 
@@ -104,35 +111,35 @@
   h3 {
     margin-top: 2rem;
   }
-  .besoins,
-  .clusters {
+  .groupes {
     border-top: 1px solid var(--border-default-grey);
   }
-  .besoins {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .besoins li {
-    align-items: center;
+  .groupes details {
     border-bottom: 1px solid var(--border-default-grey);
-    display: flex;
-    gap: 1rem;
-    justify-content: space-between;
     padding: 0.75rem 0;
   }
-  .besoins span {
+  .groupes summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .groupes ul {
+    display: grid;
+    gap: 0.75rem;
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+  }
+  .groupes li {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .source {
     color: var(--text-mention-grey);
+    font-size: 0.875rem;
+    font-weight: 700;
   }
   .date-calcul {
     color: var(--text-mention-grey);
-  }
-  .clusters details {
-    border-bottom: 1px solid var(--border-default-grey);
-    padding: 0.75rem 0;
-  }
-  .clusters summary {
-    cursor: pointer;
   }
   a {
     color: var(--text-action-high-blue-france);
