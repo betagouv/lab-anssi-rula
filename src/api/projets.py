@@ -1,5 +1,6 @@
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -10,7 +11,6 @@ from configuration import charge_configuration
 from infra.postgres.depot_projets import DepotProjetsPostgres
 from infra.postgres.depot_analyse import DepotAnalysePostgres
 from projets.analyse import (
-    ConfigurationAbsente,
     DepotAnalyse,
     EtapeAbsente,
     EtapeInaccessible,
@@ -234,7 +234,7 @@ def ajouter_source(
         brief = ""
     else:
         nouveau_projet = body.nouveau_projet
-        assert nouveau_projet is not None
+        nouveau_projet = cast(NouveauProjetSource, nouveau_projet)
         nom = _nom_projet(nouveau_projet.nom)
         brief = nouveau_projet.brief
         if _nom_est_deja_utilise(depot.lister(produit_id), nom):
@@ -314,7 +314,7 @@ def _erreur_analyse(erreur: ValueError) -> HTTPException:
         )
     if isinstance(erreur, ProjetSansEntretien):
         return HTTPException(status_code=422, detail="Ajoutez au moins un entretien.")
-    if isinstance(erreur, (EtapeAbsente, ConfigurationAbsente)):
+    if isinstance(erreur, EtapeAbsente):
         return HTTPException(status_code=404, detail="Étape d’analyse introuvable.")
     return HTTPException(status_code=422, detail=str(erreur))
 

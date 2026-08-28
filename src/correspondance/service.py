@@ -1,6 +1,7 @@
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 
 from adaptateurs.albert import AdaptateurAlbert
 from correspondance.depot import Cle, Cluster, DepotCorrespondance, DepotCorrespondancesCalculees, Feature, Membre
@@ -28,18 +29,24 @@ class ServiceCorrespondance:
         self._prompt_libelle = configuration.prompt_libelle
         self._prompt_validation = configuration.prompt_validation
 
-    def charger(self) -> list[Cluster]:
-        return self._depot_calcule.charger()
+    def charger(self, produit_id: int | None = None) -> list[Cluster]:
+        return self._depot_calcule.charger(produit_id)
 
-    def analyser(self) -> list[Cluster]:
-        manquantes = self._depot.features_sans_embedding()
+    def dernier_calcul(self, produit_id: int | None = None) -> datetime | None:
+        return self._depot_calcule.dernier_calcul(produit_id)
+
+    def analyser(self, produit_id: int | None = None) -> list[Cluster]:
+        manquantes = self._depot.features_sans_embedding(produit_id)
         if manquantes:
             vecteurs = self._albert.plonger([f.texte for f in manquantes])
             self._depot.enregistrer_embeddings([(f.source, f.id, v) for f, v in zip(manquantes, vecteurs)])
-        clusters = self._regrouper(self._depot.lister_features(), self._depot.paires_proches(self._seuil))
+        clusters = self._regrouper(
+            self._depot.lister_features(produit_id), self._depot.paires_proches(self._seuil, produit_id)
+        )
         clusters = self._valider(clusters)
         clusters = self._nommer(clusters)
-        self._depot_calcule.sauvegarder(clusters)
+        self._depot_calcule.sauvegarder(clusters, produit_id)
+        self._depot_calcule.enregistrer_calcul(produit_id)
         return clusters
 
     def _valider(self, clusters: list[Cluster]) -> list[Cluster]:

@@ -6,7 +6,7 @@ CSV_SIMPLE = "Verbatim,User nom,Rôle du user,Type cible,Source,Lien,Date,Qui ?,
 CSV_VIDE = (
     "Verbatim,User nom,Rôle du user,Type cible,Source,Lien,Date,Qui ?,Catégorie,Item\n"
 )
-FORMULAIRE = {"produit_id": "1", "confirmation": "true"}
+FORMULAIRE = {"produit_id": "1"}
 
 
 def test_lister_vide(client: TestClient) -> None:
@@ -31,27 +31,26 @@ def test_import_retourne_les_retours(client: TestClient) -> None:
     assert r.json()[0]["date_retour"] == "18/01/24"
 
 
-def test_refuse_import_sans_confirmation(client: TestClient) -> None:
+def test_import_sans_confirmation(client: TestClient) -> None:
     r = client.post(
         "/api/retours-bizdev/import",
-        data={"produit_id": "1", "confirmation": "false"},
+        data={"produit_id": "1"},
         files={"fichier": ("retours.csv", CSV_SIMPLE.encode(), "text/csv")},
     )
-    assert r.status_code == 422
+    assert r.status_code == 200
+    assert len(r.json()) == 2
 
 
-def test_refuse_import_non_conforme(
+def test_import_ne_consulte_pas_albert(
     client: TestClient, albert_validation: AdaptateurAlbertDeTest
 ) -> None:
-    albert_validation.avec_reponse(
-        '{"valide":false,"problemes":[{"categorie":"identite","element":"Alice","raison":"Donnée personnelle."}]}'
-    )
+    albert_validation.avec_erreur(RuntimeError("Albert indisponible"))
     r = client.post(
         "/api/retours-bizdev/import",
-        data=FORMULAIRE,
+        data={"produit_id": "1"},
         files={"fichier": ("retours.csv", CSV_SIMPLE.encode(), "text/csv")},
     )
-    assert r.status_code == 422
+    assert r.status_code == 200
 
 
 def test_import_remplace_les_retours(client: TestClient) -> None:

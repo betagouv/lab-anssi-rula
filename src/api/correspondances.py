@@ -14,7 +14,7 @@ _prompt_validation = (Path(__file__).parent.parent / "prompts" / "validation_clu
 
 routeur = APIRouter()
 
-def _en_dict(clusters: list) -> list[dict]:
+def en_dict(clusters: list) -> list[dict]:
     return [{"libelle": c.libelle, "occurrences": c.occurrences, "membres": [m._asdict() for m in c.membres]} for c in clusters]
 
 
@@ -40,10 +40,10 @@ def fabrique_service_correspondance(  # pragma: no cover
 
 
 @routeur.get("/correspondances")
-def charger(service: ServiceCorrespondance = Depends(fabrique_service_correspondance)) -> list[dict]:
-    return _en_dict(service.charger())
+def charger(produit_id: int | None = None, service: ServiceCorrespondance = Depends(fabrique_service_correspondance)) -> list[dict]:
+    return en_dict(service.charger(produit_id))
 
 
 @routeur.post("/correspondances/analyser")
-def analyser(service: ServiceCorrespondance = Depends(fabrique_service_correspondance)) -> list[dict]:
-    return _en_dict(service.analyser())
+def analyser(produit_id: int | None = None, service: ServiceCorrespondance = Depends(fabrique_service_correspondance)) -> list[dict]:
+    return en_dict(service.analyser(produit_id))

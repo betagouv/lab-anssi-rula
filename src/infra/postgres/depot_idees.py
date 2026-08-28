@@ -28,6 +28,7 @@ class DepotIdeesPostgres(DepotIdees):  # pragma: no cover
                 "INSERT INTO idees_featurebase (produit_id, projet_id, titre, nb_votes) VALUES (%s, %s, %s, %s)",
                 [(produit_id, projet_id, i.titre, i.nb_votes) for i in idees],
             )
+        self._connexion.commit()
         return self.lister(produit_id, projet_id)
 
     @avec_connexion

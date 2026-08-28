@@ -58,10 +58,6 @@ class EtapeInaccessible(AnalyseProjetErreur):
     pass
 
 
-class ConfigurationAbsente(AnalyseProjetErreur):
-    pass
-
-
 class EtapeAbsente(AnalyseProjetErreur):
     pass
 
@@ -99,6 +95,9 @@ class DepotAnalyse(ABC):
     @abstractmethod
     def lister_blocs_projet(self, projet_id: int) -> list[BlocPrompt]:  # pragma: no cover
         ...
+
+    @abstractmethod
+    def configuration_existe(self, projet_id: int) -> bool: ...
 
     @abstractmethod
     def enregistrer_configuration(
@@ -153,7 +152,7 @@ class ServiceAnalyseProjet:
         if not projet:
             raise EtapeAbsente
         blocs = self._analyses.lister_blocs_projet(projet_id)
-        if not blocs:
+        if not self._analyses.configuration_existe(projet_id):
             defaults = self._analyses.lister_blocs_produit(projet.produit_id)
             blocs = [
                 BlocPrompt(

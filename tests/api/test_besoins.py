@@ -65,6 +65,20 @@ def test_analyser_besoins_featurebase(client: TestClient) -> None:
     )
 
 
+def test_analyse_globale_preserve_les_produits(client: TestClient) -> None:
+    for produit_id in (1, 2):
+        client.post(
+            "/api/idees/import",
+            data={"produit_id": str(produit_id), "confirmation": "true"},
+            files={"fichier": ("export.csv", FEATUREBASE_CSV.encode(), "text/csv")},
+        )
+
+    assert client.post("/api/besoins/analyser/idee").status_code == 200
+
+    besoins = client.get("/api/besoins?source=idee").json()
+    assert {besoin["produit_id"] for besoin in besoins} == {1, 2}
+
+
 def test_analyser_besoins_retours_bizdev(client: TestClient) -> None:
     client.post(
         "/api/retours-bizdev/import",

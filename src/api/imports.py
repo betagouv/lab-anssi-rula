@@ -1,23 +1,11 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
 
 from projets.depot import DepotProjets, Projet
 from projets.service import ProjetDejaExistant
 from produits.depot import DepotProduits
-from validation_transcript.service import ServiceValidationTranscript
-
-
-def verifier_import(
-    contenu: str, confirmation: bool, validation: ServiceValidationTranscript
-) -> None:
-    if not confirmation:
-        raise HTTPException(status_code=422, detail="Confirmation obligatoire")
-    if not validation.valider(contenu).valide:
-        raise HTTPException(status_code=422, detail="Contenu non conforme")
-
-
 def selectionner_projet(
     produit_id: int,
     projet_id: int | None,
@@ -40,8 +28,7 @@ def selectionner_projet(
                 status_code=404, detail="Projet introuvable pour ce produit."
             )
         return projet, False
-    assert nouveau_nom is not None
-    nom = nouveau_nom.strip()
+    nom = cast(str, nouveau_nom).strip()
     if not nom:
         raise HTTPException(status_code=422, detail="Le nom du projet est obligatoire.")
     if any(
@@ -62,16 +49,13 @@ def selectionner_projet(
 def importer_source_csv(
     produit_id: int,
     contenu: str,
-    confirmation: bool,
     projet_id: int | None,
     nouveau_nom: str | None,
     nouveau_brief: str,
-    validation: ServiceValidationTranscript,
     projets: DepotProjets,
     produits: DepotProduits,
     importer: Callable[[int, str, int], list[Any]],
 ) -> dict[str, Any]:
-    verifier_import(contenu, confirmation, validation)
     projet, cree = selectionner_projet(
         produit_id,
         projet_id,
@@ -96,3 +80,18 @@ def importer_source_csv(
         "projet": projet._asdict(),
         "sources": [source._asdict() for source in sources],
     }
+
+
+def importer_csv_produit(
+    produit_id: int,
+    contenu: str,
+    produits: DepotProduits,
+    importer: Callable[[int, str, None], list[Any]],
+) -> dict[str, Any]:
+    if not any(produit.id == produit_id for produit in produits.lister()):
+        raise HTTPException(status_code=404, detail="Produit introuvable.")
+    try:
+        sources = importer(produit_id, contenu, None)
+    except (KeyError, ValueError) as erreur:
+        raise HTTPException(status_code=400, detail=f"CSV invalide : {erreur}") from erreur
+    return {"produit_id": produit_id, "sources": [source._asdict() for source in sources]}
