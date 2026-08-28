@@ -10,7 +10,24 @@ type RouteProjet = {
   etape?: string;
 };
 
-export type RouteMvp = { nom: 'entree' } | RouteProduit | RouteProjet;
+type RouteEntretien = {
+  nom: 'entretien';
+  projetId: number;
+  entretienId: number;
+};
+
+type RouteSourceProjet = {
+  nom: 'source-projet';
+  projetId: number;
+  source: 'bizdev' | 'featurebase';
+};
+
+export type RouteMvp =
+  | { nom: 'entree' }
+  | RouteProduit
+  | RouteProjet
+  | RouteEntretien
+  | RouteSourceProjet;
 
 function id(value: string | undefined): number | null {
   const nombre = Number(value);
@@ -41,6 +58,27 @@ export function routeMvp(hash: string): RouteMvp | null {
       source: segments[3] as RouteProduit['source'],
     };
   const projetId = id(segments[1]);
+  const entretienId = id(segments[3]);
+  if (
+    segments[0] === 'projets' &&
+    projetId &&
+    segments[2] === 'entretiens' &&
+    entretienId &&
+    segments.length === 4
+  )
+    return { nom: 'entretien', projetId, entretienId };
+  if (
+    segments[0] === 'projets' &&
+    projetId &&
+    segments[2] === 'sources' &&
+    segments.length === 4 &&
+    ['bizdev', 'featurebase'].includes(segments[3] ?? '')
+  )
+    return {
+      nom: 'source-projet',
+      projetId,
+      source: segments[3] as RouteSourceProjet['source'],
+    };
   if (
     segments[0] === 'projets' &&
     projetId &&

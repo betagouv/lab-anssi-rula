@@ -66,6 +66,7 @@ export type EtapeAnalyse = {
   prompt: string;
   brouillon: string | null;
   valide: string | null;
+  statut: string;
   cree_le: string;
   modifie_le: string;
 };
@@ -121,6 +122,8 @@ export const ajouterSource = (
 ) => corps<SourceProjet>(`/api/produits/${produitId}/sources`, body);
 export const listerEntretiens = (id: number) =>
   fetch(`/api/projets/${id}/entretiens`).then(json<Entretien[]>);
+export const obtenirEntretien = (projetId: number, entretienId: number) =>
+  fetch(`/api/projets/${projetId}/entretiens/${entretienId}`).then(json<Entretien>);
 export const creerEntretien = (
   id: number,
   body: Omit<Entretien, 'id' | 'projet_id' | 'cree_le'> & { confirmation: boolean }

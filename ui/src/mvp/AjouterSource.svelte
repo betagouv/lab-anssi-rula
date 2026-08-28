@@ -21,7 +21,15 @@
     bizdev: 'Importer des entretiens BizDev',
     featurebase: 'Importer des demandes FeatureBase',
   };
-  let { produit, source }: { produit: Produit; source: Source } = $props();
+  let {
+    produit,
+    source,
+    projetInitialId = null,
+  }: {
+    produit: Produit;
+    source: Source;
+    projetInitialId?: number | null;
+  } = $props();
   let projets = $state<Projet[]>([]);
   let projetId = $state('');
   let nom = $state('');
@@ -39,6 +47,10 @@
   let projetCible = $state<number | null>(null);
   let enCours = $state(false);
   let ouvert = $state(false);
+
+  $effect(() => {
+    if (projetInitialId && !projetId) projetId = String(projetInitialId);
+  });
 
   $effect(() => {
     listerProjets(produit.id)
