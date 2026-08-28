@@ -15,6 +15,7 @@
   import ProjetVue from './mvp/Projet.svelte';
   import Scan from './mvp/Scan.svelte';
   import ConfigurationAnalyse from './mvp/ConfigurationAnalyse.svelte';
+  import EtapeAnalyse from './mvp/EtapeAnalyse.svelte';
   import Detail from './mvp/Detail.svelte';
   import { routeMvp } from './mvp/routage';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
@@ -65,6 +66,15 @@
   const versConfiguration = () =>
     (window.location.hash = `#/projets/${projet?.id}/configuration`);
   const versDetail = () => (window.location.hash = `#/projets/${projet?.id}/detail`);
+  const versEtapeSuivante = (cle: string) => {
+    const suivante: Record<string, string> = {
+      'scan-neutre': 'points-a-retenir',
+      'points-a-retenir': 'thematisation',
+    };
+    window.location.hash = suivante[cle]
+      ? `#/projets/${projet?.id}/analyse/${suivante[cle]}`
+      : `#/projets/${projet?.id}/detail`;
+  };
 </script>
 
 <Entete produit={produitEntete} />
@@ -93,7 +103,14 @@
 {:else if projet && route?.nom === 'configuration'}
   <ConfigurationAnalyse
     {projet}
-    onlance={() => (window.location.hash = `#/projets/${projet?.id}/scan`)}
+    onlance={() =>
+      (window.location.hash = `#/projets/${projet?.id}/analyse/scan-neutre`)}
+  />
+{:else if projet && route?.nom === 'analyse'}
+  <EtapeAnalyse
+    {projet}
+    cle={route.etape ?? 'scan-neutre'}
+    onvalide={() => versEtapeSuivante(route.etape ?? 'scan-neutre')}
   />
 {:else if projet && route?.nom === 'scan'}
   <Scan {projet} onvalide={versDetail} />

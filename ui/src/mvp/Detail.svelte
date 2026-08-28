@@ -1,16 +1,17 @@
 <script lang="ts">
   import { marked } from 'marked';
   import {
-    obtenirScan,
+    obtenirDetailAnalyse,
     listerEntretiens,
     type Entretien,
     type Projet,
   } from '../api/projets';
+  import ProgressionAnalyse from './ProgressionAnalyse.svelte';
   let { projet }: { projet: Projet } = $props();
-  let scan = $state('');
+  let sorties = $state<{ cle: string; libelle: string; contenu: string }[]>([]);
   let entretiens = $state<Entretien[]>([]);
   $effect(() => {
-    obtenirScan(projet.id).then((v) => (scan = v.valide ?? v.brouillon));
+    obtenirDetailAnalyse(projet.id).then((v) => (sorties = v.etapes));
     listerEntretiens(projet.id).then((v) => (entretiens = v));
   });
 </script>
@@ -18,13 +19,17 @@
 <main class="detail">
   <section>
     <a href={`#/produits/${projet.produit_id}/projets`}>← Projets</a>
+    <ProgressionAnalyse courant={6} />
     <h1>Détail analyse</h1>
     <p>Nom du projet de recherche</p>
     <h2>{projet.nom}</h2>
-    <article>
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      {@html marked.parse(scan)}
-    </article>
+    {#each sorties as sortie (sortie.cle)}
+      <article>
+        <h2>{sortie.libelle}</h2>
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        {@html marked.parse(sortie.contenu)}
+      </article>
+    {:else}<p>Aucune étape validée pour le moment.</p>{/each}
   </section>
   <aside>
     <h2>Données brutes</h2>
