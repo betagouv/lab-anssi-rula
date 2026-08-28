@@ -1,6 +1,7 @@
 type RouteProduit = {
-  nom: 'dashboard' | 'projets' | 'nouveau';
+  nom: 'dashboard' | 'projets' | 'nouveau' | 'source';
   produitId: number;
+  source?: 'transcript' | 'bizdev' | 'featurebase';
 };
 
 type RouteProjet = {
@@ -27,6 +28,18 @@ export function routeMvp(hash: string): RouteMvp | null {
     segments.length === 3
   )
     return { nom: segments[2] as RouteProduit['nom'], produitId };
+  if (
+    segments[0] === 'produits' &&
+    produitId &&
+    segments[2] === 'sources' &&
+    segments.length === 4 &&
+    ['transcript', 'bizdev', 'featurebase'].includes(segments[3] ?? '')
+  )
+    return {
+      nom: 'source',
+      produitId,
+      source: segments[3] as RouteProduit['source'],
+    };
   const projetId = id(segments[1]);
   if (
     segments[0] === 'projets' &&
