@@ -133,7 +133,9 @@ def test_sources_csv_peuvent_etre_rattachees_a_un_projet() -> None:
 
 
 def test_analyse_transverse_ajoute_le_perimetre_produit() -> None:
-    contenu = (Path(__file__).parents[1] / "migrations" / "020_analyse_transverse_produit.sql").read_text()
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "020_analyse_transverse_produit.sql"
+    ).read_text()
     assert "ADD COLUMN IF NOT EXISTS produit_id" in contenu
     assert "backfill" not in contenu.lower()
     assert "features_embeddables" in contenu
@@ -141,5 +143,15 @@ def test_analyse_transverse_ajoute_le_perimetre_produit() -> None:
 
 
 def test_analyse_transverse_conserve_la_date_du_calcul() -> None:
-    contenu = (Path(__file__).parents[1] / "migrations" / "021_calculs_transverses.sql").read_text()
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "021_calculs_transverses.sql"
+    ).read_text()
     assert "calculs_transverses" in contenu
+
+
+def test_entretiens_de_projet_sont_rattaches_a_leur_produit() -> None:
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "022_transcripts_produit.sql"
+    ).read_text()
+    assert "SET produit_id = p.produit_id" in contenu
+    assert "t.projet_id = p.id" in contenu

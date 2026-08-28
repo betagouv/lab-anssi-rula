@@ -14,6 +14,7 @@ class BesoinDetecte(NamedTuple):
     statut: str
     cree_le: datetime
     produit_id: int | None = None
+    projet_id: int | None = None
 
 
 class DepotBesoinsDetectes(ABC):

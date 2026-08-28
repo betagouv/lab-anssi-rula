@@ -32,18 +32,24 @@ class DepotBesoinsDetectesPostgres(DepotBesoinsDetectes):  # pragma: no cover
             if source is None:
                 cur.execute(
                     """SELECT id, source, source_id, texte_original, nom_generique,
-                              verbatim, transcript_id, statut, cree_le, produit_id
-                       FROM besoins_detectes
-                       WHERE (%s IS NULL OR produit_id = %s)
+                              verbatim, transcript_id, statut, cree_le, produit_id,
+                              CASE WHEN b.source = 'transcript' THEN
+                                (SELECT t.projet_id FROM transcripts t WHERE t.id = b.transcript_id)
+                              END AS projet_id
+                       FROM besoins_detectes b
+                       WHERE (%s IS NULL OR b.produit_id = %s)
                        ORDER BY source, id""",
                     (produit_id, produit_id),
                 )
             else:
                 cur.execute(
                     """SELECT id, source, source_id, texte_original, nom_generique,
-                              verbatim, transcript_id, statut, cree_le, produit_id
-                       FROM besoins_detectes
-                       WHERE source = %s AND (%s IS NULL OR produit_id = %s)
+                              verbatim, transcript_id, statut, cree_le, produit_id,
+                              CASE WHEN b.source = 'transcript' THEN
+                                (SELECT t.projet_id FROM transcripts t WHERE t.id = b.transcript_id)
+                              END AS projet_id
+                       FROM besoins_detectes b
+                       WHERE b.source = %s AND (%s IS NULL OR b.produit_id = %s)
                        ORDER BY id""",
                     (source, produit_id, produit_id),
                 )

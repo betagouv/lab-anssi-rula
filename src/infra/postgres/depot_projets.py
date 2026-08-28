@@ -29,10 +29,10 @@ def _ajouter_entretien(
 ) -> Entretien:  # pragma: no cover
     curseur.execute(
         "INSERT INTO transcripts "
-        "(projet_id, participant, date_entretien, moderateur, contenu, note_moderateur) "
-        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING "
+        "(projet_id, produit_id, participant, date_entretien, moderateur, contenu, note_moderateur) "
+        "SELECT %s, produit_id, %s, %s, %s, %s, %s FROM projets_recherche WHERE id = %s RETURNING "
         f"{_COLONNES_ENTRETIEN}",
-        valeurs,
+        (*valeurs, valeurs[0]),
     )
     return Entretien(*curseur.fetchone())
 
