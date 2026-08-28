@@ -11,6 +11,10 @@
   import Entree from './mvp/Entree.svelte';
   import Dashboard from './mvp/Dashboard.svelte';
   import ListeProjets from './mvp/ListeProjets.svelte';
+  import NouveauProjet from './mvp/NouveauProjet.svelte';
+  import ProjetVue from './mvp/Projet.svelte';
+  import Scan from './mvp/Scan.svelte';
+  import Detail from './mvp/Detail.svelte';
   import { routeMvp } from './mvp/routage';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
   import DetailRetourBizDev from './retours/DetailRetourBizDev.svelte';
@@ -52,6 +56,10 @@
     window.addEventListener('hashchange', charger);
     return () => window.removeEventListener('hashchange', charger);
   });
+
+  const versProjet = (id: number) => (window.location.hash = `#/projets/${id}`);
+  const versScan = () => (window.location.hash = `#/projets/${projet?.id}/scan`);
+  const versDetail = () => (window.location.hash = `#/projets/${projet?.id}/detail`);
 </script>
 
 <Entete produit={produitEntete} />
@@ -73,6 +81,14 @@
   <Dashboard {produit} {projets} />
 {:else if route?.nom === 'projets' && produit}
   <ListeProjets {produit} {projets} />
+{:else if route?.nom === 'nouveau' && produit}
+  <NouveauProjet {produit} oncree={versProjet} />
+{:else if projet && route?.nom === 'projet'}
+  <ProjetVue {projet} onscan={versScan} />
+{:else if projet && route?.nom === 'scan'}
+  <Scan {projet} onvalide={versDetail} />
+{:else if projet && route?.nom === 'detail'}
+  <Detail {projet} />
 {:else}
   <main class="erreur">Page introuvable.</main>
 {/if}
