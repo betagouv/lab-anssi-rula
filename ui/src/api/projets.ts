@@ -51,6 +51,30 @@ export type Scan = {
   modifie_le: string;
 };
 
+export type BlocPrompt = {
+  cle: string;
+  libelle: string;
+  contenu: string;
+  ordre: number;
+};
+
+export type EtapeAnalyse = {
+  projet_id: number;
+  cle: string;
+  libelle: string;
+  ordre: number;
+  prompt: string;
+  brouillon: string | null;
+  valide: string | null;
+  cree_le: string;
+  modifie_le: string;
+};
+
+export type ConfigurationAnalyse = {
+  blocs: BlocPrompt[];
+  etapes: EtapeAnalyse[];
+};
+
 export type SourceProjet = { projet: Projet; entretien: Entretien };
 
 const corps = async <T>(url: string, body: unknown, method = 'POST'): Promise<T> => {
@@ -109,3 +133,28 @@ export const modifierScan = (id: number, contenu: string) =>
   corps<Scan>(`/api/projets/${id}/scan`, { contenu }, 'PUT');
 export const validerScan = (id: number) =>
   corps<Scan>(`/api/projets/${id}/scan/validation`, {});
+export const obtenirConfigurationAnalyse = (id: number) =>
+  fetch(`/api/projets/${id}/analyse/configuration`).then(json<ConfigurationAnalyse>);
+export const modifierConfigurationAnalyse = (
+  id: number,
+  blocs: Record<string, string>
+) =>
+  corps<ConfigurationAnalyse>(
+    `/api/projets/${id}/analyse/configuration`,
+    { blocs },
+    'PUT'
+  );
+export const genererEtapeAnalyse = (id: number, cle: string) =>
+  corps<EtapeAnalyse>(`/api/projets/${id}/analyse/etapes/${cle}/generation`, {});
+export const modifierEtapeAnalyse = (id: number, cle: string, contenu: string) =>
+  corps<EtapeAnalyse>(
+    `/api/projets/${id}/analyse/etapes/${cle}`,
+    { contenu },
+    'PUT'
+  );
+export const validerEtapeAnalyse = (id: number, cle: string) =>
+  corps<EtapeAnalyse>(`/api/projets/${id}/analyse/etapes/${cle}/validation`, {});
+export const obtenirDetailAnalyse = (id: number) =>
+  fetch(`/api/projets/${id}/analyse/detail`).then(
+    json<{ etapes: { cle: string; libelle: string; contenu: string }[] }>
+  );
