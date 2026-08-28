@@ -101,7 +101,6 @@ RULA/
 │   ├── src/
 │   │   ├── App.svelte
 │   │   ├── navigation/        # Navigation principale et routage par hash
-│   │   ├── besoins/           # Besoins extraits des entretiens
 │   │   └── main.ts
 │   ├── index.html
 │   ├── vite.config.ts
@@ -125,7 +124,7 @@ RULA/
 L'interface est organisée selon le parcours métier suivant :
 
 ```text
-Sources → Analyse des besoins → Correspondances
+Sources → Analyse transverse du produit
 ```
 
 ### Données sources
@@ -140,37 +139,18 @@ transverses au produit et conservent `projet_id` à `NULL` pour les nouveaux
 imports. Les routes historiques d'import restent compatibles avec les anciens
 appels pouvant cibler un projet.
 
-### Analyse des besoins
+### Normalisation et analyse transverse
 
-Cet espace remplace l'ancienne page « Fonctionnalités » et propose trois vues,
-une par source :
+Le dashboard d'un produit propose une vue transverse unique :
 
-- **Entretiens utilisateurs** : extraction des besoins et fonctionnalités à
-  partir des transcripts, avec conservation des verbatims et du lien vers
-  l'entretien d'origine.
-- **Retours BizDev** : analyse des verbatims et de leurs métadonnées pour
-  produire un nom de fonctionnalité générique.
-- **Demandes FeatureBase** : normalisation des demandes importées pour produire
-  un nom générique comparable aux deux autres sources.
-
-Les traitements peuvent donc différer selon la source. Ils convergent dans la
-table `besoins_detectes`, qui conserve le texte brut, le nom générique, le
-verbatim éventuel et l'origine de chaque résultat.
+Les traitements par source convergent dans `besoins_detectes`, puis les
+correspondances regroupent les noms génériques. Chaque groupe expose les
+passages bruts des transcripts, de FeatureBase et de BizDev, avec un lien vers
+la source d'origine.
 
 L'**historique des analyses** reste accessible depuis la page des entretiens.
 Il s'agit d'un espace de suivi du traitement, et non d'un niveau principal de
 navigation.
-
-### Correspondances
-
-Les correspondances constituent la vue unifiée de sortie. L'analyse calcule
-les embeddings sur les noms génériques de `besoins_detectes`, puis regroupe les
-besoins proches entre les trois sources. Les verbatims et les liens vers les
-sources brutes restent disponibles pour expliquer chaque rapprochement :
-chaque membre conserve son identifiant d'origine et peut ouvrir directement
-l'entretien, le retour BizDev ou la demande FeatureBase correspondante.
-Pour FeatureBase, le titre importé constitue la donnée brute affichée à la
-place d'un verbatim séparé.
 
 Le dashboard produit expose une analyse transverse unique. Elle normalise tous
 les transcripts des projets du produit, les deux sources CSV du produit, puis
@@ -186,12 +166,15 @@ La navigation frontend utilise des hashes URL, notamment :
 #sources/retours-bizdev/123
 #sources/featurebase/123
 #analyses
-#besoins
-#correspondances
 ```
 
-Les anciens hashes principaux sont conservés comme alias pour les liens
-existants (`#transcripts`, `#syntheses/analyses`, `#syntheses/besoins`, etc.).
+Les transcripts consultables depuis une analyse transverse utilisent la route
+projet-scopée `#projets/{projet_id}/entretiens/{entretien_id}`. Cette vue est en
+lecture seule ; l'ancien détail global des transcripts n'est plus rendu.
+
+Les anciennes API `/besoins` et `/correspondances` restent disponibles pour les
+clients historiques, mais leurs vues globales ne sont plus proposées dans la
+navigation frontend.
 
 ---
 

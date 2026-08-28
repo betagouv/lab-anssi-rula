@@ -15,14 +15,80 @@ def _verifier_produit(produit_id: int, produits: DepotProduits) -> None:
         raise HTTPException(status_code=404, detail="Produit introuvable.")
 
 
+def _passage(besoin, membre=None) -> dict:
+    source = membre.source if membre else besoin.source
+    source_id = (
+        membre.source_id
+        if membre and membre.source_id is not None
+        else besoin.source_id
+    )
+    texte = besoin.nom_generique if besoin else membre.texte
+    verbatim = (
+        (
+            besoin.verbatim
+            or (membre.verbatim if membre else None)
+            or besoin.texte_original
+        )
+        if besoin
+        else (membre.verbatim or membre.texte)
+    )
+    transcript_id = besoin.transcript_id if besoin else membre.transcript_id
+    projet_id = getattr(besoin, "projet_id", None) if besoin else None
+    return {
+        "source": source,
+        "source_id": source_id,
+        "transcript_id": transcript_id,
+        "projet_id": projet_id,
+        "texte_normalise": texte,
+        "verbatim": verbatim,
+    }
+
+
+def _groupes(besoins: list, clusters: list) -> list[dict]:
+    index = {(besoin.source, besoin.source_id): besoin for besoin in besoins}
+    inclus: set[tuple[str, int]] = set()
+    groupes = []
+    for cluster in clusters:
+        passages = []
+        for membre in cluster.membres:
+            source_id = membre.source_id
+            besoin = (
+                index.get((membre.source, source_id)) if source_id is not None else None
+            )
+            passages.append(_passage(besoin, membre))
+            if source_id is not None:
+                inclus.add((membre.source, source_id))
+        if passages:
+            groupes.append(
+                {
+                    "nom_generique": cluster.libelle,
+                    "occurrences": len(passages),
+                    "passages": passages,
+                }
+            )
+    for besoin in besoins:
+        if (besoin.source, besoin.source_id) not in inclus:
+            groupes.append(
+                {
+                    "nom_generique": besoin.nom_generique,
+                    "occurrences": 1,
+                    "passages": [_passage(besoin)],
+                }
+            )
+    return groupes
+
+
 def _charger(
     produit_id: int,
     besoins: ServiceBesoinsDetectes,
     correspondances: ServiceCorrespondance,
 ) -> dict:
+    besoins_liste = besoins.lister(produit_id=produit_id)
+    clusters = correspondances.charger(produit_id)
     return {
-        "besoins": [besoin._asdict() for besoin in besoins.lister(produit_id=produit_id)],
-        "correspondances": en_dict(correspondances.charger(produit_id)),
+        "besoins": [besoin._asdict() for besoin in besoins_liste],
+        "correspondances": en_dict(clusters),
+        "groupes": _groupes(besoins_liste, clusters),
         "calcule_le": correspondances.dernier_calcul(produit_id),
     }
 
