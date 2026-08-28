@@ -57,24 +57,6 @@
               Données sources
             </a>
           </li>
-          <li class="fr-nav__item">
-            <a
-              href={hashDepuisVue({ nom: 'besoins' })}
-              class="fr-nav__link"
-              aria-current={vue.nom === 'besoins' ? 'page' : undefined}
-            >
-              Analyse des besoins
-            </a>
-          </li>
-          <li class="fr-nav__item">
-            <a
-              href={hashDepuisVue({ nom: 'correspondances' })}
-              class="fr-nav__link"
-              aria-current={vue.nom === 'correspondances' ? 'page' : undefined}
-            >
-              Correspondances
-            </a>
-          </li>
         </ul>
       </nav>
       {#if dansSources}

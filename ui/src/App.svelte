@@ -25,8 +25,6 @@
   import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
   import DetailFeatureBase from './fonctionnalites/DetailFeatureBase.svelte';
   import ListeAnalyses from './analyses/ListeAnalyses.svelte';
-  import ListeBesoinsDetectes from './besoins/ListeBesoinsDetectes.svelte';
-  import ListeCorrespondance from './correspondance/ListeCorrespondance.svelte';
   import { vueDepuisHash } from './navigation/routage';
 
   let produits = $state<Produit[]>([]);
@@ -100,10 +98,6 @@
   <DetailFeatureBase id={ancienneVue.id} />
 {:else if ancienneVue.nom === 'analyses'}
   <ListeAnalyses />
-{:else if ancienneVue.nom === 'besoins'}
-  <ListeBesoinsDetectes />
-{:else if ancienneVue.nom === 'correspondances'}
-  <ListeCorrespondance />
 {:else if route?.nom === 'dashboard' && produit}
   <Dashboard {produit} {projets} />
 {:else if route?.nom === 'projets' && produit}

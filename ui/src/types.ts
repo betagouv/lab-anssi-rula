@@ -7,9 +7,7 @@ export type Vue =
   | { nom: 'sources:retours-bizdev:detail'; id: number }
   | { nom: 'sources:featurebase' }
   | { nom: 'sources:featurebase:detail'; id: number }
-  | { nom: 'analyses' }
-  | { nom: 'besoins' }
-  | { nom: 'correspondances' };
+  | { nom: 'analyses' };
 
 export type SourceBesoin = 'transcript' | 'retour_bizdev' | 'idee';
 

@@ -16,8 +16,6 @@ describe('routage RULA', () => {
     ['#sources/featurebase', { nom: 'sources:featurebase' }],
     ['#sources/featurebase/9', { nom: 'sources:featurebase:detail', id: 9 }],
     ['#analyses', { nom: 'analyses' }],
-    ['#besoins', { nom: 'besoins' }],
-    ['#correspondances', { nom: 'correspondances' }],
   ])('parse %s', (hash, attendu) => {
     expect(vueDepuisHash(hash)).toEqual(attendu);
   });
@@ -26,10 +24,7 @@ describe('routage RULA', () => {
     ['#transcripts', { nom: 'sources:entretiens' }],
     ['#transcripts/12', { nom: 'sources:entretiens:detail', id: 12 }],
     ['#syntheses/analyses', { nom: 'analyses' }],
-    ['#syntheses/besoins', { nom: 'besoins' }],
-    ['#fonctionnalites', { nom: 'sources:featurebase' }],
     ['#retours-bizdev', { nom: 'sources:retours-bizdev' }],
-    ['#correspondance', { nom: 'correspondances' }],
   ])('conserve la compatibilité avec %s', (hash, attendu) => {
     expect(vueDepuisHash(hash)).toEqual(attendu);
   });
@@ -37,6 +32,13 @@ describe('routage RULA', () => {
   it('retombe sur la route par défaut pour un hash inconnu', () => {
     expect(vueDepuisHash('#inconnu')).toEqual(ROUTE_PAR_DEFAUT);
   });
+
+  it.each(['#fonctionnalites', '#besoins', '#correspondances'])(
+    'retire la vue globale %s',
+    (hash) => {
+      expect(vueDepuisHash(hash)).toEqual(ROUTE_PAR_DEFAUT);
+    }
+  );
 
   it.each([
     [{ nom: 'sources:entretiens' }, '#sources/entretiens'],
@@ -49,8 +51,6 @@ describe('routage RULA', () => {
     [{ nom: 'sources:retours-bizdev:detail', id: 7 }, '#sources/retours-bizdev/7'],
     [{ nom: 'sources:featurebase' }, '#sources/featurebase'],
     [{ nom: 'sources:featurebase:detail', id: 9 }, '#sources/featurebase/9'],
-    [{ nom: 'besoins' }, '#besoins'],
-    [{ nom: 'correspondances' }, '#correspondances'],
   ] as Array<[Vue, string]>)('sérialise %o', (vue, hash) => {
     expect(hashDepuisVue(vue)).toBe(hash);
   });
