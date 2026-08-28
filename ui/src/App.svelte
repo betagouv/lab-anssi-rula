@@ -14,6 +14,7 @@
   import NouveauProjet from './mvp/NouveauProjet.svelte';
   import ProjetVue from './mvp/Projet.svelte';
   import Scan from './mvp/Scan.svelte';
+  import ConfigurationAnalyse from './mvp/ConfigurationAnalyse.svelte';
   import Detail from './mvp/Detail.svelte';
   import { routeMvp } from './mvp/routage';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
@@ -42,10 +43,13 @@
   async function charger() {
     try {
       produits = await listerProduits();
+      const nouvelleRoute = routeMvp(window.location.hash);
       hash = window.location.hash;
-      if (route && 'produitId' in route)
-        projets = await listerProjets(route.produitId);
-      if (route && 'projetId' in route) projet = await obtenirProjet(route.projetId);
+      if (nouvelleRoute && 'produitId' in nouvelleRoute)
+        projets = await listerProjets(nouvelleRoute.produitId);
+      if (nouvelleRoute && 'projetId' in nouvelleRoute)
+        projet = await obtenirProjet(nouvelleRoute.projetId);
+      else projet = null;
     } catch (e) {
       erreur = e instanceof Error ? e.message : 'Erreur de chargement';
     }
@@ -58,7 +62,8 @@
   });
 
   const versProjet = (id: number) => (window.location.hash = `#/projets/${id}`);
-  const versScan = () => (window.location.hash = `#/projets/${projet?.id}/scan`);
+  const versConfiguration = () =>
+    (window.location.hash = `#/projets/${projet?.id}/configuration`);
   const versDetail = () => (window.location.hash = `#/projets/${projet?.id}/detail`);
 </script>
 
@@ -84,7 +89,12 @@
 {:else if route?.nom === 'nouveau' && produit}
   <NouveauProjet {produit} oncree={versProjet} />
 {:else if projet && route?.nom === 'projet'}
-  <ProjetVue {projet} onscan={versScan} />
+  <ProjetVue {projet} onscan={versConfiguration} />
+{:else if projet && route?.nom === 'configuration'}
+  <ConfigurationAnalyse
+    {projet}
+    onlance={() => (window.location.hash = `#/projets/${projet?.id}/scan`)}
+  />
 {:else if projet && route?.nom === 'scan'}
   <Scan {projet} onvalide={versDetail} />
 {:else if projet && route?.nom === 'detail'}

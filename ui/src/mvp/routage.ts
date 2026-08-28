@@ -4,7 +4,7 @@ type RouteProduit = {
 };
 
 type RouteProjet = {
-  nom: 'projet' | 'scan' | 'detail';
+  nom: 'projet' | 'configuration' | 'scan' | 'detail';
   projetId: number;
 };
 
@@ -30,7 +30,7 @@ export function routeMvp(hash: string): RouteMvp | null {
   if (
     segments[0] === 'projets' &&
     projetId &&
-    ['projet', 'scan', 'detail'].includes(segments[2] ?? '') &&
+    ['projet', 'configuration', 'scan', 'detail'].includes(segments[2] ?? '') &&
     segments.length === 3
   )
     return { nom: segments[2] as RouteProjet['nom'], projetId };
