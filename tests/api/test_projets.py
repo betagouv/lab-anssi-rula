@@ -1,8 +1,13 @@
+from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
 
 from api.projets import (
+    _erreur_analyse,
     fabrique_depot_projets,
+    fabrique_depot_analyse,
+    fabrique_service_analyse_projet,
     fabrique_service_scan,
     fabrique_service_validation,
 )
@@ -12,6 +17,8 @@ from projets.service import ProjetDejaExistant
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.projets.depot_projets_de_test import DepotProjetsDeTest
 from infra.memoire.depot_produits import DepotProduitsMemoire
+from infra.memoire.depot_analyse import DepotAnalyseMemoire
+from projets.analyse import ConfigurationAbsente, ServiceAnalyseProjet
 from validation_transcript.service import ServiceValidationTranscript
 from serveur import app
 
@@ -250,3 +257,120 @@ def test_conflit_de_nom_concurrent_est_retourne(contexte_projets) -> None:
         ).status_code
         == 409
     )
+
+
+def test_parcours_des_etapes_d_analyse() -> None:
+    depot = DepotProjetsDeTest()
+    projet = depot.ajouter(1, "Recherche", "Brief")
+    depot.ajouter_entretien(projet.id, "A", date(2026, 8, 25), "B", "Transcript", "")
+    analyse = DepotAnalyseMemoire()
+    service = ServiceAnalyseProjet(
+        depot, analyse, AdaptateurAlbertDeTest().avec_reponse("Résultat")
+    )
+    app.dependency_overrides[fabrique_depot_projets] = lambda: depot
+    app.dependency_overrides[fabrique_depot_analyse] = lambda: analyse
+    app.dependency_overrides[fabrique_service_analyse_projet] = lambda: service
+    client = TestClient(app)
+    try:
+        configuration = client.get(f"/api/projets/{projet.id}/analyse/configuration")
+        assert configuration.status_code == 200
+        assert configuration.json()["blocs"][0]["cle"] == "role"
+        assert len(configuration.json()["etapes"]) == 3
+        assert (
+            client.post(
+                f"/api/projets/{projet.id}/analyse/etapes/points-a-retenir/generation"
+            ).status_code
+            == 409
+        )
+        scan = client.post(
+            f"/api/projets/{projet.id}/analyse/etapes/scan-neutre/generation"
+        )
+        assert scan.status_code == 201
+        assert (
+            client.put(
+                f"/api/projets/{projet.id}/analyse/etapes/scan-neutre",
+                json={"contenu": "Corrigé"},
+            ).json()["brouillon"]
+            == "Corrigé"
+        )
+        assert (
+            client.post(
+                f"/api/projets/{projet.id}/analyse/etapes/scan-neutre/validation"
+            ).json()["valide"]
+            == "Corrigé"
+        )
+        assert (
+            client.post(
+                f"/api/projets/{projet.id}/analyse/etapes/points-a-retenir/generation"
+            ).status_code
+            == 201
+        )
+        assert (
+            client.post(
+                f"/api/projets/{projet.id}/analyse/etapes/points-a-retenir/validation"
+            ).status_code
+            == 200
+        )
+        assert client.get(f"/api/projets/{projet.id}/analyse/detail").json()["etapes"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_erreurs_des_routes_d_analyse() -> None:
+    depot = DepotProjetsDeTest()
+    analyse = DepotAnalyseMemoire()
+    service = ServiceAnalyseProjet(depot, analyse, AdaptateurAlbertDeTest())
+    app.dependency_overrides[fabrique_depot_projets] = lambda: depot
+    app.dependency_overrides[fabrique_depot_analyse] = lambda: analyse
+    app.dependency_overrides[fabrique_service_analyse_projet] = lambda: service
+    client = TestClient(app)
+    try:
+        for url in (
+            "/api/projets/99/analyse/configuration",
+            "/api/projets/99/analyse/etapes",
+            "/api/projets/99/analyse/detail",
+        ):
+            assert client.get(url).status_code == 404
+        assert (
+            client.put(
+                "/api/projets/99/analyse/configuration", json={"blocs": {}}
+            ).status_code
+            == 404
+        )
+        projet = depot.ajouter(1, "Configuration", "")
+        assert (
+            client.put(
+                f"/api/projets/{projet.id}/analyse/configuration",
+                json={"blocs": {"role": "Rôle"}},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                "/api/projets/99/analyse/etapes/inconnue/generation"
+            ).status_code
+            == 404
+        )
+        assert (
+            client.put(
+                "/api/projets/99/analyse/etapes/inconnue", json={"contenu": "x"}
+            ).status_code
+            == 404
+        )
+        assert (
+            client.post(
+                "/api/projets/99/analyse/etapes/inconnue/validation"
+            ).status_code
+            == 404
+        )
+        projet_sans_entretien = depot.ajouter(1, "Recherche", "")
+        assert (
+            client.post(
+                f"/api/projets/{projet_sans_entretien.id}/analyse/etapes/scan-neutre/generation"
+            ).status_code
+            == 422
+        )
+        assert _erreur_analyse(ValueError("erreur")).status_code == 422
+        assert _erreur_analyse(ConfigurationAbsente()).status_code == 404
+    finally:
+        app.dependency_overrides.clear()

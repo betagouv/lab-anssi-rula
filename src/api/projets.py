@@ -8,6 +8,15 @@ from adaptateurs.albert import AdaptateurAlbertReel
 from api.produits import fabrique_depot_produits
 from configuration import charge_configuration
 from infra.postgres.depot_projets import DepotProjetsPostgres
+from infra.postgres.depot_analyse import DepotAnalysePostgres
+from projets.analyse import (
+    ConfigurationAbsente,
+    DepotAnalyse,
+    EtapeAbsente,
+    EtapeInaccessible,
+    ProjetSansEntretien,
+    ServiceAnalyseProjet,
+)
 from projets.depot import DepotProjets
 from projets.service import (
     ProjetDejaExistant,
@@ -23,6 +32,19 @@ _prompt = (Path(__file__).parent.parent / "prompts" / "scan_projet.md").read_tex
 
 def fabrique_depot_projets() -> DepotProjets:  # pragma: no cover
     return DepotProjetsPostgres(charge_configuration().base_de_donnees)
+
+
+def fabrique_depot_analyse() -> DepotAnalyse:  # pragma: no cover
+    return DepotAnalysePostgres(charge_configuration().base_de_donnees)
+
+
+def fabrique_service_analyse_projet(
+    projets: DepotProjets = Depends(fabrique_depot_projets),
+    analyses: DepotAnalyse = Depends(fabrique_depot_analyse),
+) -> ServiceAnalyseProjet:  # pragma: no cover
+    return ServiceAnalyseProjet(
+        projets, analyses, AdaptateurAlbertReel(charge_configuration().albert)
+    )
 
 
 def fabrique_service_scan(
@@ -76,6 +98,14 @@ class NouvelleSource(BaseModel):
     nouveau_projet: NouveauProjetSource | None = None
     entretien: EntretienSource
     confirmation: bool
+
+
+class ConfigurationAnalyseBody(BaseModel):
+    blocs: dict[str, str]
+
+
+class ModificationEtape(BaseModel):
+    contenu: str
 
 
 def _verifier(
@@ -262,3 +292,113 @@ def valider_scan(
     if not scan:
         raise HTTPException(status_code=404)
     return scan._asdict()
+
+
+def _erreur_analyse(erreur: ValueError) -> HTTPException:
+    if isinstance(erreur, EtapeInaccessible):
+        return HTTPException(
+            status_code=409,
+            detail="Validez les étapes précédentes avant de continuer.",
+        )
+    if isinstance(erreur, ProjetSansEntretien):
+        return HTTPException(status_code=422, detail="Ajoutez au moins un entretien.")
+    if isinstance(erreur, (EtapeAbsente, ConfigurationAbsente)):
+        return HTTPException(status_code=404, detail="Étape d’analyse introuvable.")
+    return HTTPException(status_code=422, detail=str(erreur))
+
+
+@routeur.get("/projets/{id}/analyse/configuration")
+def obtenir_configuration_analyse(
+    id: int,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> dict:
+    try:
+        configuration = service.configuration(id)
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+    return {
+        "blocs": [bloc._asdict() for bloc in configuration.blocs],
+        "etapes": [etape._asdict() for etape in configuration.etapes],
+    }
+
+
+@routeur.put("/projets/{id}/analyse/configuration")
+def modifier_configuration_analyse(
+    id: int,
+    body: ConfigurationAnalyseBody,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> dict:
+    try:
+        configuration = service.enregistrer_configuration(id, body.blocs)
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+    return {
+        "blocs": [bloc._asdict() for bloc in configuration.blocs],
+        "etapes": [etape._asdict() for etape in configuration.etapes],
+    }
+
+
+@routeur.get("/projets/{id}/analyse/etapes")
+def lister_etapes_analyse(
+    id: int,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> list[dict]:
+    try:
+        return [etape._asdict() for etape in service.configuration(id).etapes]
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+
+
+@routeur.post("/projets/{id}/analyse/etapes/{cle}/generation", status_code=201)
+def generer_etape_analyse(
+    id: int,
+    cle: str,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> dict:
+    try:
+        return service.generer(id, cle)._asdict()
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+
+
+@routeur.put("/projets/{id}/analyse/etapes/{cle}")
+def modifier_etape_analyse(
+    id: int,
+    cle: str,
+    body: ModificationEtape,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> dict:
+    try:
+        return service.modifier(id, cle, body.contenu)._asdict()
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+
+
+@routeur.post("/projets/{id}/analyse/etapes/{cle}/validation")
+def valider_etape_analyse(
+    id: int,
+    cle: str,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> dict:
+    try:
+        return service.valider(id, cle)._asdict()
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+
+
+@routeur.get("/projets/{id}/analyse/detail")
+def obtenir_detail_analyse(
+    id: int,
+    service: ServiceAnalyseProjet = Depends(fabrique_service_analyse_projet),
+) -> dict:
+    try:
+        configuration = service.configuration(id)
+    except ValueError as erreur:
+        raise _erreur_analyse(erreur) from erreur
+    return {
+        "etapes": [
+            {"cle": etape.cle, "libelle": etape.libelle, "contenu": etape.valide}
+            for etape in configuration.etapes
+            if etape.valide is not None
+        ]
+    }
