@@ -11,5 +11,6 @@ COPY uv.lock* ./
 RUN uv venv && uv sync --no-dev
 
 COPY src/ ./src/
+COPY migrations/ ./migrations/
 
 CMD [".venv/bin/uvicorn", "serveur:app", "--host", "0.0.0.0", "--port", "3001", "--reload", "--app-dir", "src"]
