@@ -9,7 +9,9 @@ class ServiceRetoursBizDev:
     def __init__(self, depot: DepotRetoursBizDev) -> None:
         self._depot = depot
 
-    def importer(self, produit_id: int, contenu_csv: str) -> list[Retour]:
+    def importer(
+        self, produit_id: int, contenu_csv: str, projet_id: int | None = None
+    ) -> list[Retour]:
         reader = csv.DictReader(io.StringIO(contenu_csv.lstrip("﻿")))
         retours = [
             RetourBrut(
@@ -25,7 +27,9 @@ class ServiceRetoursBizDev:
             for r in reader
             if r["Verbatim"].strip()
         ]
-        return self._depot.remplacer_tous(produit_id, retours)
+        return self._depot.remplacer_tous(produit_id, retours, projet_id)
 
-    def lister(self, produit_id: int | None = None) -> list[Retour]:
-        return self._depot.lister(produit_id)
+    def lister(
+        self, produit_id: int | None = None, projet_id: int | None = None
+    ) -> list[Retour]:
+        return self._depot.lister(produit_id, projet_id)

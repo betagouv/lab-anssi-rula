@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 
 from configuration import charge_configuration
-from api.imports import verifier_import
+from api.imports import importer_source_csv, verifier_import
+from api.produits import fabrique_depot_produits
+from api.projets import fabrique_depot_projets
 from infra.postgres.depot_retours_bizdev import DepotRetoursBizDevPostgres
 from retours_bizdev.depot import DepotRetoursBizDev
 from retours_bizdev.service import ServiceRetoursBizDev
+from projets.depot import DepotProjets
+from produits.depot import DepotProduits
 from validation_transcript.service import ServiceValidationTranscript
 from api.transcripts import fabrique_service_validation_transcript
 
@@ -51,6 +55,37 @@ def importer_csv(
 @routeur.get("/retours-bizdev")
 def lister_retours(
     produit_id: int | None = None,
+    projet_id: int | None = None,
     service: ServiceRetoursBizDev = Depends(fabrique_service_retours_bizdev),
 ) -> list[dict]:
-    return [r._asdict() for r in service.lister(produit_id)]
+    return [r._asdict() for r in service.lister(produit_id, projet_id)]
+
+
+@routeur.post("/produits/{produit_id}/sources/bizdev")
+def importer_source_bizdev(
+    produit_id: int,
+    fichier: UploadFile,
+    projet_id: int | None = Form(None),
+    nouveau_projet_nom: str | None = Form(None),
+    nouveau_projet_brief: str = Form(""),
+    confirmation: bool = Form(),
+    service: ServiceRetoursBizDev = Depends(fabrique_service_retours_bizdev),
+    validation: ServiceValidationTranscript = Depends(
+        fabrique_service_validation_transcript
+    ),
+    projets: DepotProjets = Depends(fabrique_depot_projets),
+    produits: DepotProduits = Depends(fabrique_depot_produits),
+) -> dict:
+    contenu = _decoder(fichier.file.read())
+    return importer_source_csv(
+        produit_id,
+        contenu,
+        confirmation,
+        projet_id,
+        nouveau_projet_nom,
+        nouveau_projet_brief,
+        validation,
+        projets,
+        produits,
+        service.importer,
+    )
