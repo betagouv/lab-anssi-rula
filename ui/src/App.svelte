@@ -1,70 +1,95 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Vue } from './types';
-  import NavigationPrincipale from './navigation/NavigationPrincipale.svelte';
-  import ListeTranscripts from './transcripts/ListeTranscripts.svelte';
-  import FormulaireTranscript from './transcripts/FormulaireTranscript.svelte';
-  import DetailTranscript from './transcripts/DetailTranscript.svelte';
-  import ListeAnalyses from './analyses/ListeAnalyses.svelte';
-  import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
-  import ListeCorrespondance from './correspondance/ListeCorrespondance.svelte';
+  import {
+    listerProduits,
+    listerProjets,
+    obtenirProjet,
+    type Produit,
+    type Projet,
+  } from './api/projets';
+  import Entete from './mvp/Entete.svelte';
+  import Entree from './mvp/Entree.svelte';
+  import Dashboard from './mvp/Dashboard.svelte';
+  import ListeProjets from './mvp/ListeProjets.svelte';
+  import { routeMvp } from './mvp/routage';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
   import DetailRetourBizDev from './retours/DetailRetourBizDev.svelte';
+  import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
   import DetailFeatureBase from './fonctionnalites/DetailFeatureBase.svelte';
-  import ListeBesoinsDetectes from './besoins/ListeBesoinsDetectes.svelte';
-  import { hashDepuisVue, vueDepuisHash } from './navigation/routage';
+  import { vueDepuisHash } from './navigation/routage';
 
-  let vue = $state<Vue>(vueDepuisHash(''));
+  let produits = $state<Produit[]>([]);
+  let projets = $state<Projet[]>([]);
+  let projet = $state<Projet | null>(null);
+  let erreur = $state('');
+  let hash = $state('');
+  const route = $derived(routeMvp(hash));
+  const produitId = $derived(
+    route && 'produitId' in route ? route.produitId : undefined
+  );
+  const produit = $derived(produits.find((item) => item.id === produitId));
+  const produitEntete = $derived(
+    route && 'projetId' in route
+      ? produits.find((item) => item.id === projet?.produit_id)?.nom
+      : produit?.nom
+  );
+  const ancienneVue = $derived(vueDepuisHash(hash));
 
-  function naviguer(v: Vue) {
-    const hash = hashDepuisVue(v);
-    if (window.location.hash === hash) {
-      vue = v;
-    } else {
-      window.location.hash = hash;
+  async function charger() {
+    try {
+      produits = await listerProduits();
+      hash = window.location.hash;
+      if (route && 'produitId' in route)
+        projets = await listerProjets(route.produitId);
+      if (route && 'projetId' in route) projet = await obtenirProjet(route.projetId);
+    } catch (e) {
+      erreur = e instanceof Error ? e.message : 'Erreur de chargement';
     }
   }
 
   onMount(() => {
-    const synchroniser = () => {
-      vue = vueDepuisHash(window.location.hash);
-    };
-
-    if (!window.location.hash) {
-      window.history.replaceState(null, '', hashDepuisVue(vue));
-    } else {
-      synchroniser();
-    }
-
-    window.addEventListener('hashchange', synchroniser);
-    return () => window.removeEventListener('hashchange', synchroniser);
+    void charger();
+    window.addEventListener('hashchange', charger);
+    return () => window.removeEventListener('hashchange', charger);
   });
 </script>
 
-<NavigationPrincipale {vue} />
+<Entete produit={produitEntete} />
+{#if erreur}
+  <main class="erreur">{erreur}</main>
+{:else if !produits.length}
+  <main class="chargement">Chargement…</main>
+{:else if route?.nom === 'entree'}
+  <Entree {produits} />
+{:else if ancienneVue.nom === 'sources:retours-bizdev'}
+  <ListeRetoursBizDev />
+{:else if ancienneVue.nom === 'sources:retours-bizdev:detail'}
+  <DetailRetourBizDev id={ancienneVue.id} />
+{:else if ancienneVue.nom === 'sources:featurebase'}
+  <ListeFonctionnalites />
+{:else if ancienneVue.nom === 'sources:featurebase:detail'}
+  <DetailFeatureBase id={ancienneVue.id} />
+{:else if route?.nom === 'dashboard' && produit}
+  <Dashboard {produit} {projets} />
+{:else if route?.nom === 'projets' && produit}
+  <ListeProjets {produit} {projets} />
+{:else}
+  <main class="erreur">Page introuvable.</main>
+{/if}
 
-<main>
-  {#if vue.nom === 'sources:entretiens'}
-    <ListeTranscripts onnaviquer={naviguer} />
-  {:else if vue.nom === 'sources:entretiens:ajout'}
-    <FormulaireTranscript onnaviquer={naviguer} />
-  {:else if vue.nom === 'sources:entretiens:detail'}
-    <DetailTranscript id={vue.id} onnaviquer={naviguer} />
-  {:else if vue.nom === 'sources:entretiens:modification'}
-    <FormulaireTranscript id={vue.id} onnaviquer={naviguer} />
-  {:else if vue.nom === 'analyses'}
-    <ListeAnalyses />
-  {:else if vue.nom === 'besoins'}
-    <ListeBesoinsDetectes />
-  {:else if vue.nom === 'sources:featurebase'}
-    <ListeFonctionnalites />
-  {:else if vue.nom === 'sources:retours-bizdev'}
-    <ListeRetoursBizDev />
-  {:else if vue.nom === 'sources:retours-bizdev:detail'}
-    <DetailRetourBizDev id={vue.id} />
-  {:else if vue.nom === 'correspondances'}
-    <ListeCorrespondance />
-  {:else if vue.nom === 'sources:featurebase:detail'}
-    <DetailFeatureBase id={vue.id} />
-  {/if}
-</main>
+<style>
+  :global(body) {
+    margin: 0;
+    color: var(--text-default-grey);
+    font-family: Marianne, Arial, sans-serif;
+  }
+  .chargement,
+  .erreur {
+    margin: 3rem auto;
+    max-width: 1200px;
+    padding: 0 1.5rem;
+  }
+  .erreur {
+    color: #ce0500;
+  }
+</style>
