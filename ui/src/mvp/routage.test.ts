@@ -20,6 +20,15 @@ describe('routage MVP', () => {
       { nom: 'source', produitId: 2, source: 'featurebase' },
     ],
     ['#/projets/4', { nom: 'projet', projetId: 4 }],
+    ['#/projets/4/entretiens/7', { nom: 'entretien', projetId: 4, entretienId: 7 }],
+    [
+      '#/projets/4/sources/bizdev',
+      { nom: 'source-projet', projetId: 4, source: 'bizdev' },
+    ],
+    [
+      '#/projets/4/sources/featurebase',
+      { nom: 'source-projet', projetId: 4, source: 'featurebase' },
+    ],
     ['#/projets/4/scan', { nom: 'scan', projetId: 4 }],
     ['#/projets/4/configuration', { nom: 'configuration', projetId: 4 }],
     [

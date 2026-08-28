@@ -18,6 +18,7 @@
   import ConfigurationAnalyse from './mvp/ConfigurationAnalyse.svelte';
   import EtapeAnalyse from './mvp/EtapeAnalyse.svelte';
   import Detail from './mvp/Detail.svelte';
+  import EntretienLecture from './mvp/EntretienLecture.svelte';
   import { routeMvp } from './mvp/routage';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
   import DetailRetourBizDev from './retours/DetailRetourBizDev.svelte';
@@ -35,6 +36,9 @@
     route && 'produitId' in route ? route.produitId : undefined
   );
   const produit = $derived(produits.find((item) => item.id === produitId));
+  const projetProduit = $derived(
+    projet ? produits.find((item) => item.id === projet?.produit_id) : undefined
+  );
   const produitEntete = $derived(
     route && 'projetId' in route
       ? produits.find((item) => item.id === projet?.produit_id)?.nom
@@ -64,8 +68,6 @@
   });
 
   const versProjet = (id: number) => (window.location.hash = `#/projets/${id}`);
-  const versConfiguration = () =>
-    (window.location.hash = `#/projets/${projet?.id}/configuration`);
   const versDetail = () => (window.location.hash = `#/projets/${projet?.id}/detail`);
   const versEtapeSuivante = (cle: string) => {
     const suivante: Record<string, string> = {
@@ -101,8 +103,16 @@
   <NouveauProjet {produit} oncree={versProjet} />
 {:else if route?.nom === 'source' && produit && route.source}
   <AjouterSource {produit} source={route.source} />
+{:else if route?.nom === 'entretien' && projet}
+  <EntretienLecture {projet} entretienId={route.entretienId} />
+{:else if route?.nom === 'source-projet' && projet && projetProduit}
+  <AjouterSource
+    produit={projetProduit}
+    source={route.source}
+    projetInitialId={projet.id}
+  />
 {:else if projet && route?.nom === 'projet'}
-  <ProjetVue {projet} onscan={versConfiguration} />
+  <ProjetVue {projet} produitNom={produitEntete} />
 {:else if projet && route?.nom === 'configuration'}
   <ConfigurationAnalyse
     {projet}
