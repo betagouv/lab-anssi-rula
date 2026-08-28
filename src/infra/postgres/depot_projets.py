@@ -74,6 +74,12 @@ class DepotProjetsPostgres(DepotProjets):  # pragma: no cover
             return Projet(*row) if row else None
 
     @avec_connexion
+    def supprimer(self, id: int) -> bool:
+        with self._connexion.cursor() as cur:
+            cur.execute("DELETE FROM projets_recherche WHERE id = %s", (id,))
+            return cur.rowcount > 0
+
+    @avec_connexion
     def ajouter_entretien(
         self,
         projet_id: int,

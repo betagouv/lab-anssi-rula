@@ -27,6 +27,17 @@ class DepotProjetsDeTest(DepotProjets):
     def obtenir(self, id: int) -> Projet | None:
         return next((projet for projet in self.projets if projet.id == id), None)
 
+    def supprimer(self, id: int) -> bool:
+        projet = self.obtenir(id)
+        if not projet:
+            return False
+        self.projets.remove(projet)
+        self.entretiens = [
+            entretien for entretien in self.entretiens if entretien.projet_id != id
+        ]
+        self.scans.pop(id, None)
+        return True
+
     def ajouter_entretien(
         self,
         projet_id: int,
@@ -63,7 +74,7 @@ class DepotProjetsDeTest(DepotProjets):
     ) -> SourceProjet:
         projet = self.obtenir(projet_id) if projet_id is not None else None
         if projet is None:
-            projet = self.ajouter(produit_id, nom or '', brief)
+            projet = self.ajouter(produit_id, nom or "", brief)
         return SourceProjet(
             projet,
             self.ajouter_entretien(
