@@ -7,8 +7,11 @@
     type Projet,
     type RaisonRefusProjet,
   } from '../api/projets';
-  import { importerIdeesProjet } from '../api/idees';
-  import { importerRetoursProjet } from '../api/retours_bizdev';
+  import { importerIdeesProduit, importerIdeesProjet } from '../api/idees';
+  import {
+    importerRetoursProduit,
+    importerRetoursProjet,
+  } from '../api/retours_bizdev';
   import Contenu from './Contenu.svelte';
   import FormulaireEntretien from './FormulaireEntretien.svelte';
   import Guide from './Guide.svelte';
@@ -84,7 +87,7 @@
     raisons = [];
     resultat = '';
     projetCible = null;
-    if (!projetId) {
+    if (source === 'transcript' && !projetId) {
       erreur = 'Sélectionnez un projet ou créez-en un nouveau.';
       return;
     }
@@ -94,10 +97,6 @@
     }
     if (source !== 'transcript' && !fichier) {
       erreur = 'Sélectionnez un fichier CSV à importer.';
-      return;
-    }
-    if (source !== 'transcript' && !confirmation) {
-      erreur = 'Confirmez l’autorisation de l’import avant de continuer.';
       return;
     }
     enCours = true;
@@ -121,20 +120,19 @@
       } else {
         const reponse =
           source === 'bizdev'
-            ? await importerRetoursProjet(
-                fichier!,
-                produit.id,
-                selection(),
-                confirmation
-              )
-            : await importerIdeesProjet(
-                fichier!,
-                produit.id,
-                selection(),
-                confirmation
-              );
-        projetCible = reponse.projet.id;
-        resultat = `${reponse.sources.length} élément(s) importé(s) dans le projet.`;
+            ? projetInitialId
+              ? await importerRetoursProjet(fichier!, produit.id, {
+                  projet_id: projetInitialId,
+                })
+              : await importerRetoursProduit(fichier!, produit.id)
+            : projetInitialId
+              ? await importerIdeesProjet(fichier!, produit.id, {
+                  projet_id: projetInitialId,
+                })
+              : await importerIdeesProduit(fichier!, produit.id);
+        resultat = `${reponse.sources.length} élément(s) importé(s) ${
+          projetInitialId ? 'au projet' : 'pour le produit'
+        }.`;
       }
     } catch (e) {
       if (e instanceof ProjetNonConforme) raisons = e.raisons;
@@ -157,23 +155,23 @@
   <p>Produit : <strong>{produit.nom}</strong></p>
   <h1>{TITRES[source]}</h1>
 
-  <label
-    >Projet de recherche<select
-      class="fr-select"
-      value={projetId}
-      onchange={(event) => {
-        projetId = (event.currentTarget as HTMLSelectElement).value;
-        changerProjet();
-      }}
-      ><option value="">Sélectionner un projet</option><option value={NOUVEAU}
-        >Créer un nouveau projet</option
-      >{#each projets as projet (projet.id)}<option value={String(projet.id)}
-          >{projet.nom}</option
-        >{/each}</select
-    ></label
-  >
+  {#if source === 'transcript'}<label
+      >Projet de recherche<select
+        class="fr-select"
+        value={projetId}
+        onchange={(event) => {
+          projetId = (event.currentTarget as HTMLSelectElement).value;
+          changerProjet();
+        }}
+        ><option value="">Sélectionner un projet</option><option value={NOUVEAU}
+          >Créer un nouveau projet</option
+        >{#each projets as projet (projet.id)}<option value={String(projet.id)}
+            >{projet.nom}</option
+          >{/each}</select
+      ></label
+    >{/if}
 
-  {#if projetId === NOUVEAU}
+  {#if source === 'transcript' && projetId === NOUVEAU}
     <label
       >Nom du projet de recherche<input class="fr-input" bind:value={nom} /></label
     >
@@ -197,10 +195,6 @@
         onchange={changerFichier}
       /></label
     >
-    <label class="confirmation"
-      ><input type="checkbox" bind:checked={confirmation} /> Je confirme que l’import est
-      autorisé et ne contient pas de donnée non conforme.</label
-    >
   {/if}
 
   {#if erreur}<p class="erreur">{erreur}</p>{/if}
@@ -209,7 +203,7 @@
   {#if source !== 'transcript'}<button
       class="fr-btn"
       disabled={enCours}
-      onclick={enregistrer}>{enCours ? 'Vérification…' : 'Importer'}</button
+      onclick={enregistrer}>{enCours ? 'Import en cours…' : 'Importer'}</button
     >{/if}
 </Contenu>
 
@@ -257,14 +251,6 @@
   }
   textarea {
     min-height: 8rem;
-  }
-  label.confirmation {
-    align-items: start;
-    display: flex;
-    gap: 0.5rem;
-  }
-  label.confirmation input {
-    margin-top: 0.2rem;
   }
   button {
     margin-top: 1.5rem;

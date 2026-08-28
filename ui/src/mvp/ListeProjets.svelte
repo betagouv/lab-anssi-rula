@@ -21,10 +21,10 @@
     </nav>
   </details>
   <h1>Projets</h1>
-  <div class="onglets">
-    <span>Entretiens utilisateurs UX</span><span>Entretiens BizDev</span><span
-      >CSV retours utilisateurs</span
-    ><span>FeatureBase</span>
+  <div class="onglets" aria-label="Données du produit">
+    <span>Entretiens utilisateurs UX</span><a
+      href={`#/produits/${produit.id}/donnees/bizdev`}>Entretiens BizDev</a
+    ><a href={`#/produits/${produit.id}/donnees/featurebase`}>FeatureBase</a>
   </div>
   {#if projets.length}<div class="tableau">
       <table>
@@ -99,13 +99,14 @@
     width: fit-content;
     max-width: 100%;
   }
-  .onglets span {
+  .onglets span,
+  .onglets a {
+    color: var(--text-action-high-blue-france);
     padding: 0.75rem 1rem;
     white-space: nowrap;
   }
   .onglets span:first-child {
     border: 1px solid var(--border-action-high-blue-france);
-    color: var(--text-action-high-blue-france);
   }
   .tableau {
     overflow-x: auto;

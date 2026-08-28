@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Produit, Projet } from '../api/projets';
   import Navigation from './Navigation.svelte';
+  import AnalyseTransverse from './AnalyseTransverse.svelte';
   let { produit, projets }: { produit: Produit; projets: Projet[] } = $props();
 </script>
 
@@ -23,6 +24,7 @@
   {:else}<p>
       Aucune demande à rapprocher. Ajoutez un projet de recherche pour commencer.
     </p>{/if}
+  <AnalyseTransverse {produit} />
 </main>
 
 <style>
@@ -56,5 +58,8 @@
   }
   td a {
     color: var(--text-action-high-blue-france);
+  }
+  :global(.transverse) {
+    margin-top: 4rem;
   }
 </style>

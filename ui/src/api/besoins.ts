@@ -10,6 +10,7 @@ export type BesoinDetecte = {
   transcript_id: number | null;
   statut: string;
   cree_le: string;
+  produit_id: number | null;
 };
 
 async function json<T>(r: Response): Promise<T> {
@@ -20,12 +21,19 @@ async function json<T>(r: Response): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-export const listerBesoins = (source: SourceBesoin): Promise<BesoinDetecte[]> =>
-  fetch(`/api/besoins?source=${encodeURIComponent(source)}`).then((r) =>
-    json<BesoinDetecte[]>(r)
-  );
+export const listerBesoins = (
+  source: SourceBesoin,
+  produitId?: number
+): Promise<BesoinDetecte[]> =>
+  fetch(
+    `/api/besoins?source=${encodeURIComponent(source)}${produitId ? `&produit_id=${produitId}` : ''}`
+  ).then((r) => json<BesoinDetecte[]>(r));
 
-export const analyserBesoins = (source: SourceBesoin): Promise<BesoinDetecte[]> =>
-  fetch(`/api/besoins/analyser/${source}`, { method: 'POST' }).then((r) =>
-    json<BesoinDetecte[]>(r)
-  );
+export const analyserBesoins = (
+  source: SourceBesoin,
+  produitId?: number
+): Promise<BesoinDetecte[]> =>
+  fetch(
+    `/api/besoins/analyser/${source}${produitId ? `?produit_id=${produitId}` : ''}`,
+    { method: 'POST' }
+  ).then((r) => json<BesoinDetecte[]>(r));

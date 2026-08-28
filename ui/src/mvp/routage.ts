@@ -1,5 +1,5 @@
 type RouteProduit = {
-  nom: 'dashboard' | 'projets' | 'nouveau' | 'source';
+  nom: 'dashboard' | 'projets' | 'nouveau' | 'source' | 'source-liste';
   produitId: number;
   source?: 'transcript' | 'bizdev' | 'featurebase';
 };
@@ -38,6 +38,18 @@ export function routeMvp(hash: string): RouteMvp | null {
   const segments = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   if (!segments.length) return { nom: 'entree' };
   const produitId = id(segments[1]);
+  if (
+    segments[0] === 'produits' &&
+    produitId &&
+    segments[2] === 'donnees' &&
+    segments.length === 4 &&
+    ['bizdev', 'featurebase'].includes(segments[3] ?? '')
+  )
+    return {
+      nom: 'source-liste',
+      produitId,
+      source: segments[3] as RouteProduit['source'],
+    };
   if (
     segments[0] === 'produits' &&
     produitId &&

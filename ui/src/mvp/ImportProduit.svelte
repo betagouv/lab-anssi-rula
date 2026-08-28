@@ -5,13 +5,11 @@
     produits,
     prefixe,
     produitId = $bindable(''),
-    confirmation = $bindable(false),
     onchange,
   }: {
     produits: Produit[];
     prefixe: string;
     produitId: string;
-    confirmation: boolean;
     onchange: () => void;
   } = $props();
 </script>
@@ -30,18 +28,5 @@
         <option value={produit.id}>{produit.nom}</option>
       {/each}
     </select>
-  </div>
-  <div class="fr-col-12 fr-col-md-8 fr-pl-md-2w">
-    <div class="fr-checkbox-group fr-mt-4w">
-      <input
-        id={`confirmation-${prefixe}`}
-        type="checkbox"
-        bind:checked={confirmation}
-      />
-      <label class="fr-label" for={`confirmation-${prefixe}`}>
-        Je confirme que l’import est autorisé et ne contient pas de donnée non
-        conforme.
-      </label>
-    </div>
   </div>
 </div>

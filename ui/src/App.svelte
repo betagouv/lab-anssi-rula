@@ -24,6 +24,9 @@
   import DetailRetourBizDev from './retours/DetailRetourBizDev.svelte';
   import ListeFonctionnalites from './fonctionnalites/ListeFonctionnalites.svelte';
   import DetailFeatureBase from './fonctionnalites/DetailFeatureBase.svelte';
+  import ListeAnalyses from './analyses/ListeAnalyses.svelte';
+  import ListeBesoinsDetectes from './besoins/ListeBesoinsDetectes.svelte';
+  import ListeCorrespondance from './correspondance/ListeCorrespondance.svelte';
   import { vueDepuisHash } from './navigation/routage';
 
   let produits = $state<Produit[]>([]);
@@ -95,6 +98,12 @@
   <ListeFonctionnalites />
 {:else if ancienneVue.nom === 'sources:featurebase:detail'}
   <DetailFeatureBase id={ancienneVue.id} />
+{:else if ancienneVue.nom === 'analyses'}
+  <ListeAnalyses />
+{:else if ancienneVue.nom === 'besoins'}
+  <ListeBesoinsDetectes />
+{:else if ancienneVue.nom === 'correspondances'}
+  <ListeCorrespondance />
 {:else if route?.nom === 'dashboard' && produit}
   <Dashboard {produit} {projets} />
 {:else if route?.nom === 'projets' && produit}
@@ -103,6 +112,10 @@
   <NouveauProjet {produit} oncree={versProjet} />
 {:else if route?.nom === 'source' && produit && route.source}
   <AjouterSource {produit} source={route.source} />
+{:else if route?.nom === 'source-liste' && route.source === 'bizdev'}
+  <ListeRetoursBizDev produitInitialId={route.produitId} />
+{:else if route?.nom === 'source-liste' && route.source === 'featurebase'}
+  <ListeFonctionnalites produitInitialId={route.produitId} />
 {:else if route?.nom === 'entretien' && projet}
   <EntretienLecture {projet} entretienId={route.entretienId} />
 {:else if route?.nom === 'source-projet' && projet && projetProduit}
