@@ -120,3 +120,13 @@ def test_prompts_et_etapes_sont_migres() -> None:
         Path(__file__).parents[1] / "migrations" / "018_statut_etapes.sql"
     ).read_text()
     assert "ADD COLUMN IF NOT EXISTS statut" in statut
+
+
+def test_sources_csv_peuvent_etre_rattachees_a_un_projet() -> None:
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "019_sources_projets.sql"
+    ).read_text()
+
+    assert "retours_bizdev" in contenu and "projet_id" in contenu
+    assert "idees_featurebase" in contenu and "projet_id" in contenu
+    assert "produit_projet_idx" in contenu

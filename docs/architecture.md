@@ -134,6 +134,13 @@ Sources → Analyse des besoins → Correspondances
 - **Retours BizDev** : retours importés depuis un export CSV BizDev.
 - **Demandes FeatureBase** : demandes importées depuis FeatureBase via un export CSV.
 
+Les trois sources sont accessibles depuis un produit. Chaque import peut cibler
+un projet existant de ce produit ou créer un projet avec son nom et son brief.
+Les retours BizDev et les demandes FeatureBase portent alors un `projet_id`
+nullable : les anciennes lignes produit-only restent compatibles. Les nouveaux
+imports remplacent uniquement le périmètre `(produit_id, projet_id)` ; les
+routes historiques conservent leur remplacement produit-only.
+
 ### Analyse des besoins
 
 Cet espace remplace l'ancienne page « Fonctionnalités » et propose trois vues,

@@ -46,6 +46,9 @@ class DepotProjets(ABC):
     def obtenir(self, id: int) -> Projet | None: ...
 
     @abstractmethod
+    def supprimer(self, id: int) -> bool: ...
+
+    @abstractmethod
     def ajouter_entretien(
         self,
         projet_id: int,
