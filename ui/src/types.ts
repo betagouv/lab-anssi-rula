@@ -33,6 +33,7 @@ export type Idee = {
   nb_votes: number;
   importe_le: string;
   projet_id: number | null;
+  produit_id: number;
 };
 
 export type RetourBizDev = {
@@ -45,6 +46,7 @@ export type RetourBizDev = {
   date_retour: string | null;
   importe_le: string;
   projet_id: number | null;
+  produit_id: number;
 };
 
 export type Transcript = {

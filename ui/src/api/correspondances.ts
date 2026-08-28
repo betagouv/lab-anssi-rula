@@ -8,10 +8,13 @@ async function json<T>(r: Response): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-export const chargerCorrespondances = (): Promise<Cluster[]> =>
-  fetch('/api/correspondances').then((r) => json<Cluster[]>(r));
-
-export const analyserCorrespondances = (): Promise<Cluster[]> =>
-  fetch('/api/correspondances/analyser', { method: 'POST' }).then((r) =>
-    json<Cluster[]>(r)
+export const chargerCorrespondances = (produitId?: number): Promise<Cluster[]> =>
+  fetch(`/api/correspondances${produitId ? `?produit_id=${produitId}` : ''}`).then(
+    (r) => json<Cluster[]>(r)
   );
+
+export const analyserCorrespondances = (produitId?: number): Promise<Cluster[]> =>
+  fetch(
+    `/api/correspondances/analyser${produitId ? `?produit_id=${produitId}` : ''}`,
+    { method: 'POST' }
+  ).then((r) => json<Cluster[]>(r));

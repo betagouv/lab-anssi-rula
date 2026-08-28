@@ -5,18 +5,23 @@
   import { hashDepuisVue } from '../navigation/routage';
   import ImportProduit from '../mvp/ImportProduit.svelte';
 
+  let { produitInitialId = null }: { produitInitialId?: number | null } = $props();
   let idees = $state<Idee[]>([]);
   let chargement = $state(true);
   let enCours = $state(false);
   let erreur = $state<string | null>(null);
   let produits = $state<Produit[]>([]);
   let produitId = $state('');
-  let confirmation = $state(false);
+
+  $effect(() => {
+    if (produitInitialId && !produitId) produitId = String(produitInitialId);
+  });
 
   $effect(() => {
     listerProduits()
       .then((data) => {
         produits = data;
+        if (produitInitialId) void charger();
       })
       .catch((e) => {
         erreur = e instanceof Error ? e.message : 'Erreur lors du chargement';
@@ -72,19 +77,20 @@
         id="import-csv"
         type="file"
         accept=".csv"
-        disabled={enCours || !produitId || !confirmation}
+        disabled={enCours || !produitId}
         onchange={handleFichier}
         class="sr-only"
       />
     </div>
   </div>
-  <ImportProduit
-    {produits}
-    prefixe="featurebase"
-    bind:produitId
-    bind:confirmation
-    onchange={charger}
-  />
+  {#if !produitInitialId}
+    <ImportProduit
+      {produits}
+      prefixe="featurebase"
+      bind:produitId
+      onchange={charger}
+    />
+  {/if}
 
   {#if erreur}
     <div class="fr-alert fr-alert--error fr-mb-3w">

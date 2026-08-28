@@ -9,17 +9,12 @@
     type EtapeAnalyse,
     type Projet,
   } from '../api/projets';
-  import type { Idee, RetourBizDev } from '../types';
-  import { listerIdees } from '../api/idees';
-  import { listerRetours } from '../api/retours_bizdev';
   import Contenu from './Contenu.svelte';
   import FormulaireEntretien from './FormulaireEntretien.svelte';
   import Guide from './Guide.svelte';
   import ResultatGardeFou from './ResultatGardeFou.svelte';
   let { projet, produitNom }: { projet: Projet; produitNom?: string } = $props();
   let entretiens = $state<Entretien[]>([]);
-  let retours = $state<RetourBizDev[]>([]);
-  let idees = $state<Idee[]>([]);
   let etapes = $state<EtapeAnalyse[]>([]);
   let chargement = $state(true);
   let ouvert = $state(false);
@@ -35,14 +30,10 @@
   $effect(() => {
     Promise.all([
       listerEntretiens(projet.id),
-      listerRetours(projet.produit_id, projet.id),
-      listerIdees(projet.produit_id, projet.id),
       obtenirConfigurationAnalyse(projet.id),
     ])
-      .then(([entretiensProjet, retoursProjet, ideesProjet, configuration]) => {
+      .then(([entretiensProjet, configuration]) => {
         entretiens = entretiensProjet;
-        retours = retoursProjet;
-        idees = ideesProjet;
         etapes = configuration.etapes;
       })
       .catch(
@@ -148,44 +139,14 @@
     </section>
 
     <section>
-      <h2>Retours BizDev</h2>
-      {#if retours.length}<div class="liste-details">
-          {#each retours as retour (retour.id)}<details>
-              <summary>{retour.verbatim}</summary>
-              <dl>
-                <div>
-                  <dt>Catégorie</dt>
-                  <dd>{retour.categorie ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Item</dt>
-                  <dd>{retour.item ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Rôle</dt>
-                  <dd>{retour.role ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Date</dt>
-                  <dd>{retour.date_retour ?? '—'}</dd>
-                </div>
-              </dl>
-            </details>{/each}
-        </div>{:else}<p class="vide">
-          Aucun retour BizDev rattaché à ce projet.
-        </p>{/if}
-    </section>
-
-    <section>
-      <h2>Demandes FeatureBase</h2>
-      {#if idees.length}<div class="liste-details">
-          {#each idees as idee (idee.id)}<details>
-              <summary>{idee.titre}</summary>
-              <p>{idee.nb_votes} vote(s)</p>
-            </details>{/each}
-        </div>{:else}<p class="vide">
-          Aucune demande FeatureBase rattachée à ce projet.
-        </p>{/if}
+      <h2>Données produit</h2>
+      <p class="vide">
+        Les retours BizDev et les demandes FeatureBase sont analysés au niveau du
+        produit.
+      </p>
+      <a href={'#/produits/' + projet.produit_id + '/dashboard'}
+        >Consulter l’analyse transverse du produit</a
+      >
     </section>
 
     <section>
@@ -320,28 +281,6 @@
   .menu-lien:focus {
     background: var(--background-alt-blue-france);
   }
-  .liste-details {
-    border-top: 1px solid var(--border-default-grey);
-  }
-  .liste-details details {
-    border-bottom: 1px solid var(--border-default-grey);
-    padding: 1rem 0;
-  }
-  .liste-details summary {
-    cursor: pointer;
-  }
-  dl {
-    display: grid;
-    gap: 0.75rem 1.5rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 1rem 0 0;
-  }
-  dt {
-    font-weight: 700;
-  }
-  dd {
-    margin: 0.25rem 0 0;
-  }
   .analyses {
     list-style: none;
     margin: 0 0 1rem;
@@ -415,9 +354,6 @@
     .analyses li {
       align-items: stretch;
       flex-direction: column;
-    }
-    dl {
-      grid-template-columns: 1fr;
     }
     .menu nav {
       left: 0;
