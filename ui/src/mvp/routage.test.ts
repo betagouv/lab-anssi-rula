@@ -10,6 +10,10 @@ describe('routage MVP', () => {
     ['#/projets/4', { nom: 'projet', projetId: 4 }],
     ['#/projets/4/scan', { nom: 'scan', projetId: 4 }],
     ['#/projets/4/configuration', { nom: 'configuration', projetId: 4 }],
+    [
+      '#/projets/4/analyse/scan-neutre',
+      { nom: 'analyse', projetId: 4, etape: 'scan-neutre' },
+    ],
     ['#/projets/4/detail', { nom: 'detail', projetId: 4 }],
   ])('lit %s', (hash, attendu) => expect(routeMvp(hash)).toEqual(attendu));
 

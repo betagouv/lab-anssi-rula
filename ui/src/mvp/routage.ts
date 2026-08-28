@@ -4,8 +4,9 @@ type RouteProduit = {
 };
 
 type RouteProjet = {
-  nom: 'projet' | 'configuration' | 'scan' | 'detail';
+  nom: 'projet' | 'configuration' | 'analyse' | 'scan' | 'detail';
   projetId: number;
+  etape?: string;
 };
 
 export type RouteMvp = { nom: 'entree' } | RouteProduit | RouteProjet;
@@ -34,6 +35,14 @@ export function routeMvp(hash: string): RouteMvp | null {
     segments.length === 3
   )
     return { nom: segments[2] as RouteProjet['nom'], projetId };
+  if (
+    segments[0] === 'projets' &&
+    projetId &&
+    segments[2] === 'analyse' &&
+    segments.length === 4 &&
+    segments[3]
+  )
+    return { nom: 'analyse', projetId, etape: segments[3] };
   if (segments[0] === 'projets' && projetId && segments.length === 2)
     return { nom: 'projet', projetId };
   return null;
