@@ -11,27 +11,42 @@ class DepotIdeesPostgres(DepotIdees):  # pragma: no cover
         self._connexion: Any = None
 
     @avec_connexion
-    def remplacer_toutes(self, produit_id: int, idees: list[IdeeBrute]) -> list[Idee]:
+    def remplacer_toutes(
+        self, produit_id: int, idees: list[IdeeBrute], projet_id: int | None = None
+    ) -> list[Idee]:
         with self._connexion.cursor() as cur:
-            cur.execute(
-                "DELETE FROM idees_featurebase WHERE produit_id = %s", (produit_id,)
-            )
+            if projet_id is None:
+                cur.execute(
+                    "DELETE FROM idees_featurebase WHERE produit_id = %s", (produit_id,)
+                )
+            else:
+                cur.execute(
+                    "DELETE FROM idees_featurebase WHERE produit_id = %s AND projet_id = %s",
+                    (produit_id, projet_id),
+                )
             cur.executemany(
-                "INSERT INTO idees_featurebase (produit_id, titre, nb_votes) VALUES (%s, %s, %s)",
-                [(produit_id, i.titre, i.nb_votes) for i in idees],
+                "INSERT INTO idees_featurebase (produit_id, projet_id, titre, nb_votes) VALUES (%s, %s, %s, %s)",
+                [(produit_id, projet_id, i.titre, i.nb_votes) for i in idees],
             )
-        return self.lister(produit_id)
+        return self.lister(produit_id, projet_id)
 
     @avec_connexion
-    def lister(self, produit_id: int | None = None) -> list[Idee]:
+    def lister(
+        self, produit_id: int | None = None, projet_id: int | None = None
+    ) -> list[Idee]:
         with self._connexion.cursor() as cur:
             cur.execute(
-                "SELECT id, produit_id, titre, nb_votes, importe_le FROM idees_featurebase WHERE produit_id = COALESCE(%s, produit_id) ORDER BY nb_votes DESC",
-                (produit_id,),
+                "SELECT id, produit_id, titre, nb_votes, importe_le, projet_id FROM idees_featurebase WHERE produit_id = COALESCE(%s, produit_id) AND (%s IS NULL OR projet_id = %s) ORDER BY nb_votes DESC",
+                (produit_id, projet_id, projet_id),
             )
             return [
                 Idee(
-                    id=r[0], produit_id=r[1], titre=r[2], nb_votes=r[3], importe_le=r[4]
+                    id=r[0],
+                    produit_id=r[1],
+                    titre=r[2],
+                    nb_votes=r[3],
+                    importe_le=r[4],
+                    projet_id=r[5],
                 )
                 for r in cur.fetchall()
             ]

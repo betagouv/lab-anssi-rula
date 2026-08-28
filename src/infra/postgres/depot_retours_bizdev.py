@@ -12,17 +12,24 @@ class DepotRetoursBizDevPostgres(DepotRetoursBizDev):  # pragma: no cover
 
     @avec_connexion
     def remplacer_tous(
-        self, produit_id: int, retours: list[RetourBrut]
+        self, produit_id: int, retours: list[RetourBrut], projet_id: int | None = None
     ) -> list[Retour]:
         with self._connexion.cursor() as cur:
-            cur.execute(
-                "DELETE FROM retours_bizdev WHERE produit_id = %s", (produit_id,)
-            )
+            if projet_id is None:
+                cur.execute(
+                    "DELETE FROM retours_bizdev WHERE produit_id = %s", (produit_id,)
+                )
+            else:
+                cur.execute(
+                    "DELETE FROM retours_bizdev WHERE produit_id = %s AND projet_id = %s",
+                    (produit_id, projet_id),
+                )
             cur.executemany(
-                "INSERT INTO retours_bizdev (produit_id, verbatim, categorie, item, role, qui, date_retour) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO retours_bizdev (produit_id, projet_id, verbatim, categorie, item, role, qui, date_retour) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 [
                     (
                         produit_id,
+                        projet_id,
                         r.verbatim,
                         r.categorie,
                         r.item,
@@ -33,14 +40,16 @@ class DepotRetoursBizDevPostgres(DepotRetoursBizDev):  # pragma: no cover
                     for r in retours
                 ],
             )
-        return self.lister(produit_id)
+        return self.lister(produit_id, projet_id)
 
     @avec_connexion
-    def lister(self, produit_id: int | None = None) -> list[Retour]:
+    def lister(
+        self, produit_id: int | None = None, projet_id: int | None = None
+    ) -> list[Retour]:
         with self._connexion.cursor() as cur:
             cur.execute(
-                "SELECT id, produit_id, verbatim, categorie, item, role, qui, date_retour, importe_le FROM retours_bizdev WHERE produit_id = COALESCE(%s, produit_id) ORDER BY importe_le DESC",
-                (produit_id,),
+                "SELECT id, produit_id, verbatim, categorie, item, role, qui, date_retour, importe_le, projet_id FROM retours_bizdev WHERE produit_id = COALESCE(%s, produit_id) AND (%s IS NULL OR projet_id = %s) ORDER BY importe_le DESC",
+                (produit_id, projet_id, projet_id),
             )
             return [
                 Retour(
@@ -53,6 +62,7 @@ class DepotRetoursBizDevPostgres(DepotRetoursBizDev):  # pragma: no cover
                     qui=r[6],
                     date_retour=r[7],
                     importe_le=r[8],
+                    projet_id=r[9],
                 )
                 for r in cur.fetchall()
             ]

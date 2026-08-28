@@ -22,13 +22,16 @@ class Retour(NamedTuple):
     qui: str | None
     date_retour: str | None
     importe_le: datetime
+    projet_id: int | None = None
 
 
 class DepotRetoursBizDev(ABC):
     @abstractmethod
     def remplacer_tous(
-        self, produit_id: int, retours: list[RetourBrut]
+        self, produit_id: int, retours: list[RetourBrut], projet_id: int | None = None
     ) -> list[Retour]: ...
 
     @abstractmethod
-    def lister(self, produit_id: int | None = None) -> list[Retour]: ...
+    def lister(
+        self, produit_id: int | None = None, projet_id: int | None = None
+    ) -> list[Retour]: ...
