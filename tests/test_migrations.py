@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from configuration import BaseDeDonnees
 from infra.postgres import migrations
 from infra.postgres import execute_migrations as script_migrations
@@ -81,3 +83,24 @@ def test_script_execute_les_migrations(monkeypatch):
     script_migrations.main()
 
     assert appels == [config]
+
+
+def test_refonte_mvp_reinitialise_et_recree_le_catalogue() -> None:
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "015_refonte_mvp_produits.sql"
+    ).read_text()
+
+    assert "TRUNCATE analyses" in contenu
+    assert "retours_bizdev" in contenu
+    assert "idees_featurebase" in contenu
+
+
+def test_projets_uniques_reinitialise_la_base_locale() -> None:
+    contenu = (
+        Path(__file__).parents[1] / "migrations" / "016_projets_uniques_reset.sql"
+    ).read_text()
+
+    assert "TRUNCATE analyses" in contenu
+    assert "scans_projets" in contenu
+    assert "lower(btrim(nom))" in contenu
+    assert "INSERT INTO produits (nom) VALUES ('MQC'), ('MSC'), ('MSS')" in contenu
