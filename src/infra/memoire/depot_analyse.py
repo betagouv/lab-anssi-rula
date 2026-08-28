@@ -7,6 +7,7 @@ class DepotAnalyseMemoire(DepotAnalyse):
     def __init__(self, produits: dict[int, list[BlocPrompt]] | None = None) -> None:
         self.produits = produits or {}
         self.blocs: dict[int, list[BlocPrompt]] = {}
+        self.configurations: set[int] = set()
         self.etapes: dict[tuple[int, str], EtapeAnalyse] = {}
 
     def lister_blocs_produit(self, produit_id: int) -> list[BlocPrompt]:
@@ -18,11 +19,12 @@ class DepotAnalyseMemoire(DepotAnalyse):
     def enregistrer_configuration(
         self, projet_id: int, blocs: list[BlocPrompt]
     ) -> list[BlocPrompt]:
-        if not self.blocs.get(projet_id):
-            self.blocs[projet_id] = list(blocs)
-        else:
-            self.blocs[projet_id] = list(blocs)
+        self.configurations.add(projet_id)
+        self.blocs[projet_id] = list(blocs)
         return list(self.blocs[projet_id])
+
+    def configuration_existe(self, projet_id: int) -> bool:
+        return projet_id in self.configurations
 
     def initialiser_etapes(self, projet_id: int) -> list[EtapeAnalyse]:
         maintenant = datetime.now()

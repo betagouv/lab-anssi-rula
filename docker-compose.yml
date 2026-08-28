@@ -7,7 +7,6 @@ services:
       POSTGRES_PASSWORD: ${DB_MOT_DE_PASSE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
@@ -42,6 +41,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app/src
+      - ./migrations:/app/migrations
     networks:
       - rula-network
 

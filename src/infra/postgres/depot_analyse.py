@@ -29,6 +29,12 @@ class DepotAnalysePostgres(DepotAnalyse):  # pragma: no cover
             return [BlocPrompt(*row) for row in cur.fetchall()]
 
     @avec_connexion
+    def configuration_existe(self, projet_id: int) -> bool:
+        with self._connexion.cursor() as cur:
+            cur.execute("SELECT EXISTS (SELECT 1 FROM prompts_projets WHERE projet_id = %s)", (projet_id,))
+            return cur.fetchone()[0]
+
+    @avec_connexion
     def enregistrer_configuration(
         self, projet_id: int, blocs: list[BlocPrompt]
     ) -> list[BlocPrompt]:
@@ -47,6 +53,7 @@ class DepotAnalysePostgres(DepotAnalyse):  # pragma: no cover
                 "INSERT INTO etapes_analyses (projet_id, cle, libelle, ordre) VALUES (%s, %s, %s, %s) ON CONFLICT (projet_id, cle) DO NOTHING",
                 [(projet_id, cle, libelle, ordre) for cle, libelle, ordre in ETAPES],
             )
+        self._connexion.commit()
         return self.lister_etapes(projet_id)
 
     @avec_connexion
