@@ -1,5 +1,5 @@
 import type { Cluster, SourceBesoin } from '../types';
-import { json } from './requete';
+import { requete } from './requete';
 
 export type Besoin = {
   id: number;
@@ -40,11 +40,9 @@ export type GroupeTransverse = {
 export const obtenirAnalyseTransverse = (
   produitId: number
 ): Promise<AnalyseTransverse> =>
-  fetch(`/api/produits/${produitId}/analyse-transverse`).then((r) =>
-    json<AnalyseTransverse>(r)
-  );
+  requete<AnalyseTransverse>(`/api/produits/${produitId}/analyse-transverse`);
 
 export const analyserTransverse = (produitId: number): Promise<AnalyseTransverse> =>
-  fetch(`/api/produits/${produitId}/analyse-transverse`, { method: 'POST' }).then(
-    (r) => json<AnalyseTransverse>(r)
-  );
+  requete<AnalyseTransverse>(`/api/produits/${produitId}/analyse-transverse`, {
+    method: 'POST',
+  });

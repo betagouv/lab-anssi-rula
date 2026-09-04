@@ -1,6 +1,7 @@
 import pytest
 
 from adaptateurs.albert import AdaptateurAlbert
+from adaptateurs.exceptions import ErreurCommunicationAlbert
 from validation_transcript.service import (
     ReponseValidationTranscriptInvalide,
     ServiceValidationTranscript,
@@ -108,7 +109,7 @@ def test_refuse_une_reponse_albert_invalide(reponse: str) -> None:
 
 
 def test_propage_l_indisponibilite_d_albert() -> None:
-    service, _ = _service(RuntimeError("Albert indisponible"))
+    service, _ = _service(ErreurCommunicationAlbert())
 
-    with pytest.raises(RuntimeError, match="Albert indisponible"):
+    with pytest.raises(ErreurCommunicationAlbert):
         service.valider("Un transcript.")

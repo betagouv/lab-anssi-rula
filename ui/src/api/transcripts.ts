@@ -1,4 +1,5 @@
 import type { Transcript } from '../types';
+import { ErreurApi, requete } from './requete';
 
 export type NouveauTranscript = {
   identite_id?: number;
@@ -34,43 +35,43 @@ function estRaisonRefusTranscript(raison: unknown): raison is RaisonRefusTranscr
   );
 }
 
-async function json<T>(r: Response): Promise<T> {
-  const body = (await r.json()) as { detail?: unknown };
-  if (
-    r.status === 422 &&
-    typeof body.detail === 'object' &&
-    body.detail !== null &&
-    'raisons' in body.detail &&
-    Array.isArray(body.detail.raisons) &&
-    body.detail.raisons.every(estRaisonRefusTranscript)
-  ) {
-    throw new TranscriptNonConforme(body.detail.raisons);
+async function corps<T>(url: string, init?: RequestInit): Promise<T> {
+  try {
+    return await requete<T>(url, init);
+  } catch (erreur) {
+    if (erreur instanceof ErreurApi && erreur.statut === 422) {
+      const detail = erreur.detail;
+      if (
+        typeof detail === 'object' &&
+        detail !== null &&
+        'raisons' in detail &&
+        Array.isArray(detail.raisons) &&
+        detail.raisons.every(estRaisonRefusTranscript)
+      )
+        throw new TranscriptNonConforme(detail.raisons);
+    }
+    throw erreur;
   }
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return body as T;
 }
 
-export const listerTranscripts = () =>
-  fetch('/api/transcripts').then((r) => json<Transcript[]>(r));
+export const listerTranscripts = () => requete<Transcript[]>('/api/transcripts');
 
 export const obtenirTranscript = (id: number) =>
-  fetch(`/api/transcripts/${id}`).then((r) => json<Transcript>(r));
+  requete<Transcript>(`/api/transcripts/${id}`);
 
 export const ajouterTranscript = (body: NouveauTranscript) =>
-  fetch('/api/transcripts', {
+  corps<Transcript>('/api/transcripts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).then((r) => json<Transcript>(r));
+  });
 
 export const modifierTranscript = (id: number, body: NouveauTranscript) =>
-  fetch(`/api/transcripts/${id}`, {
+  corps<Transcript>(`/api/transcripts/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).then((r) => json<Transcript>(r));
+  });
 
 export const supprimerTranscript = (id: number) =>
-  fetch(`/api/transcripts/${id}`, { method: 'DELETE' }).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  });
+  requete<void>(`/api/transcripts/${id}`, { method: 'DELETE' });

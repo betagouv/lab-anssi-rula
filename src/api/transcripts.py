@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from adaptateurs.albert import AdaptateurAlbertReel
 from api.identites import fabrique_depot_identites
@@ -37,6 +37,20 @@ class NouveauTranscript(BaseModel):
     nouveau_produit: str | None = None
     date_entretien: date
     contenu: str
+
+    @field_validator("contenu")
+    @classmethod
+    def contenu_obligatoire(cls, valeur: str) -> str:
+        if not valeur.strip():
+            raise ValueError("Champ obligatoire")
+        return valeur
+
+    @field_validator("nouvelle_identite", "nouveau_produit")
+    @classmethod
+    def nouvelle_ressource_obligatoire(cls, valeur: str | None) -> str | None:
+        if valeur is not None and not valeur.strip():
+            raise ValueError("Champ obligatoire")
+        return valeur
 
 
 routeur = APIRouter()
@@ -124,13 +138,16 @@ def _id_ressource(
 
 
 def _verifier(body: NouveauTranscript, service: ServiceValidationTranscript) -> None:
-    try:
-        validation = service.valider(body.contenu)
-    except Exception as erreur:
-        raise HTTPException(
-            status_code=503,
-            detail="La vérification des données est indisponible. Le transcript n'a pas été enregistré.",
-        ) from erreur
+    for identifiant, nouveau_nom in (
+        (body.identite_id, body.nouvelle_identite),
+        (body.produit_id, body.nouveau_produit),
+    ):
+        if (identifiant is None) == (nouveau_nom is None):
+            raise HTTPException(
+                status_code=422,
+                detail="Une identité ou un projet doit être sélectionné ou créé.",
+            )
+    validation = service.valider(body.contenu)
     if not validation.valide:
         raise HTTPException(
             status_code=422,

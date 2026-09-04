@@ -15,7 +15,9 @@
   $effect(() => {
     obtenirScan(projet.id)
       .then((scan) => (contenu = scan.brouillon))
-      .catch((e) => (erreur = e.message));
+      .catch(
+        (e) => (erreur = e instanceof Error ? e.message : 'Erreur de chargement')
+      );
   });
   async function valider() {
     enCours = true;
@@ -36,7 +38,7 @@
   <Progression courant={2} suivante="Consulter l’analyse" />
   <h2>Scanner les données</h2>
   <h1>1 - Scan neutre des données</h1>
-  {#if erreur}<p class="erreur">{erreur}</p>{:else}<article>
+  {#if erreur}<p class="erreur" role="alert">{erreur}</p>{:else}<article>
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html marked.parse(contenu)}
     </article>

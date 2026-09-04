@@ -1,7 +1,11 @@
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from adaptateurs.albert import AdaptateurAlbertReel
-from api.transcripts import fabrique_service_validation_transcript
+from adaptateurs.exceptions import ErreurCommunicationAlbert
+from api.transcripts import _id_ressource, fabrique_service_validation_transcript
+from infra.memoire.depot_identites import DepotIdentitesMemoire
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 
 PAYLOAD = {
@@ -80,11 +84,14 @@ def test_refuse_un_transcript_non_conforme_sans_creer_les_nouvelles_ressources(
 def test_refuse_si_albert_ne_peut_pas_verifier(
     client: TestClient, albert_validation: AdaptateurAlbertDeTest
 ):
-    albert_validation.avec_erreur(RuntimeError("Albert indisponible"))
+    albert_validation.avec_erreur(ErreurCommunicationAlbert())
 
     reponse = client.post("/api/transcripts", json=PAYLOAD)
 
     assert reponse.status_code == 503
+    assert reponse.json() == {
+        "detail": "L'API Albert est indisponible. Réessayez dans quelques instants."
+    }
     assert client.get("/api/transcripts").json() == []
 
 
@@ -95,7 +102,10 @@ def test_refuse_si_albert_renvoie_un_json_invalide(
 
     reponse = client.post("/api/transcripts", json=PAYLOAD)
 
-    assert reponse.status_code == 503
+    assert reponse.status_code == 502
+    assert reponse.json() == {
+        "detail": "L'API Albert a renvoyé une réponse invalide."
+    }
     assert client.get("/api/transcripts").json() == []
 
 
@@ -109,6 +119,26 @@ def test_refuse_une_identite_a_la_fois_selectionnee_et_nouvelle(client: TestClie
     )
 
     assert reponse.status_code == 422
+
+
+@pytest.mark.parametrize("payload", [{"contenu": " "}, {"nouvelle_identite": " "}])
+def test_refuse_les_champs_transcript_vides_avant_albert(
+    client: TestClient,
+    albert_validation: AdaptateurAlbertDeTest,
+    payload: dict[str, str],
+):
+    albert_validation.messages_recus.clear()
+
+    reponse = client.post("/api/transcripts", json={**PAYLOAD, **payload})
+
+    assert reponse.status_code == 422
+    assert reponse.json()["detail"]["champs"]
+    assert albert_validation.messages_recus == []
+
+
+def test_id_ressource_sans_selection_retourne_une_erreur() -> None:
+    with pytest.raises(HTTPException, match="sélectionné"):
+        _id_ressource(None, None, DepotIdentitesMemoire())
 
 
 def test_ne_modifie_pas_un_transcript_non_conforme(

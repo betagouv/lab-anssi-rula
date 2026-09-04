@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from adaptateurs.albert import AdaptateurAlbertReel
 from api.produits import fabrique_depot_produits
@@ -75,6 +75,13 @@ class NouvelEntretien(BaseModel):
     note_moderateur: str = ""
     confirmation: bool
 
+    @field_validator("participant", "moderateur", "contenu")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        if not valeur.strip():
+            raise ValueError("Champ obligatoire")
+        return valeur
+
 
 class NouveauScan(BaseModel):
     contenu: str
@@ -91,6 +98,13 @@ class EntretienSource(BaseModel):
     moderateur: str
     contenu: str
     note_moderateur: str = ""
+
+    @field_validator("participant", "moderateur", "contenu")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        if not valeur.strip():
+            raise ValueError("Champ obligatoire")
+        return valeur
 
 
 class NouvelleSource(BaseModel):

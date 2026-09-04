@@ -2,6 +2,7 @@ import json
 from typing import NamedTuple
 
 from adaptateurs.albert import AdaptateurAlbert
+from adaptateurs.exceptions import ReponseAlbertInvalide
 
 
 class ProblemeValidationTranscript(NamedTuple):
@@ -15,7 +16,7 @@ class ValidationTranscript(NamedTuple):
     problemes: list[ProblemeValidationTranscript]
 
 
-class ReponseValidationTranscriptInvalide(ValueError):
+class ReponseValidationTranscriptInvalide(ReponseAlbertInvalide):
     pass
 
 
@@ -67,19 +68,13 @@ class ServiceValidationTranscript:
         try:
             valeur = json.loads(reponse)
         except json.JSONDecodeError as erreur:
-            raise ReponseValidationTranscriptInvalide(
-                "Albert a renvoyé un JSON invalide"
-            ) from erreur
+            raise ReponseValidationTranscriptInvalide from erreur
         if not isinstance(valeur, dict) or set(valeur) != {"valide", "problemes"}:
-            raise ReponseValidationTranscriptInvalide(
-                "Albert a renvoyé une réponse de validation invalide"
-            )
+            raise ReponseValidationTranscriptInvalide
         valide = valeur["valide"]
         problemes_bruts = valeur["problemes"]
         if type(valide) is not bool or not isinstance(problemes_bruts, list):
-            raise ReponseValidationTranscriptInvalide(
-                "Albert a renvoyé une réponse de validation invalide"
-            )
+            raise ReponseValidationTranscriptInvalide
         problemes: list[ProblemeValidationTranscript] = []
         for probleme in problemes_bruts:
             if not isinstance(probleme, dict) or set(probleme) != {
@@ -87,9 +82,7 @@ class ServiceValidationTranscript:
                 "element",
                 "raison",
             }:
-                raise ReponseValidationTranscriptInvalide(
-                    "Albert a renvoyé un problème de validation invalide"
-                )
+                raise ReponseValidationTranscriptInvalide
             categorie = probleme["categorie"]
             element = probleme["element"]
             raison = probleme["raison"]
@@ -99,12 +92,8 @@ class ServiceValidationTranscript:
                 or not isinstance(element, str)
                 or not isinstance(raison, str)
             ):
-                raise ReponseValidationTranscriptInvalide(
-                    "Albert a renvoyé un problème de validation invalide"
-                )
+                raise ReponseValidationTranscriptInvalide
             problemes.append(ProblemeValidationTranscript(categorie, element, raison))
         if valide != (not problemes):
-            raise ReponseValidationTranscriptInvalide(
-                "Albert a renvoyé une réponse de validation incohérente"
-            )
+            raise ReponseValidationTranscriptInvalide
         return ValidationTranscript(valide, problemes)

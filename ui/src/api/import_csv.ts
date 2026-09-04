@@ -1,4 +1,4 @@
-import { json } from './requete';
+import { requete } from './requete';
 
 export const envoyerCsv = <T>(
   endpoint: string,
@@ -8,7 +8,7 @@ export const envoyerCsv = <T>(
   const form = new FormData();
   form.append('fichier', fichier);
   for (const [nom, valeur] of Object.entries(champs)) form.append(nom, valeur);
-  return fetch(endpoint, { method: 'POST', body: form }).then((r) => json<T>(r));
+  return requete<T>(endpoint, { method: 'POST', body: form });
 };
 
 export const champsSelection = (selection: {

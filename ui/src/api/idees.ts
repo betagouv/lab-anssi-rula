@@ -1,14 +1,12 @@
 import type { Idee } from '../types';
 import { champsSelection, envoyerCsv } from './import_csv';
-import { json } from './requete';
+import { requete } from './requete';
 
 export const importerIdees = (fichier: File, produitId: number): Promise<Idee[]> => {
   const form = new FormData();
   form.append('fichier', fichier);
   form.append('produit_id', String(produitId));
-  return fetch('/api/idees/import', { method: 'POST', body: form }).then((r) =>
-    json<Idee[]>(r)
-  );
+  return requete<Idee[]>('/api/idees/import', { method: 'POST', body: form });
 };
 
 export const importerIdeesProjet = (
@@ -34,9 +32,9 @@ export const listerIdees = (
   produitId?: number,
   projetId?: number
 ): Promise<Idee[]> =>
-  fetch(
+  requete<Idee[]>(
     `/api/idees?${new URLSearchParams({
       ...(produitId ? { produit_id: String(produitId) } : {}),
       ...(projetId ? { projet_id: String(projetId) } : {}),
     })}`
-  ).then((r) => json<Idee[]>(r));
+  );

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Vue, Transcript } from '../types';
   import { listerTranscripts } from '../api/transcripts';
+  import { requete } from '../api/requete';
   import { hashDepuisVue } from '../navigation/routage';
 
   let { onnaviquer }: { onnaviquer: (v: Vue) => void } = $props();
@@ -23,8 +24,8 @@
   $effect(() => {
     Promise.all([
       listerTranscripts(),
-      fetch('/api/identites').then((r) => r.json() as Promise<Ressource[]>),
-      fetch('/api/produits').then((r) => r.json() as Promise<Ressource[]>),
+      requete<Ressource[]>('/api/identites'),
+      requete<Ressource[]>('/api/produits'),
     ])
       .then(([ts, ids, prods]) => {
         transcripts = ts;

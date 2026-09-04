@@ -10,9 +10,16 @@
   let { projet }: { projet: Projet } = $props();
   let sorties = $state<{ cle: string; libelle: string; contenu: string }[]>([]);
   let entretiens = $state<Entretien[]>([]);
+  let erreur = $state('');
   $effect(() => {
-    obtenirDetailAnalyse(projet.id).then((v) => (sorties = v.etapes));
-    listerEntretiens(projet.id).then((v) => (entretiens = v));
+    Promise.all([obtenirDetailAnalyse(projet.id), listerEntretiens(projet.id)])
+      .then(([analyse, entretiensProjet]) => {
+        sorties = analyse.etapes;
+        entretiens = entretiensProjet;
+      })
+      .catch(
+        (e) => (erreur = e instanceof Error ? e.message : 'Erreur de chargement')
+      );
   });
 </script>
 
@@ -21,6 +28,7 @@
     <a href={`#/produits/${projet.produit_id}/projets`}>← Projets</a>
     <ProgressionAnalyse courant={6} />
     <h1>Détail analyse</h1>
+    {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
     <p>Nom du projet de recherche</p>
     <h2>{projet.nom}</h2>
     {#each sorties as sortie (sortie.cle)}
@@ -103,6 +111,9 @@
   }
   a {
     color: var(--text-action-high-blue-france);
+  }
+  .erreur {
+    color: var(--text-default-error);
   }
   @media (max-width: 48rem) {
     .detail {

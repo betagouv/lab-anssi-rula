@@ -18,19 +18,19 @@
 
 <label class:compact>
   Prénom de l’utilisateur
-  <input class="fr-input" bind:value={participant} />
+  <input class="fr-input" required bind:value={participant} />
 </label>
 <label class:compact>
   Date de l’entretien
-  <input class="fr-input" type="date" bind:value={date_entretien} />
+  <input class="fr-input" required type="date" bind:value={date_entretien} />
 </label>
 <label class:compact>
   Modérateur
-  <input class="fr-input" bind:value={moderateur} />
+  <input class="fr-input" required bind:value={moderateur} />
 </label>
 <label class:compact>
   Transcript de l’entretien
-  <textarea class="fr-input" class:compact bind:value={contenu}></textarea>
+  <textarea class="fr-input" class:compact required bind:value={contenu}></textarea>
 </label>
 <label class:compact>
   Note du modérateur

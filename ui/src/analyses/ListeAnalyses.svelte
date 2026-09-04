@@ -7,6 +7,7 @@
     calculerFonctionnalites,
   } from '../api/fonctionnalites';
   import { listerTranscripts } from '../api/transcripts';
+  import { requete } from '../api/requete';
 
   type Ressource = { id: number; nom: string };
   type Ligne = {
@@ -30,8 +31,8 @@
       listerTranscripts(),
       listerAnalyses(),
       listerFonctionnalites(),
-      fetch('/api/identites').then((r) => r.json() as Promise<Ressource[]>),
-      fetch('/api/produits').then((r) => r.json() as Promise<Ressource[]>),
+      requete<Ressource[]>('/api/identites'),
+      requete<Ressource[]>('/api/produits'),
     ])
       .then(([ts, as, fs, ids, prods]) => {
         const analyseParTranscript = Object.fromEntries(
