@@ -219,6 +219,21 @@ du sujet, besoins, points de douleur, cas concrets, contournements,
 priorisation, questions ouvertes, vocabulaire et synthèse). Le résultat reste
 consultable via `GET /api/analyses`.
 
+## Gestion des erreurs
+
+Les appels à Albert utilisent un timeout de 30 secondes et convertissent les
+erreurs de délai, réseau et HTTP en exceptions typées. Une réponse Albert
+invalide est distinguée d’une indisponibilité. FastAPI transforme ces exceptions
+en réponses `detail` explicites : 503 pour l’indisponibilité et 502 pour une
+réponse invalide.
+
+Les champs obligatoires des transcripts et des projets sont validés côté
+frontend et backend avant l’appel à Albert ou la persistance. Un projet doit
+comporter un nom et un brief. Les erreurs de validation utilisent un `detail`
+structuré avec un message et les champs à corriger. Le frontend dispose d’un
+parseur unique pour les réponses JSON, structurées, HTML et réseau ; les erreurs
+de garde-fou `ProjetNonConforme` et `TranscriptNonConforme` restent spécialisées.
+
 ## Parcours d’analyse par projet
 
 Les projets de recherche disposent d’une copie modifiable des blocs de prompt du

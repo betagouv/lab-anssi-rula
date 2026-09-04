@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from adaptateurs.albert import AdaptateurAlbertReel
 from api.produits import fabrique_depot_produits
@@ -28,6 +28,12 @@ from validation_transcript.service import ServiceValidationTranscript
 
 routeur = APIRouter()
 _prompt = (Path(__file__).parent.parent / "prompts" / "scan_projet.md").read_text()
+
+
+def _texte_obligatoire(valeur: str) -> str:
+    if not valeur.strip():
+        raise ValueError("Champ obligatoire")
+    return valeur
 
 
 def fabrique_depot_projets() -> DepotProjets:  # pragma: no cover
@@ -64,7 +70,12 @@ def fabrique_service_validation() -> ServiceValidationTranscript:  # pragma: no 
 class NouveauProjet(BaseModel):
     produit_id: int
     nom: str
-    brief: str = ""
+    brief: str
+
+    @field_validator("nom", "brief")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        return _texte_obligatoire(valeur)
 
 
 class NouvelEntretien(BaseModel):
@@ -75,6 +86,11 @@ class NouvelEntretien(BaseModel):
     note_moderateur: str = ""
     confirmation: bool
 
+    @field_validator("participant", "moderateur", "contenu")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        return _texte_obligatoire(valeur)
+
 
 class NouveauScan(BaseModel):
     contenu: str
@@ -82,7 +98,12 @@ class NouveauScan(BaseModel):
 
 class NouveauProjetSource(BaseModel):
     nom: str
-    brief: str = ""
+    brief: str
+
+    @field_validator("nom", "brief")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        return _texte_obligatoire(valeur)
 
 
 class EntretienSource(BaseModel):
@@ -91,6 +112,11 @@ class EntretienSource(BaseModel):
     moderateur: str
     contenu: str
     note_moderateur: str = ""
+
+    @field_validator("participant", "moderateur", "contenu")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        return _texte_obligatoire(valeur)
 
 
 class NouvelleSource(BaseModel):

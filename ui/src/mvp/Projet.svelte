@@ -13,6 +13,7 @@
   import FormulaireEntretien from './FormulaireEntretien.svelte';
   import Guide from './Guide.svelte';
   import ResultatGardeFou from './ResultatGardeFou.svelte';
+  import { champsEntretienManquants } from './validation';
   let { projet, produitNom }: { projet: Projet; produitNom?: string } = $props();
   let entretiens = $state<Entretien[]>([]);
   let etapes = $state<EtapeAnalyse[]>([]);
@@ -42,6 +43,17 @@
       .finally(() => (chargement = false));
   });
   async function ajouter() {
+    const manquants = champsEntretienManquants({
+      participant,
+      date_entretien,
+      moderateur,
+      contenu,
+    });
+    if (manquants.length) {
+      raisons = [];
+      erreur = `Renseignez les champs obligatoires : ${manquants.join(', ')}.`;
+      return;
+    }
     if (!confirmation) {
       raisons = [];
       erreur = 'Confirmez la préparation des données avant de les enregistrer.';
@@ -187,7 +199,7 @@
         bind:note_moderateur
         compact
       /><Guide bind:confirme={confirmation} /><ResultatGardeFou {raisons} />
-      {#if erreur}<p class="erreur">{erreur}</p>{/if}
+      {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
       <div class="actions">
         <button class="fr-btn" disabled={enCours} onclick={ajouter}
           >{enCours ? 'Vérification…' : 'Enregistrer'}</button
