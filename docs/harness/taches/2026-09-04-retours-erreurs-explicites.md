@@ -10,7 +10,7 @@ incomplet, sans persister de données invalides.
 
 ## Périmètre
 
-- Inclus : branche `fix/erreurs-explicites` depuis `main` synchronisé, exceptions
+- Inclus : branche `erreurs-explicites` depuis `main` synchronisé, exceptions
   Albert, réponses FastAPI `detail`, validation des transcripts, parseur frontend
   partagé, écrans MVP et tests.
 - Exclu : migration de schéma, retry automatique, modification du format
@@ -52,7 +52,7 @@ incomplet, sans persister de données invalides.
 
 ## Handoff
 
-- État du code : implémentation terminée sur `fix/erreurs-explicites`, sans
+- État du code : implémentation terminée sur `erreurs-explicites`, sans
   changement de schéma.
 - Prochaine action : faire relire la [PR #17](https://github.com/betagouv/lab-anssi-rula/pull/17).
 - Risques ou limites : le contrôle frontend via `pnpm` est bloqué localement par
