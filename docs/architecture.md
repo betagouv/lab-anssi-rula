@@ -227,12 +227,12 @@ invalide est distinguée d’une indisponibilité. FastAPI transforme ces except
 en réponses `detail` explicites : 503 pour l’indisponibilité et 502 pour une
 réponse invalide.
 
-Les champs obligatoires des transcripts sont validés côté frontend et backend
-avant l’appel à Albert ou la persistance. Les erreurs de validation utilisent un
-`detail` structuré avec un message et les champs à corriger. Le frontend dispose
-d’un parseur unique pour les réponses JSON, structurées, HTML et réseau ; les
-erreurs de garde-fou `ProjetNonConforme` et `TranscriptNonConforme` restent
-spécialisées.
+Les champs obligatoires des transcripts et des projets sont validés côté
+frontend et backend avant l’appel à Albert ou la persistance. Un projet doit
+comporter un nom et un brief. Les erreurs de validation utilisent un `detail`
+structuré avec un message et les champs à corriger. Le frontend dispose d’un
+parseur unique pour les réponses JSON, structurées, HTML et réseau ; les erreurs
+de garde-fou `ProjetNonConforme` et `TranscriptNonConforme` restent spécialisées.
 
 ## Parcours d’analyse par projet
 

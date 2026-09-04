@@ -5,8 +5,8 @@ Statut : prête à revoir
 ## Objectif
 
 Retourner un message compréhensible lorsqu’Albert est indisponible, lorsqu’une
-réponse distante est invalide ou lorsqu’un formulaire de transcript est
-incomplet, sans persister de données invalides.
+réponse distante est invalide ou lorsqu’un formulaire de transcript ou de projet
+est incomplet, sans persister de données invalides.
 
 ## Périmètre
 
@@ -23,6 +23,8 @@ incomplet, sans persister de données invalides.
 - [x] Le délai d’Albert est limité à 30 secondes.
 - [x] Les champs transcript absents, vides ou composés d’espaces sont refusés
   avant tout appel à Albert et toute écriture.
+- [x] Le nom et le brief d’un projet sont obligatoires à la création, avec un
+  message explicite en cas d’absence ou de valeur vide.
 - [x] Le frontend interprète les erreurs JSON, HTML, structurées et réseau sans
   afficher `Unexpected token '<'`.
 - [x] Les retours `ProjetNonConforme` et `TranscriptNonConforme` restent
@@ -39,7 +41,7 @@ incomplet, sans persister de données invalides.
 
 ## Validation
 
-- Commandes ciblées pendant l’itération : `uv run pytest` (158 tests, couverture
+- Commandes ciblées pendant l’itération : `uv run pytest` (163 tests, couverture
   100 %), Ruff, mypy, svelte-check, ESLint, Prettier et Vitest (53 tests).
 - `bash scripts/harness.sh complet` : backend validé ; étape frontend bloquée par
   la résolution de `pnpm.cmd` Windows dans Bash.
@@ -54,14 +56,14 @@ incomplet, sans persister de données invalides.
 
 - État du code : implémentation terminée sur `erreurs-explicites`, sans
   changement de schéma.
-- Prochaine action : faire relire la [PR #17](https://github.com/betagouv/lab-anssi-rula/pull/17).
+- Prochaine action : faire relire la [PR #18](https://github.com/betagouv/lab-anssi-rula/pull/18).
 - Risques ou limites : le contrôle frontend via `pnpm` est bloqué localement par
   l’autorisation de build `esbuild`; les binaires installés ont été contrôlés
   directement.
 
 ## Revue indépendante
 
-- Diff examiné : [PR #17](https://github.com/betagouv/lab-anssi-rula/pull/17).
+- Diff examiné : [PR #18](https://github.com/betagouv/lab-anssi-rula/pull/18).
 - Critères vérifiés : contrôles locaux terminés ; contrôles GitHub en cours.
 - Remarques : aucune.
 - Verdict : prêt à fusionner | corrections demandées

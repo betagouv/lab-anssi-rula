@@ -7,7 +7,8 @@ Date : 2026-09-04
 Les erreurs d’Albert pouvaient remonter jusqu’au frontend sans contrat stable.
 Une réponse HTML du backend était alors interprétée comme du JSON et affichait
 `Unexpected token '<'`. Les formulaires de transcript pouvaient aussi atteindre
-le service de validation avec des champs obligatoires absents ou blancs.
+le service de validation avec des champs obligatoires absents ou blancs. La
+création d’un projet n’imposait pas encore explicitement son nom et son brief.
 
 ## Décision
 
@@ -17,8 +18,8 @@ le timeout à 30 secondes et ne réessaie pas automatiquement.
 
 FastAPI convertit ces exceptions en réponses `{"detail": ...}` avec un statut
 503 pour l’indisponibilité et 502 pour une réponse distante invalide. Les erreurs
-de validation de formulaire utilisent un `detail` structuré avec un message et
-la liste des champs à corriger. Le frontend passe par un parseur commun qui
+de validation de formulaire et de projet utilisent un `detail` structuré avec un
+message et la liste des champs à corriger. Le frontend passe par un parseur commun qui
 accepte les détails JSON structurés, les réponses HTML inattendues et les erreurs
 réseau. Les erreurs de garde-fou restent exposées par leurs classes dédiées.
 

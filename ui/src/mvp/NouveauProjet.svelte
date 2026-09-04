@@ -10,8 +10,12 @@
   let enCours = $state(false);
 
   async function enregistrer() {
-    if (!nom.trim()) {
-      erreur = 'Renseignez le nom du projet avant de continuer.';
+    const manquants = [
+      ...(!nom.trim() ? ['Nom du projet'] : []),
+      ...(!brief.trim() ? ['Brief de recherche'] : []),
+    ];
+    if (manquants.length) {
+      erreur = `Renseignez les champs obligatoires : ${manquants.join(', ')}.`;
       return;
     }
     enCours = true;
@@ -38,7 +42,7 @@
     /></label
   >
   <label
-    >Brief de recherche<textarea class="fr-input" bind:value={brief}
+    >Brief de recherche<textarea class="fr-input" required bind:value={brief}
     ></textarea></label
   >
   {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
