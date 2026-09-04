@@ -54,14 +54,14 @@ incomplet, sans persister de données invalides.
 
 - État du code : implémentation terminée sur `fix/erreurs-explicites`, sans
   changement de schéma.
-- Prochaine action : ouvrir la PR vers `main`.
+- Prochaine action : faire relire la [PR #17](https://github.com/betagouv/lab-anssi-rula/pull/17).
 - Risques ou limites : le contrôle frontend via `pnpm` est bloqué localement par
   l’autorisation de build `esbuild`; les binaires installés ont été contrôlés
   directement.
 
 ## Revue indépendante
 
-- Diff examiné : à faire.
-- Critères vérifiés : tests et harness complet à confirmer.
+- Diff examiné : [PR #17](https://github.com/betagouv/lab-anssi-rula/pull/17).
+- Critères vérifiés : contrôles locaux terminés ; contrôles GitHub en cours.
 - Remarques : aucune.
 - Verdict : prêt à fusionner | corrections demandées
