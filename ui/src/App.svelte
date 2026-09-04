@@ -83,7 +83,7 @@
 
 <Entete produit={produitEntete} />
 {#if erreur}
-  <main class="erreur">{erreur}</main>
+  <main class="erreur" role="alert">{erreur}</main>
 {:else if !produits.length}
   <main class="chargement">Chargement…</main>
 {:else if route?.nom === 'entree'}
@@ -137,7 +137,7 @@
 {:else if projet && route?.nom === 'detail'}
   <Detail {projet} />
 {:else}
-  <main class="erreur">Page introuvable.</main>
+  <main class="erreur" role="alert">Page introuvable.</main>
 {/if}
 
 <style>

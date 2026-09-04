@@ -7,6 +7,7 @@
     TranscriptNonConforme,
     type RaisonRefusTranscript,
   } from '../api/transcripts';
+  import { requete } from '../api/requete';
 
   const NOUVEAU = '__nouveau__';
 
@@ -39,13 +40,10 @@
   }
 
   $effect(() => {
-    Promise.all([fetch('/api/identites'), fetch('/api/produits')])
-      .then(([ri, rp]) =>
-        Promise.all([
-          ri.json() as Promise<Ressource[]>,
-          rp.json() as Promise<Ressource[]>,
-        ])
-      )
+    Promise.all([
+      requete<Ressource[]>('/api/identites'),
+      requete<Ressource[]>('/api/produits'),
+    ])
       .then(([ids, prods]) => {
         identites = versOptions(ids, '+ Nouvelle identité');
         produits = versOptions(prods, '+ Nouveau projet');
@@ -90,6 +88,22 @@
   async function enregistrer() {
     erreur = '';
     raisonsRefus = [];
+    const manquants = [
+      ...(identiteId ? [] : ['Identité']),
+      ...(identiteId === NOUVEAU && !nouvelleIdentite.trim()
+        ? ['Nom de la nouvelle identité']
+        : []),
+      ...(produitId ? [] : ['Projet']),
+      ...(produitId === NOUVEAU && !nouveauProduit.trim()
+        ? ['Nom du nouveau projet']
+        : []),
+      ...(!dateEntretien.trim() ? ["Date de l'entretien"] : []),
+      ...(!contenu.trim() ? ["Contenu de l'entretien"] : []),
+    ];
+    if (manquants.length) {
+      erreur = `Renseignez les champs obligatoires : ${manquants.join(', ')}.`;
+      return;
+    }
     verificationEnCours = true;
     try {
       const payload = {
@@ -109,7 +123,9 @@
         raisonsRefus = e.raisons;
       } else {
         erreur =
-          'La vérification des données est indisponible. Le transcript n’a pas été enregistré.';
+          e instanceof Error
+            ? e.message
+            : 'Le transcript n’a pas été enregistré. Réessayez.';
       }
     } finally {
       verificationEnCours = false;
@@ -266,7 +282,7 @@
         </ul>
       </div>
     {:else if erreur}
-      <p class="erreur">{erreur}</p>
+      <p class="erreur" role="alert">{erreur}</p>
     {/if}
 
     <div class="boutons">

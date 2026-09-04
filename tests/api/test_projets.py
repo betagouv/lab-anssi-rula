@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 
+from adaptateurs.exceptions import ErreurCommunicationAlbert
 from api.projets import (
     _erreur_analyse,
     fabrique_depot_projets,
@@ -130,6 +131,94 @@ def test_creer_projet_sans_confirmation(contexte_projets) -> None:
         ).status_code
         == 201
     )
+
+
+def test_refuse_un_entretien_incomplet_sans_appeler_albert(contexte_projets) -> None:
+    client, depot, albert_validation = contexte_projets()
+    projet = depot.ajouter(1, "Projet", "")
+
+    reponse = client.post(
+        f"/api/projets/{projet.id}/entretiens",
+        json={"participant": " ", "date_entretien": "", "confirmation": True},
+    )
+
+    assert reponse.status_code == 422
+    assert reponse.json() == {
+        "detail": {
+            "message": "Vérifiez les champs obligatoires avant de continuer.",
+            "champs": [
+                "Le renseignement concernant le prénom de l’utilisateur est obligatoire.",
+                "La date de l’entretien est invalide.",
+                "Le renseignement concernant le modérateur est obligatoire.",
+                "Le renseignement concernant le transcript de l’entretien est obligatoire.",
+            ],
+        }
+    }
+    assert albert_validation.messages_recus == []
+    assert depot.lister_entretiens(projet.id) == []
+
+
+def test_refuse_les_champs_entretien_absents_explicitement(contexte_projets) -> None:
+    client, depot, albert_validation = contexte_projets()
+    projet = depot.ajouter(1, "Projet", "")
+
+    reponse = client.post(
+        f"/api/projets/{projet.id}/entretiens",
+        json={},
+    )
+
+    assert reponse.status_code == 422
+    assert "le prénom de l’utilisateur" in reponse.json()["detail"]["champs"][0]
+    assert len(reponse.json()["detail"]["champs"]) == 5
+    assert albert_validation.messages_recus == []
+    assert depot.lister_entretiens(projet.id) == []
+
+
+def test_refuse_un_entretien_source_incomplet_sans_appeler_albert(
+    contexte_projets,
+) -> None:
+    produits = DepotProduitsMemoire()
+    produits.ajouter("MQC")
+    client, depot, albert_validation = contexte_projets(produits=produits)
+
+    reponse = client.post(
+        "/api/produits/1/sources",
+        json={
+            "projet_id": None,
+            "nouveau_projet": {"nom": "Projet"},
+            "entretien": {
+                "participant": " ",
+                "date_entretien": "2026-08-25",
+                "moderateur": "Bob",
+                "contenu": "Texte",
+            },
+            "confirmation": True,
+        },
+    )
+
+    assert reponse.status_code == 422
+    assert "le prénom de l’utilisateur" in reponse.json()["detail"]["champs"][0]
+    assert albert_validation.messages_recus == []
+    assert depot.lister(1) == []
+
+
+def test_explicite_l_indisponibilite_d_albert_sans_persistance(
+    contexte_projets,
+) -> None:
+    client, depot, albert_validation = contexte_projets()
+    projet = depot.ajouter(1, "Projet", "")
+    albert_validation.avec_erreur(ErreurCommunicationAlbert())
+
+    reponse = client.post(
+        f"/api/projets/{projet.id}/entretiens",
+        json={**entretien_payload(), "confirmation": True},
+    )
+
+    assert reponse.status_code == 503
+    assert reponse.json() == {
+        "detail": "L'API Albert est indisponible. Réessayez dans quelques instants."
+    }
+    assert depot.lister_entretiens(projet.id) == []
 
 
 def test_ajouter_source_reutilise_un_projet_et_reste_atomique(contexte_projets) -> None:

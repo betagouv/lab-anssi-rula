@@ -1,4 +1,4 @@
-import { json } from './requete';
+import { ErreurApi, requete } from './requete';
 
 export type RaisonRefusProjet = {
   categorie: string;
@@ -79,33 +79,32 @@ export type ConfigurationAnalyse = {
 export type SourceProjet = { projet: Projet; entretien: Entretien };
 
 const corps = async <T>(url: string, body: unknown, method = 'POST'): Promise<T> => {
-  const reponse = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const contenu = (await reponse.json()) as { detail?: unknown };
-  if (
-    reponse.status === 422 &&
-    typeof contenu.detail === 'object' &&
-    contenu.detail !== null &&
-    'raisons' in contenu.detail &&
-    Array.isArray(contenu.detail.raisons) &&
-    contenu.detail.raisons.every(estRaisonRefus)
-  )
-    throw new ProjetNonConforme(contenu.detail.raisons);
-  if (!reponse.ok)
-    throw new Error(
-      typeof contenu.detail === 'string' ? contenu.detail : `HTTP ${reponse.status}`
-    );
-  return contenu as T;
+  try {
+    return await requete<T>(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (erreur) {
+    if (erreur instanceof ErreurApi && erreur.statut === 422) {
+      const detail = erreur.detail;
+      if (
+        typeof detail === 'object' &&
+        detail !== null &&
+        'raisons' in detail &&
+        Array.isArray(detail.raisons) &&
+        detail.raisons.every(estRaisonRefus)
+      )
+        throw new ProjetNonConforme(detail.raisons);
+    }
+    throw erreur;
+  }
 };
 
-export const listerProduits = () => fetch('/api/produits').then(json<Produit[]>);
+export const listerProduits = () => requete<Produit[]>('/api/produits');
 export const listerProjets = (produitId: number) =>
-  fetch(`/api/projets?produit_id=${produitId}`).then(json<Projet[]>);
-export const obtenirProjet = (id: number) =>
-  fetch(`/api/projets/${id}`).then(json<Projet>);
+  requete<Projet[]>(`/api/projets?produit_id=${produitId}`);
+export const obtenirProjet = (id: number) => requete<Projet>(`/api/projets/${id}`);
 export const creerProjet = (body: {
   produit_id: number;
   nom: string;
@@ -121,15 +120,14 @@ export const ajouterSource = (
   }
 ) => corps<SourceProjet>(`/api/produits/${produitId}/sources`, body);
 export const listerEntretiens = (id: number) =>
-  fetch(`/api/projets/${id}/entretiens`).then(json<Entretien[]>);
+  requete<Entretien[]>(`/api/projets/${id}/entretiens`);
 export const obtenirEntretien = (projetId: number, entretienId: number) =>
-  fetch(`/api/projets/${projetId}/entretiens/${entretienId}`).then(json<Entretien>);
+  requete<Entretien>(`/api/projets/${projetId}/entretiens/${entretienId}`);
 export const creerEntretien = (
   id: number,
   body: Omit<Entretien, 'id' | 'projet_id' | 'cree_le'> & { confirmation: boolean }
 ) => corps<Entretien>(`/api/projets/${id}/entretiens`, body);
-export const obtenirScan = (id: number) =>
-  fetch(`/api/projets/${id}/scan`).then(json<Scan>);
+export const obtenirScan = (id: number) => requete<Scan>(`/api/projets/${id}/scan`);
 export const genererScan = (id: number) =>
   corps<Scan>(`/api/projets/${id}/scan`, {});
 export const modifierScan = (id: number, contenu: string) =>
@@ -137,7 +135,7 @@ export const modifierScan = (id: number, contenu: string) =>
 export const validerScan = (id: number) =>
   corps<Scan>(`/api/projets/${id}/scan/validation`, {});
 export const obtenirConfigurationAnalyse = (id: number) =>
-  fetch(`/api/projets/${id}/analyse/configuration`).then(json<ConfigurationAnalyse>);
+  requete<ConfigurationAnalyse>(`/api/projets/${id}/analyse/configuration`);
 export const modifierConfigurationAnalyse = (
   id: number,
   blocs: Record<string, string>
@@ -158,6 +156,6 @@ export const modifierEtapeAnalyse = (id: number, cle: string, contenu: string) =
 export const validerEtapeAnalyse = (id: number, cle: string) =>
   corps<EtapeAnalyse>(`/api/projets/${id}/analyse/etapes/${cle}/validation`, {});
 export const obtenirDetailAnalyse = (id: number) =>
-  fetch(`/api/projets/${id}/analyse/detail`).then(
-    json<{ etapes: { cle: string; libelle: string; contenu: string }[] }>
+  requete<{ etapes: { cle: string; libelle: string; contenu: string }[] }>(
+    `/api/projets/${id}/analyse/detail`
   );

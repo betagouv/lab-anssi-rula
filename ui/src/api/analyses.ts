@@ -1,21 +1,14 @@
 import type { Analyse } from '../types';
-
-async function json<T>(r: Response): Promise<T> {
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json() as Promise<T>;
-}
+import { ErreurApi, requete } from './requete';
 
 export const obtenirAnalyse = (transcript_id: number): Promise<Analyse | null> =>
-  fetch(`/api/analyses/transcripts/${transcript_id}`).then((r) => {
-    if (r.status === 404) return null;
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json() as Promise<Analyse>;
+  requete<Analyse>(`/api/analyses/transcripts/${transcript_id}`).catch((erreur) => {
+    if (erreur instanceof ErreurApi && erreur.statut === 404) return null;
+    throw erreur;
   });
 
 export const genererAnalyse = (transcript_id: number): Promise<Analyse> =>
-  fetch(`/api/analyses/transcripts/${transcript_id}`, { method: 'POST' }).then((r) =>
-    json<Analyse>(r)
-  );
+  requete<Analyse>(`/api/analyses/transcripts/${transcript_id}`, { method: 'POST' });
 
 export const listerAnalyses = (): Promise<Analyse[]> =>
-  fetch('/api/analyses').then((r) => json<Analyse[]>(r));
+  requete<Analyse[]>('/api/analyses');

@@ -16,6 +16,7 @@
   import FormulaireEntretien from './FormulaireEntretien.svelte';
   import Guide from './Guide.svelte';
   import ResultatGardeFou from './ResultatGardeFou.svelte';
+  import { champsEntretienManquants } from './validation';
 
   type Source = 'transcript' | 'bizdev' | 'featurebase';
   const NOUVEAU = '__nouveau__';
@@ -91,9 +92,19 @@
       erreur = 'Sélectionnez un projet ou créez-en un nouveau.';
       return;
     }
-    if (source === 'transcript' && !confirmation) {
-      erreur = 'Confirmez la préparation du transcript avant de l’enregistrer.';
-      return;
+    if (source === 'transcript') {
+      const manquants = champsEntretienManquants({
+        participant,
+        date_entretien,
+        moderateur,
+        contenu,
+      });
+      if (projetId === NOUVEAU && !nom.trim()) manquants.unshift('Nom du projet');
+      if (!confirmation) manquants.push('Confirmation de préparation');
+      if (manquants.length) {
+        erreur = `Renseignez les champs obligatoires : ${manquants.join(', ')}.`;
+        return;
+      }
     }
     if (source !== 'transcript' && !fichier) {
       erreur = 'Sélectionnez un fichier CSV à importer.';
@@ -173,7 +184,11 @@
 
   {#if source === 'transcript' && projetId === NOUVEAU}
     <label
-      >Nom du projet de recherche<input class="fr-input" bind:value={nom} /></label
+      >Nom du projet de recherche<input
+        class="fr-input"
+        required
+        bind:value={nom}
+      /></label
     >
     <label
       >Brief de recherche<textarea class="fr-input" bind:value={brief}
@@ -197,7 +212,7 @@
     >
   {/if}
 
-  {#if erreur}<p class="erreur">{erreur}</p>{/if}
+  {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
   {#if resultat}<p class="succes">{resultat}</p>{/if}
   {#if projetCible}<a href={`#/projets/${projetCible}`}>Voir le projet cible</a>{/if}
   {#if source !== 'transcript'}<button
@@ -222,7 +237,7 @@
       />
       <Guide bind:confirme={confirmation} />
       <ResultatGardeFou {raisons} />
-      {#if erreur}<p class="erreur">{erreur}</p>{/if}
+      {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
       <div class="actions">
         <button class="fr-btn" disabled={enCours} onclick={enregistrer}
           >{enCours ? 'Vérification…' : 'Enregistrer'}</button

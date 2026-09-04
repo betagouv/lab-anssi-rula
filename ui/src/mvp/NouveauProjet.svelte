@@ -10,6 +10,10 @@
   let enCours = $state(false);
 
   async function enregistrer() {
+    if (!nom.trim()) {
+      erreur = 'Renseignez le nom du projet avant de continuer.';
+      return;
+    }
     enCours = true;
     erreur = '';
     try {
@@ -26,13 +30,18 @@
 
 <Contenu largeur="32rem">
   <h1>Créer un projet de recherche</h1>
-  <label>Nom du projet de recherche<input class="fr-input" bind:value={nom} /></label
+  <label
+    >Nom du projet de recherche<input
+      class="fr-input"
+      required
+      bind:value={nom}
+    /></label
   >
   <label
     >Brief de recherche<textarea class="fr-input" bind:value={brief}
     ></textarea></label
   >
-  {#if erreur}<p class="erreur">{erreur}</p>{/if}
+  {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
   <button class="fr-btn" disabled={enCours} onclick={enregistrer}
     >{enCours ? 'Création…' : 'Créer le projet'}</button
   >

@@ -1,6 +1,6 @@
 import type { RetourBizDev } from '../types';
 import { champsSelection, envoyerCsv } from './import_csv';
-import { json } from './requete';
+import { requete } from './requete';
 
 export const importerRetours = (
   fichier: File,
@@ -18,9 +18,10 @@ export const importerRetours = (
     form.append('nouveau_projet_nom', selection.nouveau_projet.nom);
     form.append('nouveau_projet_brief', selection.nouveau_projet.brief);
   }
-  return fetch('/api/retours-bizdev/import', { method: 'POST', body: form }).then(
-    (r) => json<RetourBizDev[]>(r)
-  );
+  return requete<RetourBizDev[]>('/api/retours-bizdev/import', {
+    method: 'POST',
+    body: form,
+  });
 };
 
 export const importerRetoursProjet = (
@@ -49,9 +50,9 @@ export const listerRetours = (
   produitId?: number,
   projetId?: number
 ): Promise<RetourBizDev[]> =>
-  fetch(
+  requete<RetourBizDev[]>(
     `/api/retours-bizdev?${new URLSearchParams({
       ...(produitId ? { produit_id: String(produitId) } : {}),
       ...(projetId ? { projet_id: String(projetId) } : {}),
     })}`
-  ).then((r) => json<RetourBizDev[]>(r));
+  );
