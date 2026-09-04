@@ -64,6 +64,6 @@ est incomplet, sans persister de données invalides.
 ## Revue indépendante
 
 - Diff examiné : [PR #18](https://github.com/betagouv/lab-anssi-rula/pull/18).
-- Critères vérifiés : contrôles locaux terminés ; contrôles GitHub en cours.
+- Critères vérifiés : contrôles locaux et contrôles GitHub terminés.
 - Remarques : aucune.
-- Verdict : prêt à fusionner | corrections demandées
+- Verdict : prêt à fusionner.
