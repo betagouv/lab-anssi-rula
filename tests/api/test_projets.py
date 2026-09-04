@@ -1,11 +1,13 @@
 from datetime import date
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from adaptateurs.exceptions import ErreurCommunicationAlbert
 from api.projets import (
     _erreur_analyse,
+    _nom_projet,
     fabrique_depot_projets,
     fabrique_depot_analyse,
     fabrique_service_analyse_projet,
@@ -56,13 +58,23 @@ def entretien_payload() -> dict:
     }
 
 
+def test_nom_projet_vide_est_refuse() -> None:
+    with pytest.raises(HTTPException, match="obligatoire"):
+        _nom_projet("   ")
+
+
 def test_parcours_projet(contexte_projets) -> None:
     client, _, albert_validation = contexte_projets()
     assert client.get("/api/projets?produit_id=1").json() == []
     assert (
         client.post(
             "/api/projets",
-            json={"produit_id": 1, "nom": "Projet", "confirmation": False},
+            json={
+                "produit_id": 1,
+                "nom": "Projet",
+                "brief": "Brief",
+                "confirmation": False,
+            },
         ).status_code
         == 201
     )
@@ -127,10 +139,34 @@ def test_creer_projet_sans_confirmation(contexte_projets) -> None:
     client, _, _ = contexte_projets()
     assert (
         client.post(
-            "/api/projets", json={"produit_id": 1, "nom": "Projet sans confirmation"}
+            "/api/projets",
+            json={
+                "produit_id": 1,
+                "nom": "Projet sans confirmation",
+                "brief": "Brief",
+            },
         ).status_code
         == 201
     )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"produit_id": 1},
+        {"produit_id": 1, "nom": "Projet"},
+        {"produit_id": 1, "nom": " ", "brief": "Brief"},
+        {"produit_id": 1, "nom": "Projet", "brief": "  "},
+    ],
+)
+def test_refuse_un_projet_incomplet_explicitement(contexte_projets, payload) -> None:
+    client, depot, _ = contexte_projets()
+
+    reponse = client.post("/api/projets", json=payload)
+
+    assert reponse.status_code == 422
+    assert reponse.json()["detail"]["champs"]
+    assert depot.lister(1) == []
 
 
 def test_refuse_un_entretien_incomplet_sans_appeler_albert(contexte_projets) -> None:
@@ -185,7 +221,7 @@ def test_refuse_un_entretien_source_incomplet_sans_appeler_albert(
         "/api/produits/1/sources",
         json={
             "projet_id": None,
-            "nouveau_projet": {"nom": "Projet"},
+            "nouveau_projet": {"nom": "Projet", "brief": "Brief"},
             "entretien": {
                 "participant": " ",
                 "date_entretien": "2026-08-25",
@@ -230,7 +266,12 @@ def test_ajouter_source_reutilise_un_projet_et_reste_atomique(contexte_projets) 
     assert (
         client.post(
             "/api/projets",
-            json={"produit_id": 1, "nom": "Recherche", "confirmation": True},
+            json={
+                "produit_id": 1,
+                "nom": "Recherche",
+                "brief": "Brief",
+                "confirmation": True,
+            },
         ).status_code
         == 201
     )
@@ -250,21 +291,36 @@ def test_ajouter_source_reutilise_un_projet_et_reste_atomique(contexte_projets) 
     assert (
         client.post(
             "/api/projets",
-            json={"produit_id": 1, "nom": " recherche ", "confirmation": True},
+            json={
+                "produit_id": 1,
+                "nom": " recherche ",
+                "brief": "Brief",
+                "confirmation": True,
+            },
         ).status_code
         == 409
     )
     assert (
         client.post(
             "/api/projets",
-            json={"produit_id": 1, "nom": "   ", "confirmation": True},
+            json={
+                "produit_id": 1,
+                "nom": "   ",
+                "brief": "Brief",
+                "confirmation": True,
+            },
         ).status_code
         == 422
     )
     assert (
         client.post(
             "/api/projets",
-            json={"produit_id": 2, "nom": "Recherche", "confirmation": True},
+            json={
+                "produit_id": 2,
+                "nom": "Recherche",
+                "brief": "Brief",
+                "confirmation": True,
+            },
         ).status_code
         == 201
     )
@@ -287,7 +343,7 @@ def test_ajouter_source_reutilise_un_projet_et_reste_atomique(contexte_projets) 
             "/api/produits/1/sources",
             json={
                 "projet_id": 1,
-                "nouveau_projet": {"nom": "Autre"},
+                "nouveau_projet": {"nom": "Autre", "brief": "Brief"},
                 "entretien": entretien,
                 "confirmation": True,
             },
@@ -298,7 +354,7 @@ def test_ajouter_source_reutilise_un_projet_et_reste_atomique(contexte_projets) 
         client.post(
             "/api/produits/1/sources",
             json={
-                "nouveau_projet": {"nom": "Recherche"},
+                "nouveau_projet": {"nom": "Recherche", "brief": "Brief"},
                 "entretien": entretien,
                 "confirmation": True,
             },
@@ -336,7 +392,12 @@ def test_conflit_de_nom_concurrent_est_retourne(contexte_projets) -> None:
     assert (
         client.post(
             "/api/projets",
-            json={"produit_id": 1, "nom": "Projet", "confirmation": True},
+            json={
+                "produit_id": 1,
+                "nom": "Projet",
+                "brief": "Brief",
+                "confirmation": True,
+            },
         ).status_code
         == 409
     )
@@ -344,7 +405,7 @@ def test_conflit_de_nom_concurrent_est_retourne(contexte_projets) -> None:
         client.post(
             "/api/produits/1/sources",
             json={
-                "nouveau_projet": {"nom": "Projet"},
+                "nouveau_projet": {"nom": "Projet", "brief": "Brief"},
                 "entretien": entretien_payload(),
                 "confirmation": True,
             },

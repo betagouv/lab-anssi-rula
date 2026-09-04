@@ -30,6 +30,12 @@ routeur = APIRouter()
 _prompt = (Path(__file__).parent.parent / "prompts" / "scan_projet.md").read_text()
 
 
+def _texte_obligatoire(valeur: str) -> str:
+    if not valeur.strip():
+        raise ValueError("Champ obligatoire")
+    return valeur
+
+
 def fabrique_depot_projets() -> DepotProjets:  # pragma: no cover
     return DepotProjetsPostgres(charge_configuration().base_de_donnees)
 
@@ -64,7 +70,12 @@ def fabrique_service_validation() -> ServiceValidationTranscript:  # pragma: no 
 class NouveauProjet(BaseModel):
     produit_id: int
     nom: str
-    brief: str = ""
+    brief: str
+
+    @field_validator("nom", "brief")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        return _texte_obligatoire(valeur)
 
 
 class NouvelEntretien(BaseModel):
@@ -78,9 +89,7 @@ class NouvelEntretien(BaseModel):
     @field_validator("participant", "moderateur", "contenu")
     @classmethod
     def texte_obligatoire(cls, valeur: str) -> str:
-        if not valeur.strip():
-            raise ValueError("Champ obligatoire")
-        return valeur
+        return _texte_obligatoire(valeur)
 
 
 class NouveauScan(BaseModel):
@@ -89,7 +98,12 @@ class NouveauScan(BaseModel):
 
 class NouveauProjetSource(BaseModel):
     nom: str
-    brief: str = ""
+    brief: str
+
+    @field_validator("nom", "brief")
+    @classmethod
+    def texte_obligatoire(cls, valeur: str) -> str:
+        return _texte_obligatoire(valeur)
 
 
 class EntretienSource(BaseModel):
@@ -102,9 +116,7 @@ class EntretienSource(BaseModel):
     @field_validator("participant", "moderateur", "contenu")
     @classmethod
     def texte_obligatoire(cls, valeur: str) -> str:
-        if not valeur.strip():
-            raise ValueError("Champ obligatoire")
-        return valeur
+        return _texte_obligatoire(valeur)
 
 
 class NouvelleSource(BaseModel):

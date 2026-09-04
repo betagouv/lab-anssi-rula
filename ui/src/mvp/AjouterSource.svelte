@@ -100,6 +100,8 @@
         contenu,
       });
       if (projetId === NOUVEAU && !nom.trim()) manquants.unshift('Nom du projet');
+      if (projetId === NOUVEAU && !brief.trim())
+        manquants.push('Brief de recherche');
       if (!confirmation) manquants.push('Confirmation de préparation');
       if (manquants.length) {
         erreur = `Renseignez les champs obligatoires : ${manquants.join(', ')}.`;
@@ -191,7 +193,7 @@
       /></label
     >
     <label
-      >Brief de recherche<textarea class="fr-input" bind:value={brief}
+      >Brief de recherche<textarea class="fr-input" required bind:value={brief}
       ></textarea></label
     >
   {/if}
