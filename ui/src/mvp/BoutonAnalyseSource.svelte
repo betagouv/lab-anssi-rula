@@ -5,12 +5,11 @@
 <details class="menu">
   <summary class="fr-btn">Analyser une source de données</summary>
   <nav aria-label="Analyser une source de données">
-    <a href={`#/produits/${produitId}/sources/transcript`}>Ajouter un transcript</a>
-    <a href={`#/produits/${produitId}/sources/bizdev`}
-      >Importer des entretiens BizDev</a
+    <a href={`#/produits/${produitId}/sources/transcript`}
+      >Entretiens utilisateurs UX</a
     >
-    <a href={`#/produits/${produitId}/sources/featurebase`}
-      >Importer des demandes FeatureBase</a
+    <a href={`#/produits/${produitId}/sources/bizdev`}>CSV BizDev</a>
+    <a href={`#/produits/${produitId}/sources/featurebase`}>Demandes featuresBases</a
     >
   </nav>
 </details>
