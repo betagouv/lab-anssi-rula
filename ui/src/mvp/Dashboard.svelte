@@ -2,14 +2,13 @@
   import type { Produit, Projet } from '../api/projets';
   import Navigation from './Navigation.svelte';
   import AnalyseTransverse from './AnalyseTransverse.svelte';
+  import BoutonAnalyseSource from './BoutonAnalyseSource.svelte';
   let { produit, projets }: { produit: Produit; projets: Projet[] } = $props();
 </script>
 
 <Navigation produitId={produit.id} vue="dashboard" />
 <main class="contenu">
-  <a href={`#/produits/${produit.id}/projets`} class="fr-btn action"
-    >Analyser une source de données</a
-  >
+  <BoutonAnalyseSource produitId={produit.id} />
   <h1>Dashboard {produit.nom}</h1>
   {#if projets.length}
     <table>
@@ -38,9 +37,6 @@
   h1 {
     font-size: clamp(2rem, 3vw, 2.7rem);
     margin: 2rem 0 4rem;
-  }
-  .action {
-    float: right;
   }
   table {
     border-collapse: collapse;
