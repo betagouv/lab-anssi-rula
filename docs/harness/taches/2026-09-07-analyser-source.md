@@ -42,12 +42,12 @@ Dashboard et la liste des projets produit.
 ## Handoff
 
 - État du code : implémentation terminée sur `feature/analyser-source`.
-- Prochaine action : faire relire la PR #19.
+- Prochaine action : faire relire la PR #20.
 - Risques ou limites : aucun changement backend prévu.
 
 ## Revue indépendante
 
-- Diff examiné : [PR #19](https://github.com/betagouv/lab-anssi-rula/pull/19),
+- Diff examiné : [PR #20](https://github.com/betagouv/lab-anssi-rula/pull/20),
   composant partagé et intégration dans les deux vues produit.
 - Critères vérifiés : contrôles frontend et backend validés.
 - Remarques :
