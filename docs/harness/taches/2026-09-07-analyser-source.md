@@ -41,7 +41,7 @@ Dashboard et la liste des projets produit.
 
 ## Handoff
 
-- État du code : implémentation terminée sur `codex/analyser-source`.
+- État du code : implémentation terminée sur `feature/analyser-source`.
 - Prochaine action : faire relire la PR #19.
 - Risques ou limites : aucun changement backend prévu.
 
