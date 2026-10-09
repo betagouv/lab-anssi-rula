@@ -14,9 +14,22 @@ def test_valeurs_par_defaut():
     assert config.rula.max_requetes_par_minute == 100
     assert config.albert.modele == "openweight-medium"
     assert config.albert.modele_embeddings == "BAAI/bge-m3"
+    assert config.albert.max_completion_tokens_transcripts == 16384
+    assert config.albert.temperature_transcripts == 1.0
+    assert config.albert.top_p_transcripts == 1.0
     assert config.base_de_donnees.port == 5432
     assert config.base_de_donnees.nom == "rula"
     assert config.correspondance.seuil == 0.35
+
+
+def test_configuration_des_parametres_echantillonnage_transcripts(monkeypatch):
+    monkeypatch.setenv("ALBERT_TEMPERATURE_TRANSCRIPTS", "0.8")
+    monkeypatch.setenv("ALBERT_TOP_P_TRANSCRIPTS", "0.9")
+
+    config = charge_configuration()
+
+    assert config.albert.temperature_transcripts == 0.8
+    assert config.albert.top_p_transcripts == 0.9
 
 
 def test_configuration_constructible_avec_valeurs_custom():

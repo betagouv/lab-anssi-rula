@@ -104,7 +104,7 @@ class ServiceAnalysePdf:
         schema_version: str,
     ) -> AnalysePdf:
         schema = _PRODUIT if type_source == "produit" else _BIZDEV
-        reponse = self._albert.completer_json_raisonnement(
+        reponse = self._albert.completer_json_raisonnement_transcript(
             [
                 {"role": "system", "content": self._prompts[type_source]},
                 {
