@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listerProjets, type Projet } from '../api/projets';
+  import { creerProjet, listerProjets, type Projet } from '../api/projets';
+  import {
+    dureeDepuisSoumission,
+    libelleProgression,
+    pourcentageProgression,
+    type ProgressionPreparation,
+  } from './progression';
 
   let {
     produitId,
@@ -9,6 +15,9 @@
   }: { produitId: number; projetId?: number; typeSource: 'produit' | 'bizdev' } =
     $props();
   let projets = $state<Projet[]>([]);
+  let projetsCharges = $state(false);
+  let nomProjet = $state('');
+  let briefProjet = $state('');
   let fichier = $state<File | null>(null);
   let dateEntretien = $state('');
   let nomSource = $state('');
@@ -43,6 +52,7 @@
   );
   let erreur = $state('');
   let enCours = $state(false);
+  let progression = $state<ProgressionPreparation | null>(null);
   let sources = $state<
     {
       id: number;
@@ -57,7 +67,9 @@
   onMount(() => {
     selectionProjet = projetId ?? 0;
     if (typeSource === 'produit')
-      listerProjets(produitId).then((valeur) => (projets = valeur));
+      listerProjets(produitId)
+        .then((valeur) => (projets = valeur))
+        .finally(() => (projetsCharges = true));
     fetch(`/api/transcripts-pdf/produits/${produitId}`)
       .then((reponse) => reponse.json())
       .then((valeur) => {
@@ -67,8 +79,34 @@
       });
   });
 
+  async function creerProjetRecherche() {
+    if (!nomProjet.trim() || !briefProjet.trim()) {
+      erreur = 'Renseignez le nom et le brief de recherche.';
+      return;
+    }
+    enCours = true;
+    erreur = '';
+    try {
+      const projet = await creerProjet({
+        produit_id: produitId,
+        nom: nomProjet,
+        brief: briefProjet,
+      });
+      projets = [...projets, projet];
+      selectionProjet = projet.id;
+      nomProjet = '';
+      briefProjet = '';
+    } catch (cause) {
+      erreur =
+        cause instanceof Error ? cause.message : 'Création du projet impossible.';
+    } finally {
+      enCours = false;
+    }
+  }
+
   async function consulter(id: number) {
     enCours = true;
+    progression = null;
     try {
       const source = await fetch(`/api/transcripts-pdf/${id}`).then((reponse) =>
         reponse.json()
@@ -99,6 +137,7 @@
   async function preparer() {
     if (!fichier) return;
     enCours = true;
+    progression = null;
     erreur = '';
     try {
       const donnees = new FormData();
@@ -111,6 +150,7 @@
       });
       const demande = await reponse.json();
       if (!reponse.ok) throw new Error(demande.detail ?? 'Préparation impossible.');
+      progression = demande.progression;
       let resultat = demande;
       for (
         let tentative = 0;
@@ -122,6 +162,7 @@
           `/api/transcripts-pdf/preparation/${demande.jeton}`
         );
         resultat = await suivi.json();
+        progression = resultat.progression;
         if (!suivi.ok)
           throw new Error(
             resultat.detail ?? 'Préparation expirée. Réimportez le fichier.'
@@ -139,6 +180,7 @@
       locuteurs = resultat.locuteurs;
       remplacements = resultat.remplacements;
     } catch (cause) {
+      if (progression) progression = { ...progression, phase: 'echec' };
       erreur = cause instanceof Error ? cause.message : 'Préparation impossible.';
     } finally {
       enCours = false;
@@ -147,6 +189,7 @@
 
   async function confirmer() {
     enCours = true;
+    progression = null;
     erreur = '';
     try {
       const reponse = await fetch(
@@ -191,6 +234,7 @@
   async function analyser() {
     if (!transcriptId) return;
     enCours = true;
+    progression = null;
     erreur = '';
     try {
       const reponse = await fetch(
@@ -260,18 +304,119 @@
   {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
   {#if !transcriptId || edition}
     {#if !contenu && !transcriptId}
-      <label for="pdf">Fichier PDF</label>
-      <input
-        id="pdf"
-        type="file"
-        accept="application/pdf,.pdf"
-        onchange={(event) => (fichier = event.currentTarget.files?.[0] ?? null)}
-      />
-      <label for="contexte">Contexte complémentaire (facultatif)</label>
-      <textarea id="contexte" bind:value={contexte} rows="4"></textarea>
-      <button class="fr-btn" disabled={!fichier || enCours} onclick={preparer}
+      {#if typeSource === 'produit'}
+        {#if !projetsCharges}
+          <p>Chargement des projets…</p>
+        {:else if projets.length}
+          <label class="fr-label" for="projet-import">Projet de recherche</label>
+          <select
+            class="fr-select"
+            id="projet-import"
+            bind:value={selectionProjet}
+            required
+          >
+            <option value={0}>Choisir un projet</option>
+            {#each projets as projet (projet.id)}
+              <option value={projet.id}>{projet.nom}</option>
+            {/each}
+          </select>
+        {:else}
+          <fieldset>
+            <legend>Créer un projet de recherche</legend>
+            <label class="fr-label" for="nom-projet-import">Nom du projet</label>
+            <input
+              class="fr-input"
+              id="nom-projet-import"
+              bind:value={nomProjet}
+              required
+            />
+            <label class="fr-label" for="brief-projet-import"
+              >Brief de recherche</label
+            >
+            <textarea
+              class="fr-input"
+              id="brief-projet-import"
+              bind:value={briefProjet}
+              required
+            ></textarea>
+            <button
+              class="fr-btn fr-btn--secondary"
+              disabled={enCours}
+              onclick={creerProjetRecherche}
+            >
+              {enCours ? 'Création…' : 'Créer le projet'}
+            </button>
+          </fieldset>
+        {/if}
+      {/if}
+      <div class="fr-upload-group">
+        <label class="fr-label" for="pdf">
+          Fichier PDF
+          <span class="fr-hint-text" id="pdf-aide">Format PDF, 10 Mo maximum</span>
+        </label>
+        <input
+          class="fr-upload"
+          id="pdf"
+          name="fichier"
+          type="file"
+          accept=".pdf,application/pdf"
+          aria-describedby="pdf-aide"
+          onchange={(event) => (fichier = event.currentTarget.files?.[0] ?? null)}
+        />
+      </div>
+      <div class="fr-input-group">
+        <label class="fr-label" for="contexte"
+          >Contexte complémentaire (facultatif)</label
+        >
+        <textarea class="fr-input" id="contexte" bind:value={contexte} rows="4"
+        ></textarea>
+      </div>
+      <button
+        class="fr-btn"
+        disabled={!fichier ||
+          enCours ||
+          (typeSource === 'produit' && (!projetsCharges || !selectionProjet))}
+        onclick={preparer}
         >{enCours ? 'Préparation…' : 'Préparer et anonymiser'}</button
       >
+      {#if progression && enCours}
+        {@const pourcentage = pourcentageProgression(progression)}
+        <div class="progression">
+          <div
+            role="progressbar"
+            aria-label="Progression de la préparation du transcript"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={pourcentage ?? undefined}
+            aria-valuetext={pourcentage === null
+              ? libelleProgression(progression)
+              : `${progression.groupes_termines} groupes analysés sur ${progression.groupes_total}`}
+          >
+            {#if pourcentage !== null}
+              <div
+                class="progression__valeur"
+                style={`width: ${pourcentage}%`}
+              ></div>
+            {:else}
+              <div class="progression__indeterminee"></div>
+            {/if}
+          </div>
+          <p aria-live="polite">{libelleProgression(progression)}</p>
+          {#if progression.phase === 'anonymisation' && progression.groupes_total !== null}
+            <p>
+              Groupes analysés : {progression.groupes_termines} sur {progression.groupes_total}
+            </p>
+            {#if progression.groupe_en_cours !== null}
+              <p>Groupe en cours : {progression.groupe_en_cours}</p>
+            {/if}
+          {/if}
+          <p>
+            Temps écoulé depuis l’envoi : {dureeDepuisSoumission(
+              progression.duree_secondes
+            )}
+          </p>
+        </div>
+      {/if}
     {:else}
       <label for="date">Date de l’entretien</label>
       <input id="date" type="date" bind:value={dateEntretien} required />
@@ -284,8 +429,9 @@
             >{/each}
         </select>
       {/if}
-      <label for="transcript">Transcript anonymisé</label>
-      <textarea id="transcript" bind:value={contenu} rows="14"></textarea>
+      <label class="fr-label" for="transcript">Transcript anonymisé</label>
+      <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
+      ></textarea>
       {#if remplacements.length}
         <h2>Remplacements proposés</h2>
         <table>
@@ -311,8 +457,11 @@
           >
         </table>
       {/if}
-      <label for="contexte-edite">Contexte anonymisé</label>
-      <textarea id="contexte-edite" bind:value={contexte} rows="4"></textarea>
+      <div class="fr-input-group">
+        <label class="fr-label" for="contexte-edite">Contexte anonymisé</label>
+        <textarea class="fr-input" id="contexte-edite" bind:value={contexte} rows="4"
+        ></textarea>
+      </div>
       <fieldset>
         <legend>Rôle des locuteurs</legend>
         {#each locuteurs as locuteur, index (locuteur.identifiant)}
@@ -432,7 +581,7 @@
     font-weight: 600;
     margin: 1.25rem 0 0.4rem;
   }
-  input,
+  input:not([type='file']),
   select,
   textarea {
     box-sizing: border-box;
@@ -441,7 +590,7 @@
     padding: 0.6rem;
     width: 100%;
   }
-  textarea {
+  #transcript {
     font-family: monospace;
   }
   button {
@@ -452,6 +601,29 @@
   }
   .erreur {
     color: #b34000;
+  }
+  .progression {
+    margin-top: 1rem;
+  }
+  [role='progressbar'] {
+    background: var(--background-contrast-grey);
+    height: 0.5rem;
+    overflow: hidden;
+  }
+  .progression__valeur,
+  .progression__indeterminee {
+    background: var(--border-action-high-blue-france);
+    height: 100%;
+    transition: width 200ms ease;
+  }
+  .progression__indeterminee {
+    animation: progression 1.5s ease-in-out infinite alternate;
+    width: 35%;
+  }
+  @keyframes progression {
+    to {
+      transform: translateX(185%);
+    }
   }
   blockquote {
     border-left: 3px solid var(--border-action-high-blue-france);

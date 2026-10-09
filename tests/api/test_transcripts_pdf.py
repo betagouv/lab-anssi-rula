@@ -2,10 +2,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from concurrent.futures import Executor, Future
 import asyncio
+import logging
 import time
 import api.transcripts_pdf as api_pdf
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable, cast
 
 from api.transcripts_pdf import (
     _executer_job,
@@ -15,6 +16,8 @@ from api.transcripts_pdf import (
     fabrique_service_analyse_pdf,
     fabrique_service_validation_pdf,
     fabrique_service_transcripts_pdf,
+    fabrique_service_transcripts_pdf_travail,
+    fabrique_executeur_preparation,
     reprendre_jobs,
     surveille_jobs,
     routeur,
@@ -48,6 +51,11 @@ class ServiceModificationRaceDeTest(ServiceTranscriptsPdf):
         locuteurs: list[Locuteur],
     ) -> SourceTranscriptPdf | None:
         return None
+
+
+class ServiceEchecWorkerDeTest(ServiceTranscriptsPdf):
+    def executer_job(self, job_id: int) -> None:
+        raise ValueError("texte sensible")
 
 
 def _client(
@@ -244,6 +252,9 @@ def test_preparation_pdf_et_erreurs_de_traitement() -> None:
         time.sleep(0.01)
         resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
     assert resultat.json()["statut"] == "termine"
+    assert resultat.json()["progression"]["phase"] == "termine"
+    assert resultat.json()["progression"]["groupes_termines"] == 1
+    assert resultat.json()["progression"]["groupes_total"] == 1
     assert resultat.json()["remplacements"] == []
     trop_long = client.post(
         "/api/transcripts-pdf/preparation",
@@ -263,10 +274,9 @@ def test_preparation_pdf_et_erreurs_de_traitement() -> None:
         statut_trop_long = client.get(
             f"/api/transcripts-pdf/preparation/{trop_long.json()['jeton']}"
         )
-    assert statut_trop_long.json() == {
-        "statut": "echec",
-        "erreur": "Le fichier dépasse 10 Mo.",
-    }
+    assert statut_trop_long.json()["statut"] == "echec"
+    assert statut_trop_long.json()["erreur"] == "Le fichier dépasse 10 Mo."
+    assert statut_trop_long.json()["progression"]["phase"] == "echec"
     albert.avec_erreur(ValueError("Albert indisponible"))
     echec = client.post(
         "/api/transcripts-pdf/preparation",
@@ -281,10 +291,44 @@ def test_preparation_pdf_et_erreurs_de_traitement() -> None:
             break
         time.sleep(0.01)
         resultat_echec = client.get(f"/api/transcripts-pdf/preparation/{jeton_echec}")
-    assert resultat_echec.json() == {
-        "statut": "echec",
-        "erreur": "La préparation du transcript a échoué.",
-    }
+    assert resultat_echec.json()["statut"] == "echec"
+    assert resultat_echec.json()["erreur"] == "La préparation du transcript a échoué."
+    assert resultat_echec.json()["progression"]["phase"] == "echec"
+    assert resultat_echec.json()["progression"]["groupes_termines"] == 0
+    assert resultat_echec.json()["progression"]["groupe_en_cours"] == 1
+
+
+def test_progression_preparation_reste_liee_au_jeton() -> None:
+    executeur = ExecuteurDeTest()
+    service = ServicePreparationTranscript(
+        AdaptateurAlbertDeTest().avec_reponse('{"remplacements": [], "locuteurs": []}'),
+        "prompt",
+    )
+    app = FastAPI()
+    app.include_router(routeur, prefix="/api")
+    app.dependency_overrides[fabrique_service_preparation_pdf] = lambda: service
+    app.dependency_overrides[fabrique_executeur_preparation] = lambda: executeur
+    client = TestClient(app)
+
+    soumission = client.post(
+        "/api/transcripts-pdf/preparation",
+        data={"type_source": "bizdev"},
+        files={"fichier": ("reunion.pdf", _pdf("Bonjour"), "application/pdf")},
+    ).json()
+
+    assert soumission["progression"]["phase"] == "en_attente"
+    assert soumission["progression"]["groupes_total"] is None
+    fonction, arguments = executeur.taches[0]
+    cast(Callable[..., object], fonction)(*arguments)
+    resultat = client.get(
+        f"/api/transcripts-pdf/preparation/{soumission['jeton']}"
+    ).json()
+
+    assert resultat["statut"] == "termine"
+    assert resultat["progression"]["phase"] == "termine"
+    assert resultat["progression"]["groupes_termines"] == 1
+    assert resultat["progression"]["groupes_total"] == 1
+    assert resultat["progression"]["duree_secondes"] >= 0
 
 
 def test_factories_and_reprise_jobs() -> None:
@@ -321,6 +365,12 @@ def test_factories_and_reprise_jobs() -> None:
         == "ServiceValidationTranscript"
     )
     assert fabrique_service_analyse_pdf().__class__.__name__ == "ServiceAnalysePdf"
+    service_travail = fabrique_service_transcripts_pdf_travail()
+    assert service_travail._depot.__class__.__name__ == "DepotTranscriptsPdfPostgres"
+    assert (
+        service_travail._garde_fou.__class__.__name__ == "ServiceValidationTranscript"
+    )
+    assert service_travail._analyseur.__class__.__name__ == "ServiceAnalysePdf"
     assert fabrique_executeur() is not None
     assert (
         fabrique_service_transcripts_pdf(depot, garde_fou, analyseur).__class__.__name__
@@ -343,6 +393,23 @@ def test_surveillance_reessaie_apres_expiration_du_delai() -> None:
     asyncio.run(surveille_jobs(arreter, scanner, 0))
 
     assert scans == 2
+
+
+def test_worker_journalise_le_type_sans_le_message_de_l_exception(caplog) -> None:
+    _, depot, _ = _client('{"valide": true, "problemes": []}')
+    service = ServiceEchecWorkerDeTest(
+        depot,
+        ServiceValidationTranscript(AdaptateurAlbertDeTest(), "prompt"),
+        ServiceAnalysePdf(
+            AdaptateurAlbertDeTest(), {"produit": "prompt", "bizdev": "prompt"}
+        ),
+    )
+    caplog.set_level(logging.ERROR, logger=api_pdf.__name__)
+
+    _executer_job(12, service)
+
+    assert "exception_type=ValueError" in caplog.text
+    assert "texte sensible" not in caplog.text
 
 
 def test_surveillance_reprend_un_bail_expire_sans_action_utilisateur() -> None:
@@ -398,10 +465,22 @@ def test_preparation_expire_et_limite_les_demandes() -> None:
         ).status_code
         == 429
     )
-    api_pdf._PREPARATIONS["running"] = {"statut": "en_cours", "expire": futur}
-    assert client.get("/api/transcripts-pdf/preparation/running").json() == {
-        "statut": "en_cours"
+    api_pdf._PREPARATIONS["running"] = {
+        "statut": "en_cours",
+        "expire": futur,
+        "soumis_monotonic": time.monotonic(),
+        "progression": {
+            "phase": "en_attente",
+            "groupes_termines": 0,
+            "groupes_total": None,
+            "groupe_en_cours": None,
+        },
     }
+    progression = client.get("/api/transcripts-pdf/preparation/running").json()
+    assert progression["statut"] == "en_cours"
+    assert progression["progression"]["phase"] == "en_attente"
+    assert progression["progression"]["groupes_total"] is None
+    assert progression["progression"]["duree_secondes"] >= 0
     api_pdf._PREPARATIONS["expired"] = {
         "statut": "termine",
         "expire": datetime.now(timezone.utc) - timedelta(seconds=1),
