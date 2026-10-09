@@ -46,3 +46,11 @@ export function dureeDepuisSoumission(secondes: number): string {
   const reste = ecoulees % 60;
   return minutes ? `${minutes} min ${reste} s` : `${reste} s`;
 }
+
+export function dureeLocale(
+  secondesServeur: number,
+  horodatageServeur: number,
+  horodatageLocal: number
+): number {
+  return secondesServeur + Math.max(0, horodatageLocal - horodatageServeur) / 1000;
+}

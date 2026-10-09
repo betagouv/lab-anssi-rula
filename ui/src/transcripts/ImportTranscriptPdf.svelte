@@ -3,10 +3,16 @@
   import { creerProjet, listerProjets, type Projet } from '../api/projets';
   import {
     dureeDepuisSoumission,
+    dureeLocale,
     libelleProgression,
     pourcentageProgression,
     type ProgressionPreparation,
   } from './progression';
+  import {
+    ErreurSuiviPreparation,
+    lirePreparation,
+    type ResultatPreparation,
+  } from './suivi-preparation';
 
   let {
     produitId,
@@ -53,6 +59,15 @@
   let erreur = $state('');
   let enCours = $state(false);
   let progression = $state<ProgressionPreparation | null>(null);
+  let jetonPreparation = $state<string | null>(null);
+  let controleSuivi: AbortController | null = null;
+  let controleEnvoi: AbortController | null = null;
+  let timerHorloge: ReturnType<typeof setInterval> | null = null;
+  let timerAttente: ReturnType<typeof setTimeout> | null = null;
+  let resoudreAttente: (() => void) | null = null;
+  let secondesServeur = 0;
+  let horodatageServeur = 0;
+  let monte = false;
   let sources = $state<
     {
       id: number;
@@ -64,7 +79,49 @@
   >([]);
   let edition = $state(false);
 
+  function actualiserProgression(valeur: ProgressionPreparation) {
+    progression = valeur;
+    secondesServeur = valeur.duree_secondes;
+    horodatageServeur = performance.now();
+    timerHorloge ??= setInterval(() => {
+      if (progression)
+        progression = {
+          ...progression,
+          duree_secondes: dureeLocale(
+            secondesServeur,
+            horodatageServeur,
+            performance.now()
+          ),
+        };
+    }, 1000);
+  }
+
+  function arreterHorloge() {
+    if (timerHorloge !== null) clearInterval(timerHorloge);
+    timerHorloge = null;
+  }
+
+  function attendre(delai: number): Promise<void> {
+    return new Promise((resoudre) => {
+      resoudreAttente = resoudre;
+      timerAttente = setTimeout(() => {
+        timerAttente = null;
+        resoudreAttente = null;
+        resoudre();
+      }, delai);
+    });
+  }
+
+  function annulerAttente() {
+    if (timerAttente !== null) clearTimeout(timerAttente);
+    timerAttente = null;
+    const terminer = resoudreAttente;
+    resoudreAttente = null;
+    terminer?.();
+  }
+
   onMount(() => {
+    monte = true;
     selectionProjet = projetId ?? 0;
     if (typeSource === 'produit')
       listerProjets(produitId)
@@ -77,6 +134,13 @@
           (source: { type_source: string }) => source.type_source === typeSource
         );
       });
+    return () => {
+      monte = false;
+      controleEnvoi?.abort();
+      controleSuivi?.abort();
+      annulerAttente();
+      arreterHorloge();
+    };
   });
 
   async function creerProjetRecherche() {
@@ -135,55 +199,98 @@
   }
 
   async function preparer() {
-    if (!fichier) return;
+    if (!fichier || enCours || jetonPreparation) return;
     enCours = true;
     progression = null;
+    arreterHorloge();
     erreur = '';
+    let jeton: string | null = null;
     try {
       const donnees = new FormData();
       donnees.set('fichier', fichier);
       donnees.set('type_source', typeSource);
       donnees.set('contexte', contexte);
+      const controle = new AbortController();
+      controleEnvoi = controle;
       const reponse = await fetch('/api/transcripts-pdf/preparation', {
         method: 'POST',
         body: donnees,
+        signal: controle.signal,
       });
       const demande = await reponse.json();
+      if (!monte) return;
       if (!reponse.ok) throw new Error(demande.detail ?? 'Préparation impossible.');
-      progression = demande.progression;
-      let resultat = demande;
-      for (
-        let tentative = 0;
-        tentative < 900 && resultat.statut === 'en_cours';
-        tentative += 1
-      ) {
-        await new Promise((resoudre) => setTimeout(resoudre, 2000));
-        const suivi = await fetch(
-          `/api/transcripts-pdf/preparation/${demande.jeton}`
-        );
-        resultat = await suivi.json();
-        progression = resultat.progression;
-        if (!suivi.ok)
-          throw new Error(
-            resultat.detail ?? 'Préparation expirée. Réimportez le fichier.'
-          );
-      }
-      if (resultat.statut === 'echec') throw new Error(resultat.erreur);
-      if (resultat.statut !== 'termine')
-        throw new Error(
-          'Préparation toujours en cours. Vous pouvez réessayer le suivi.'
-        );
-      contenu = resultat.contenu;
-      contexte = resultat.contexte;
-      nomSource = resultat.nom_source;
-      dateEntretien = resultat.date_entretien ?? '';
-      locuteurs = resultat.locuteurs;
-      remplacements = resultat.remplacements;
+      jeton = demande.jeton;
+      jetonPreparation = jeton;
+      actualiserProgression(demande.progression);
     } catch (cause) {
-      if (progression) progression = { ...progression, phase: 'echec' };
+      if (!monte) return;
       erreur = cause instanceof Error ? cause.message : 'Préparation impossible.';
     } finally {
-      enCours = false;
+      controleEnvoi = null;
+      if (monte) enCours = false;
+    }
+    if (jeton) await suivrePreparation(jeton, true);
+  }
+
+  async function suivrePreparation(
+    jeton = jetonPreparation,
+    attendreAvantPremierPoll = false
+  ) {
+    if (!jeton || enCours) return;
+    enCours = true;
+    erreur = '';
+    try {
+      if (attendreAvantPremierPoll) await attendre(2000);
+      while (monte && jetonPreparation === jeton) {
+        const controle = new AbortController();
+        controleSuivi = controle;
+        let resultat: ResultatPreparation;
+        try {
+          resultat = await lirePreparation(
+            jeton,
+            (url, signal) => fetch(url, { signal }),
+            controle.signal
+          );
+        } finally {
+          if (controleSuivi === controle) controleSuivi = null;
+        }
+        if (!monte) return;
+        actualiserProgression(resultat.progression);
+        if (resultat.statut === 'echec') {
+          progression = { ...resultat.progression, phase: 'echec' };
+          jetonPreparation = null;
+          arreterHorloge();
+          erreur = resultat.erreur;
+          return;
+        }
+        if (resultat.statut === 'termine') {
+          contenu = resultat.contenu;
+          contexte = resultat.contexte;
+          nomSource = resultat.nom_source;
+          dateEntretien = resultat.date_entretien ?? '';
+          locuteurs = resultat.locuteurs;
+          remplacements = resultat.remplacements;
+          jetonPreparation = null;
+          arreterHorloge();
+          return;
+        }
+        await attendre(2000);
+      }
+    } catch (cause) {
+      if (!monte) return;
+      if (cause instanceof ErreurSuiviPreparation && cause.code === 'introuvable') {
+        jetonPreparation = null;
+        if (progression) progression = { ...progression, phase: 'echec' };
+        arreterHorloge();
+        erreur =
+          'La préparation a expiré ou est introuvable. Réimportez le fichier.';
+      } else {
+        erreur =
+          'Le suivi a été interrompu. Reprenez le suivi pour récupérer le résultat.';
+      }
+    } finally {
+      if (monte) enCours = false;
     }
   }
 
@@ -375,11 +482,19 @@
         class="fr-btn"
         disabled={!fichier ||
           enCours ||
+          jetonPreparation !== null ||
           (typeSource === 'produit' && (!projetsCharges || !selectionProjet))}
         onclick={preparer}
         >{enCours ? 'Préparation…' : 'Préparer et anonymiser'}</button
       >
-      {#if progression && enCours}
+      {#if jetonPreparation && !enCours}
+        <button
+          class="fr-btn fr-btn--secondary"
+          type="button"
+          onclick={() => suivrePreparation()}>Reprendre le suivi</button
+        >
+      {/if}
+      {#if progression && (enCours || jetonPreparation)}
         {@const pourcentage = pourcentageProgression(progression)}
         <div class="progression">
           <div

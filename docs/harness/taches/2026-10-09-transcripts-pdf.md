@@ -70,3 +70,9 @@ Permettre d’importer des entretiens utilisateurs et des retours BizDev en PDF,
 `ALBERT_PARALLELISME_ANONYMISATION` règle le plafond global du processus (défaut 8). Les préparations injectent le même exécuteur borné et fabriquent un adaptateur Albert distinct par groupe. Le résultat et les pseudonymes restent assemblés dans l’ordre source. En cas d’erreur, les tâches en attente sont annulées, les appels déjà commencés sont drainés sans réutiliser leurs réponses, et la préparation se termine en échec sans résultat partiel. La progression donne la liste triée des groupes actuellement actifs.
 
 Vérifications du lot : backend complet (267 passés, 2 ignorés, 100 % couverture, Ruff et mypy verts), frontend complet (60 tests, ESLint, Prettier et svelte-check verts). Revues architecture et Sol : acceptées. La mesure du débit Albert réel sous huit appels simultanés reste à effectuer après intégration dans la stack locale.
+
+## Reprise du suivi de préparation
+
+Le suivi conserve le jeton en mémoire après une interruption réseau. Les GET de suivi, lecture JSON comprise, expirent après 10 secondes; le bouton « Reprendre le suivi » ne relance jamais le POST. La durée continue localement depuis la dernière métadonnée serveur et les minuteries/requêtes sont annulées au démontage. Un POST tardif après démontage ne modifie pas l’état de l’interface. Une préparation terminale en échec ou un jeton introuvable libère le suivi et présente un message adapté.
+
+Vérification frontend après ce correctif : ESLint, Prettier, svelte-check (0 erreur, 0 avertissement) et Vitest (65 tests) réussis dans un conteneur jetable. La revue architecture/Sol a accepté le code sous réserve de ce dernier run vert. Aucun contrôle backend ni redémarrage backend n’est associé à ce lot.
