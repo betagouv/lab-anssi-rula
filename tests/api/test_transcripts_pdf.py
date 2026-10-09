@@ -295,7 +295,7 @@ def test_preparation_pdf_et_erreurs_de_traitement() -> None:
     assert resultat_echec.json()["erreur"] == "La préparation du transcript a échoué."
     assert resultat_echec.json()["progression"]["phase"] == "echec"
     assert resultat_echec.json()["progression"]["groupes_termines"] == 0
-    assert resultat_echec.json()["progression"]["groupe_en_cours"] == 1
+    assert resultat_echec.json()["progression"]["groupes_en_cours"] == []
 
 
 def test_progression_preparation_reste_liee_au_jeton() -> None:
@@ -473,7 +473,7 @@ def test_preparation_expire_et_limite_les_demandes() -> None:
             "phase": "en_attente",
             "groupes_termines": 0,
             "groupes_total": None,
-            "groupe_en_cours": None,
+            "groupes_en_cours": [],
         },
     }
     progression = client.get("/api/transcripts-pdf/preparation/running").json()

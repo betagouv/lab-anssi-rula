@@ -39,8 +39,8 @@ Permettre d’importer des entretiens utilisateurs et des retours BizDev en PDF,
 - Analyse transverse du produit synthétique : 5 besoins, 2 de source `transcript_produit` et 3 de source `transcript_bizdev`; la source BizDev reste sans projet et n’apparaît pas dans le scan du projet. Les appels d’analyse répétés ont retourné les résultats existants et n’ont pas augmenté le nombre de besoins.
 - Reprise du job synthétique d’analyse : le job resté en attente a été repris au démarrage du backend après correction de la factory manuelle qui recevait des objets `Depends` non résolus. L’analyse s’est terminée sans nouveau POST; les factories concrètes du worker et le journal d’erreur limité au type d’exception sont couverts.
 - Migration isolée : base vide, ancienne fixture à 22 migrations, deuxième exécution sans effet et rollback préservant table témoin vérifiés sur PostgreSQL dédié.
-- Harness backend isolé, avec environnement de test nettoyé : Ruff et format Ruff réussis, mypy sans erreur, 259 tests passés, 2 intégrations PostgreSQL ignorées par défaut, couverture 100 %. Le premier essai dans le conteneur d’application a utilisé une copie de tests sous `/app`; Uvicorn `--reload` a redémarré le worker et perdu le jeton de préparation actif. L’utilisateur a été informé et doit réimporter son PDF. Les exécutions suivantes ont utilisé des conteneurs jetables hors volume surveillé.
-- Frontend : 60 tests, Svelte sans erreur ni avertissement, ESLint, Prettier et build réussis. Navigation à cinq entrées vérifiée; le formulaire utilise `fr-upload-group`, champs DSFR, création de projet sans participant artificiel et progression basée sur les groupes validés. Le navigateur a nécessité un redémarrage du seul conteneur frontend pour vider le cache du bind Windows; le backend n’a pas été redémarré ensuite.
+- Harness backend isolé : `bash scripts/harness.sh complet --cible backend` réussi dans un conteneur jetable; Ruff et mypy verts, 267 tests passés, 2 intégrations PostgreSQL ignorées par défaut, couverture 100 %. Les tests du lot vérifient l’ordre source malgré les fins inversées, la limite globale partagée entre préparations, l’isolation des adaptateurs/métriques, l’annulation des groupes en file et la progression des groupes actifs.
+- Frontend : ESLint, Prettier, svelte-check (0 erreur, 0 avertissement) et Vitest (60 tests) réussis dans un conteneur jetable. Navigation à cinq entrées vérifiée; le formulaire utilise `fr-upload-group`, champs DSFR, création de projet sans participant artificiel et progression basée sur les groupes validés.
 - `bash scripts/harness.sh complet` : les commandes équivalentes ont passé dans des conteneurs jetables pour éviter le watcher de l’application active. Sur Windows, `uv` ne peut pas réutiliser le lien `.venv/lib64`; le conteneur jetable est le chemin de validation courant.
 - `bash scripts/harness.sh audit` : non requis sauf constat de risque.
 - `uv run ruff format --check src/ tests/` : 131 fichiers déjà formatés; réussite.
@@ -63,3 +63,10 @@ Permettre d’importer des entretiens utilisateurs et des retours BizDev en PDF,
 - Critères vérifiés : corrections backend de la revue, locuteurs, bail, verrous de révision, cinq entrées UI et contrôles finaux.
 - Remarques : la préparation Albert de bout en bout sur un PDF réel reste non validée; conserver cette limite visible dans la PR.
 - Verdict : PR brouillon, pas prête à merger; fusion réservée à la décision humaine.
+
+
+## Lot de parallélisation
+
+`ALBERT_PARALLELISME_ANONYMISATION` règle le plafond global du processus (défaut 8). Les préparations injectent le même exécuteur borné et fabriquent un adaptateur Albert distinct par groupe. Le résultat et les pseudonymes restent assemblés dans l’ordre source. En cas d’erreur, les tâches en attente sont annulées, les appels déjà commencés sont drainés sans réutiliser leurs réponses, et la préparation se termine en échec sans résultat partiel. La progression donne la liste triée des groupes actuellement actifs.
+
+Vérifications du lot : backend complet (267 passés, 2 ignorés, 100 % couverture, Ruff et mypy verts), frontend complet (60 tests, ESLint, Prettier et svelte-check verts). Revues architecture et Sol : acceptées. La mesure du débit Albert réel sous huit appels simultanés reste à effectuer après intégration dans la stack locale.

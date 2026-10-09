@@ -8,7 +8,7 @@ export type ProgressionPreparation = {
     | 'echec';
   groupes_termines: number;
   groupes_total: number | null;
-  groupe_en_cours: number | null;
+  groupes_en_cours: number[];
   duree_secondes: number;
 };
 

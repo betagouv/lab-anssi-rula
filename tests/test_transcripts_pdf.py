@@ -1,17 +1,21 @@
 import json
+from concurrent.futures import Future, ThreadPoolExecutor
 import logging
+from threading import Barrier, Event, Lock
 
 from io import BytesIO
 
 from datetime import date, datetime, timedelta
 
-from typing import Any, cast
+from typing import Any, Callable, TypeVar, cast
 
 
 import pytest
 
 from pypdf import PdfWriter
 
+
+from adaptateurs.albert import AdaptateurAlbert
 
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 
@@ -495,7 +499,7 @@ def test_preparation_accepte_un_role_indetermine() -> None:
 
 def test_preparation_emet_une_progression_monotone() -> None:
     texte = "Speaker_01: Alice"
-    evenements: list[tuple[str, int, int | None, int | None]] = []
+    evenements: list[tuple[str, int, int | None, list[int]]] = []
     service = ServicePreparationTranscript(
         AdaptateurAlbertDeTest().avec_reponses(
             _reponses_preparation(
@@ -516,15 +520,17 @@ def test_preparation_emet_une_progression_monotone() -> None:
     )
 
     assert evenements == [
-        ("extraction", 0, None, None),
-        ("anonymisation", 0, 1, 1),
-        ("anonymisation", 1, 1, None),
-        ("finalisation", 1, 1, None),
+        ("extraction", 0, None, []),
+        ("anonymisation", 0, 1, []),
+        ("anonymisation", 0, 1, [1]),
+        ("anonymisation", 0, 1, []),
+        ("anonymisation", 1, 1, []),
+        ("finalisation", 1, 1, []),
     ]
 
 
 def test_preparation_ne_compte_pas_le_groupe_en_echec() -> None:
-    evenements: list[tuple[str, int, int | None, int | None]] = []
+    evenements: list[tuple[str, int, int | None, list[int]]] = []
     service = ServicePreparationTranscript(
         AdaptateurAlbertDeTest().avec_erreur(ValueError("réponse privée")), "prompt"
     )
@@ -540,7 +546,13 @@ def test_preparation_ne_compte_pas_le_groupe_en_echec() -> None:
             ),
         )
 
-    assert evenements == [("extraction", 0, None, None), ("anonymisation", 0, 1, 1)]
+    assert evenements == [
+        ("extraction", 0, None, []),
+        ("anonymisation", 0, 1, []),
+        ("anonymisation", 0, 1, [1]),
+        ("anonymisation", 0, 1, []),
+        ("echec", 0, 1, []),
+    ]
 
 
 def test_preparation_ne_transmet_pas_un_fragment_sans_tokens() -> None:
@@ -969,3 +981,291 @@ def test_depot_memoire_signale_une_source_et_un_job_absents() -> None:
 
     with pytest.raises(ValueError, match="introuvable"):
         depot.creer_job(99)
+
+
+T = TypeVar("T")
+
+
+class ExecuteurSoumissionsDeTest(ThreadPoolExecutor):
+    def __init__(
+        self,
+        nombre_soumissions: int,
+        max_workers: int,
+        attendre_fin_premier: bool = False,
+    ):
+        super().__init__(max_workers=max_workers)
+        self.nombre_soumissions = nombre_soumissions
+        self.soumissions = 0
+        self.verrou_soumissions = Lock()
+        self.toutes_soumises = Event()
+        self.premier_termine = Event()
+        self.attendre_fin_premier = attendre_fin_premier
+
+    def submit(self, fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> Future[T]:
+        with self.verrou_soumissions:
+            self.soumissions += 1
+            if self.soumissions == self.nombre_soumissions:
+                self.toutes_soumises.set()
+
+        numero = args[0] if args else None
+
+        def executer() -> T:
+            if not self.toutes_soumises.wait(timeout=10):
+                raise TimeoutError
+            if self.attendre_fin_premier and numero == 2:
+                if not self.premier_termine.wait(timeout=10):
+                    raise TimeoutError
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                if numero == 1:
+                    self.premier_termine.set()
+
+        return super().submit(executer)
+
+
+class ObservateurGroupesDeTest:
+    def __init__(self, barriere: Barrier | None = None, retarder_premier: bool = False):
+        self.barriere = barriere
+        self.retour_groupe_deux = Event()
+        self.echec_groupe_un = Event()
+        self.groupe_deux_demarre = Event()
+        self.retarder_premier = retarder_premier
+        self.verrou = Lock()
+        self.actifs = 0
+        self.maximum_actifs = 0
+        self.termines: list[int] = []
+        self.adaptateurs: list[AdaptateurGroupesDeTest] = []
+        self.appels = 0
+
+    def enregistrer(self, adaptateur: "AdaptateurGroupesDeTest") -> None:
+        with self.verrou:
+            self.adaptateurs.append(adaptateur)
+
+    def debut(self) -> None:
+        with self.verrou:
+            self.actifs += 1
+            self.appels += 1
+            self.maximum_actifs = max(self.maximum_actifs, self.actifs)
+
+    def fin(self, numero: int) -> None:
+        with self.verrou:
+            self.actifs -= 1
+            self.termines.append(numero)
+        if numero == 2:
+            self.retour_groupe_deux.set()
+
+
+class AdaptateurGroupesDeTest(AdaptateurAlbert):
+    def __init__(self, observateur: ObservateurGroupesDeTest):
+        self.observateur = observateur
+        self.metriques_dernier_flux: dict[str, str] = {}
+        observateur.enregistrer(self)
+
+    def completer(
+        self, messages: list[dict[str, str]], temperature: float = 0.0
+    ) -> str:
+        contenu = json.loads(messages[1]["content"].split("FRAGMENTS:\n", 1)[1])
+        numero = contenu[0]["fragment_id"]
+        self.observateur.debut()
+        try:
+            if self.observateur.barriere is not None:
+                self.observateur.barriere.wait(timeout=10)
+            if self.observateur.retarder_premier and numero == 1:
+                if not self.observateur.retour_groupe_deux.wait(timeout=10):
+                    raise TimeoutError
+            remplacements = []
+            locuteurs = {}
+            for fragment in contenu:
+                speaker_id = fragment["speaker_id"]
+                if speaker_id:
+                    locuteurs[speaker_id] = {
+                        "role": "externe",
+                        "justification": "Les extraits indiquent un rôle externe.",
+                    }
+                for token in fragment["tokens"]:
+                    if token["contenu"] in {"Alice", "Bob"}:
+                        remplacements.append(
+                            {
+                                "categorie": "identite",
+                                "fragment_id": fragment["fragment_id"],
+                                "token_debut": token["token_id"],
+                                "token_fin": token["token_id"],
+                            }
+                        )
+            return json.dumps({"remplacements": remplacements, "locuteurs": locuteurs})
+        finally:
+            self.observateur.fin(numero)
+
+    def plonger(self, textes: list[str]) -> list[list[float]]:
+        return []
+
+
+def test_preparation_parallele_fusionne_dans_ordre_source_et_expose_groupes_actifs():
+    observateur = ObservateurGroupesDeTest(retarder_premier=True)
+    evenements: list[tuple[str, int, int | None, list[int]]] = []
+    texte = "Speaker_01: Alice " + "mot " * 1100 + "Bob"
+    with ThreadPoolExecutor(max_workers=2) as executeur:
+        service = ServicePreparationTranscript(
+            None,
+            "prompt",
+            executeur,
+            lambda: AdaptateurGroupesDeTest(observateur),
+        )
+        preparation = service.preparer(
+            "reunion.pdf",
+            _pdf(texte),
+            "produit",
+            "",
+            lambda phase, termines, total, actifs: evenements.append(
+                (phase, termines, total, actifs)
+            ),
+        )
+    assert observateur.maximum_actifs == 2
+    assert observateur.termines.index(2) < observateur.termines.index(1)
+    assert preparation.contenu.startswith("SPEAKER_01: [IDENTITE_01]")
+    assert preparation.contenu.endswith("[IDENTITE_02]")
+    assert any(actifs == [1, 2] for _, _, _, actifs in evenements)
+    assert evenements[-1] == ("finalisation", 3, 3, [])
+
+
+def test_preparations_partageant_un_executeur_respectent_la_borne_globale():
+    observateur = ObservateurGroupesDeTest(Barrier(2))
+    with ThreadPoolExecutor(max_workers=2) as executeur_groupes:
+        service = ServicePreparationTranscript(
+            None,
+            "prompt",
+            executeur_groupes,
+            lambda: AdaptateurGroupesDeTest(observateur),
+        )
+        with ThreadPoolExecutor(max_workers=2) as executeur_preparations:
+            travaux = [
+                executeur_preparations.submit(
+                    service.preparer,
+                    "reunion.pdf",
+                    _pdf("Speaker_01: Alice " + "mot " * 1100 + "Bob"),
+                    "produit",
+                    "",
+                )
+                for _ in range(2)
+            ]
+            for travail in travaux:
+                travail.result(timeout=15)
+    assert observateur.maximum_actifs == 2
+    assert observateur.actifs == 0
+    assert observateur.appels == 6
+    assert len(observateur.adaptateurs) == observateur.appels
+    assert (
+        len(
+            {
+                id(adaptateur.metriques_dernier_flux)
+                for adaptateur in observateur.adaptateurs
+            }
+        )
+        == observateur.appels
+    )
+
+
+def test_echec_annule_les_groupes_en_file_sans_appel_albert():
+    observateur = ObservateurGroupesDeTest()
+    evenements: list[tuple[str, int, int | None, list[int]]] = []
+
+    class AdaptateurAvecErreurDeTest(AdaptateurGroupesDeTest):
+        def completer(
+            self, messages: list[dict[str, str]], temperature: float = 0.0
+        ) -> str:
+            contenu = json.loads(messages[1]["content"].split("FRAGMENTS:\n", 1)[1])
+            if contenu[0]["fragment_id"] == 1:
+                self.observateur.debut()
+                try:
+                    raise ValueError("échec de groupe")
+                finally:
+                    self.observateur.fin(1)
+            return super().completer(messages, temperature)
+
+    texte = "Speaker_01: Alice " + "mot " * 1100 + "Bob"
+    with ExecuteurSoumissionsDeTest(
+        nombre_soumissions=3, max_workers=2, attendre_fin_premier=True
+    ) as executeur:
+        service = ServicePreparationTranscript(
+            None, "prompt", executeur, lambda: AdaptateurAvecErreurDeTest(observateur)
+        )
+        with pytest.raises(ValueError, match="échec de groupe"):
+            service.preparer(
+                "reunion.pdf",
+                _pdf(texte),
+                "produit",
+                "",
+                lambda phase, termines, total, actifs: evenements.append(
+                    (phase, termines, total, actifs)
+                ),
+            )
+    assert evenements[-1] == ("echec", 0, 3, [])
+    assert observateur.actifs == 0
+    assert observateur.appels == 1
+    assert len(observateur.adaptateurs) == 1
+
+
+def test_annulation_avant_fabrique_apres_activation_du_groupe():
+    observateur = ObservateurGroupesDeTest()
+    evenements: list[tuple[str, int, int | None, list[int]]] = []
+
+    class AdaptateurAvecErreurDeTest(AdaptateurGroupesDeTest):
+        def completer(
+            self, messages: list[dict[str, str]], temperature: float = 0.0
+        ) -> str:
+            contenu = json.loads(messages[1]["content"].split("FRAGMENTS:\n", 1)[1])
+            if contenu[0]["fragment_id"] == 1:
+                assert observateur.groupe_deux_demarre.wait(timeout=10)
+                observateur.echec_groupe_un.set()
+                raise ValueError("échec de groupe")
+            return super().completer(messages, temperature)
+
+    texte = "Speaker_01: Alice " + "mot " * 1100 + "Bob"
+    with ThreadPoolExecutor(max_workers=2) as executeur:
+        service = ServicePreparationTranscript(
+            None, "prompt", executeur, lambda: AdaptateurAvecErreurDeTest(observateur)
+        )
+
+        def suivre(
+            phase: str, termines: int, total: int | None, actifs: list[int]
+        ) -> None:
+            evenements.append((phase, termines, total, actifs))
+            if phase == "anonymisation" and actifs == [1, 2]:
+                observateur.groupe_deux_demarre.set()
+                assert observateur.echec_groupe_un.wait(timeout=10)
+
+        with pytest.raises(ValueError, match="échec de groupe"):
+            service.preparer("reunion.pdf", _pdf(texte), "produit", "", suivre)
+    assert evenements[-1] == ("echec", 0, 3, [])
+    assert observateur.appels == 0
+    assert len(observateur.adaptateurs) == 1
+
+
+def test_constructeur_exige_les_dependances_de_parallelisme():
+    with pytest.raises(ValueError, match="fabrique Albert est requise"):
+        ServicePreparationTranscript(None, "prompt")
+    with ThreadPoolExecutor(max_workers=1) as executeur:
+        with pytest.raises(ValueError, match="groupes parallèles nécessitent"):
+            ServicePreparationTranscript(AdaptateurAlbertDeTest(), "prompt", executeur)
+
+
+def test_echec_fabrique_ne_laisse_pas_de_groupe_actif():
+    evenements: list[tuple[str, int, int | None, list[int]]] = []
+
+    def fabrique() -> AdaptateurAlbert:
+        raise RuntimeError("échec de fabrique")
+
+    with ThreadPoolExecutor(max_workers=1) as executeur:
+        service = ServicePreparationTranscript(None, "prompt", executeur, fabrique)
+        with pytest.raises(RuntimeError, match="échec de fabrique"):
+            service.preparer(
+                "reunion.pdf",
+                _pdf("Speaker_01: Alice"),
+                "produit",
+                "",
+                lambda phase, termines, total, actifs: evenements.append(
+                    (phase, termines, total, actifs)
+                ),
+            )
+    assert evenements[-1] == ("echec", 0, 1, [])
