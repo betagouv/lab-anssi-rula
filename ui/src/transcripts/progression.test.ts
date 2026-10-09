@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dureeDepuisSoumission,
+  dureeLocale,
   libelleProgression,
   pourcentageProgression,
   type ProgressionPreparation,
@@ -46,5 +47,10 @@ describe('progression de préparation', () => {
     expect(dureeDepuisSoumission(17.9)).toBe('17 s');
     expect(dureeDepuisSoumission(125)).toBe('2 min 5 s');
     expect(dureeDepuisSoumission(-1)).toBe('0 s');
+  });
+
+  it('avance l’horloge locale depuis la dernière durée serveur', () => {
+    expect(dureeLocale(153, 10_000, 12_500)).toBe(155.5);
+    expect(dureeLocale(153, 10_000, 9_000)).toBe(153);
   });
 });
