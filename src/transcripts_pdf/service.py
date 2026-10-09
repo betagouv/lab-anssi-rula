@@ -1,6 +1,8 @@
+from concurrent.futures import CancelledError, Executor, as_completed
 import json
 import logging
 import re
+from threading import Event, Lock
 from typing import Callable, NamedTuple, TypedDict, cast
 from uuid import uuid4
 
@@ -207,9 +209,21 @@ class PreparationTranscript(NamedTuple):
 
 
 class ServicePreparationTranscript:
-    def __init__(self, albert: AdaptateurAlbert, prompt: str) -> None:
+    def __init__(
+        self,
+        albert: AdaptateurAlbert | None,
+        prompt: str,
+        executeur: Executor | None = None,
+        fabrique_albert: Callable[[], AdaptateurAlbert] | None = None,
+    ) -> None:
+        if albert is None and fabrique_albert is None:
+            raise ValueError("Une fabrique Albert est requise.")
+        if executeur is not None and fabrique_albert is None:
+            raise ValueError("Les groupes parallèles nécessitent une fabrique Albert.")
         self._albert = albert
         self._prompt = prompt
+        self._executeur = executeur
+        self._fabrique_albert = fabrique_albert
 
     def preparer(
         self,
@@ -217,12 +231,12 @@ class ServicePreparationTranscript:
         fichier: bytes,
         type_source: str,
         contexte: str,
-        progression: Callable[[str, int, int | None, int | None], None] | None = None,
+        progression: Callable[[str, int, int | None, list[int]], None] | None = None,
     ) -> PreparationTranscript:
         if type_source not in {"produit", "bizdev"}:
             raise ValueError("Type de source invalide.")
         if progression:
-            progression("extraction", 0, None, None)
+            progression("extraction", 0, None, [])
         texte, date_source = extraire_pdf(nom_fichier, fichier)
         locuteurs_origine = anonymiser_locuteurs(texte)[1]
         identifiants = dict(locuteurs_origine)
@@ -237,30 +251,52 @@ class ServicePreparationTranscript:
         ]
         groupes = _grouper_fragments(fragments)
         if progression:
-            progression("anonymisation", 0, len(groupes), 1 if groupes else None)
-        valeurs: list[PreparationLue] = []
-        remplacements_resolus: list[RemplacementResolu] = []
-        for numero_groupe, fragments_groupe in enumerate(groupes, 1):
+            progression("anonymisation", 0, len(groupes), [])
+        verrou = Lock()
+        annulation = Event()
+        actifs: set[int] = set()
+        termines = 0
+        resultats: list[
+            tuple[PreparationLue, list[RemplacementResolu], AdaptateurAlbert] | None
+        ] = [None for _ in groupes]
+
+        def notifier() -> None:
+            if progression:
+                progression("anonymisation", termines, len(groupes), sorted(actifs))
+
+        def traiter(
+            numero: int, fragments_groupe: list[Fragment]
+        ) -> tuple[PreparationLue, list[RemplacementResolu], AdaptateurAlbert]:
+            with verrou:
+                if annulation.is_set():
+                    raise CancelledError()
+                actifs.add(numero)
+                notifier()
             speakers_segment = {
                 fragment.speaker_id
                 for fragment in fragments_groupe
                 if fragment.champ == "transcript" and fragment.speaker_id
             }
             phase = "appel_albert"
-            fragments_json = json.dumps(
+            contenu_message = f"TYPE: {type_source}\nFRAGMENTS:\n" + json.dumps(
                 [_serialiser_fragment(fragment) for fragment in fragments_groupe],
                 ensure_ascii=False,
             )
-            contenu_message = f"TYPE: {type_source}\nFRAGMENTS:\n{fragments_json}"
             caracteres_serialises = len(contenu_message)
+            albert: AdaptateurAlbert | None = None
             try:
-                reponse = self._albert.completer_json_raisonnement_preparation(
+                if annulation.is_set():
+                    raise CancelledError()
+                albert = cast(
+                    AdaptateurAlbert,
+                    self._fabrique_albert()
+                    if self._fabrique_albert is not None
+                    else self._albert,
+                )
+                reponse = albert.completer_json_raisonnement_preparation(
                     [
                         {"role": "system", "content": self._prompt},
-                        {
-                            "role": "user",
-                            "content": contenu_message,
-                        },
+                        {"role": "user", "content": contenu_message},
                     ],
                     "preparation_transcript",
                     _schema_preparation(speakers_segment, fragments_groupe),
@@ -279,46 +315,106 @@ class ServicePreparationTranscript:
                         nombre_recu=len(valeur["locuteurs"]),
                     )
                 phase = "validation_remplacements"
-                remplacements_resolus.extend(
-                    _resoudre_remplacements(valeur["remplacements"], fragments_groupe)
+                remplacements = _resoudre_remplacements(
+                    valeur["remplacements"], fragments_groupe
                 )
             except Exception as erreur:
-                _journaliser_groupe(
-                    self._albert,
-                    numero_groupe,
-                    len(groupes),
-                    fragments_groupe,
-                    len(speakers_segment),
-                    erreur,
-                    phase,
-                    caracteres_serialises,
-                )
+                annulation.set()
+                if albert is not None:
+                    _journaliser_groupe(
+                        albert,
+                        numero,
+                        len(groupes),
+                        fragments_groupe,
+                        len(speakers_segment),
+                        erreur,
+                        phase,
+                        caracteres_serialises,
+                    )
                 raise
+            finally:
+                with verrou:
+                    actifs.discard(numero)
+                    notifier()
+            adaptateur = cast(AdaptateurAlbert, albert)
             _journaliser_groupe(
-                self._albert,
-                numero_groupe,
+                adaptateur,
+                numero,
                 len(groupes),
                 fragments_groupe,
                 len(speakers_segment),
                 None,
                 caracteres_serialises=caracteres_serialises,
             )
-            valeurs.append(valeur)
-            if progression:
-                progression(
-                    "anonymisation",
-                    numero_groupe,
-                    len(groupes),
-                    numero_groupe + 1 if numero_groupe < len(groupes) else None,
-                )
+            return valeur, remplacements, adaptateur
+
+        def terminer_groupe(
+            numero: int,
+            resultat: tuple[PreparationLue, list[RemplacementResolu], AdaptateurAlbert],
+        ) -> None:
+            nonlocal termines
+            with verrou:
+                resultats[numero - 1] = resultat
+                termines += 1
+                notifier()
+
+        if self._executeur is None:
+            try:
+                for numero, fragments_groupe in enumerate(groupes, 1):
+                    terminer_groupe(numero, traiter(numero, fragments_groupe))
+            except Exception:
+                if progression:
+                    progression("echec", termines, len(groupes), [])
+                raise
+        else:
+            futures = {
+                self._executeur.submit(traiter, numero, fragments_groupe): numero
+                for numero, fragments_groupe in enumerate(groupes, 1)
+            }
+            erreur_premiere: Exception | None = None
+            for future in as_completed(futures):
+                numero = futures[future]
+                if erreur_premiere is not None:
+                    try:
+                        future.result()
+                    except Exception:
+                        pass
+                    continue
+                try:
+                    resultat = future.result()
+                except CancelledError:
+                    continue
+                except Exception as erreur:
+                    erreur_premiere = erreur
+                    annulation.set()
+                    for autre in futures:
+                        if autre is not future:
+                            autre.cancel()
+                    continue
+                terminer_groupe(numero, resultat)
+            if erreur_premiere is not None:
+                if progression:
+                    progression("echec", termines, len(groupes), [])
+                raise erreur_premiere
+
+        valeurs = [resultat[0] for resultat in resultats if resultat is not None]
+        remplacements_resolus = [
+            remplacement
+            for resultat in resultats
+            if resultat is not None
+            for remplacement in resultat[1]
+        ]
+        dernier_albert = next(
+            resultat[2] for resultat in reversed(resultats) if resultat is not None
+        )
         if progression:
-            progression("finalisation", len(groupes), len(groupes), None)
+            progression("finalisation", termines, len(groupes), [])
         labels = locuteurs_origine
         try:
             remplacements = _positions_valides(remplacements_resolus, texte, contexte)
         except Exception as erreur:
             _journaliser_groupe(
-                self._albert,
+                dernier_albert,
                 len(groupes),
                 len(groupes),
                 groupes[-1],

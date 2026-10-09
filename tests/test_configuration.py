@@ -1,3 +1,8 @@
+import os
+from pathlib import Path
+import subprocess
+import sys
+
 from configuration import (
     Albert,
     BaseDeDonnees,
@@ -5,6 +10,7 @@ from configuration import (
     Correspondance,
     Rula,
     charge_configuration,
+    _valider_parallelisme_anonymisation,
 )
 
 
@@ -17,6 +23,7 @@ def test_valeurs_par_defaut():
     assert config.albert.max_completion_tokens_transcripts == 16384
     assert config.albert.temperature_transcripts == 1.0
     assert config.albert.top_p_transcripts == 1.0
+    assert config.albert.parallelisme_anonymisation == 8
     assert config.base_de_donnees.port == 5432
     assert config.base_de_donnees.nom == "rula"
     assert config.correspondance.seuil == 0.35
@@ -70,3 +77,30 @@ def test_configuration_accepte_les_variables_postgresql_clever_cloud(monkeypatch
         utilisateur="rula",
         mot_de_passe="mot-de-passe",
     )
+
+
+def test_configuration_refuse_un_parallelisme_non_positif():
+    import pytest
+
+    with pytest.raises(ValueError, match="doit être positif"):
+        _valider_parallelisme_anonymisation(0)
+
+
+def test_configuration_charge_parallelisme_depuis_lenvironnement():
+    code = (
+        "from configuration import charge_configuration; "
+        "print(charge_configuration().albert.parallelisme_anonymisation)"
+    )
+    resultat = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
+        env={
+            **os.environ,
+            "ALBERT_PARALLELISME_ANONYMISATION": "3",
+            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        },
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    assert resultat.stdout.strip() == "3"

@@ -33,6 +33,9 @@ routeur = APIRouter()
 _JOURNAL = logging.getLogger(__name__)
 _EXECUTEUR = ThreadPoolExecutor(max_workers=2)
 _EXECUTEUR_PREPARATION = ThreadPoolExecutor(max_workers=1)
+_EXECUTEUR_GROUPES_PREPARATION = ThreadPoolExecutor(
+    max_workers=charge_configuration().albert.parallelisme_anonymisation
+)
 _PREPARATIONS: dict[str, dict] = {}
 _TTL_PREPARATION = timedelta(minutes=30)
 _PROMPT = Path(__file__).parent.parent / "prompts"
@@ -62,8 +65,10 @@ def fabrique_depot_transcripts_pdf() -> DepotTranscriptsPdf:
 
 def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
     return ServicePreparationTranscript(
-        AdaptateurAlbertReel(charge_configuration().albert),
+        None,
         (_PROMPT / "anonymisation_transcript.md").read_text(),
+        executeur=_EXECUTEUR_GROUPES_PREPARATION,
+        fabrique_albert=lambda: AdaptateurAlbertReel(charge_configuration().albert),
     )
 
 
@@ -136,7 +141,7 @@ async def preparer(
             "phase": "en_attente",
             "groupes_termines": 0,
             "groupes_total": None,
-            "groupe_en_cours": None,
+            "groupes_en_cours": [],
         },
     }
     executeur.submit(
@@ -200,7 +205,7 @@ def _executer_preparation(
         phase: str,
         groupes_termines: int,
         groupes_total: int | None,
-        groupe_en_cours: int | None,
+        groupes_en_cours: list[int],
     ) -> None:
         if jeton in _PREPARATIONS:
             _PREPARATIONS[jeton]["progression"].update(
@@ -208,7 +213,7 @@ def _executer_preparation(
                     "phase": phase,
                     "groupes_termines": groupes_termines,
                     "groupes_total": groupes_total,
-                    "groupe_en_cours": groupe_en_cours,
+                    "groupes_en_cours": groupes_en_cours,
                 }
             )
 
@@ -232,18 +237,20 @@ def _executer_preparation(
                 "termine",
                 _PREPARATIONS[jeton]["progression"]["groupes_termines"],
                 _PREPARATIONS[jeton]["progression"]["groupes_total"],
-                None,
+                [],
             )
             _PREPARATIONS[jeton].update(statut="termine", resultat=resultat)
     except ErreurPdf as erreur:
         if jeton in _PREPARATIONS:
             _PREPARATIONS[jeton]["progression"].update(
-                phase="echec", groupe_en_cours=None
+                phase="echec", groupes_en_cours=[]
             )
             _PREPARATIONS[jeton].update(statut="echec", erreur=str(erreur))
     except Exception:
         if jeton in _PREPARATIONS:
-            _PREPARATIONS[jeton]["progression"].update(phase="echec")
+            _PREPARATIONS[jeton]["progression"].update(
+                phase="echec", groupes_en_cours=[]
+            )
             _PREPARATIONS[jeton].update(
                 statut="echec", erreur="La préparation du transcript a échoué."
             )

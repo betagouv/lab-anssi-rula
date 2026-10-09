@@ -406,8 +406,8 @@
             <p>
               Groupes analysés : {progression.groupes_termines} sur {progression.groupes_total}
             </p>
-            {#if progression.groupe_en_cours !== null}
-              <p>Groupe en cours : {progression.groupe_en_cours}</p>
+            {#if progression.groupes_en_cours.length > 0}
+              <p>Groupes en cours : {progression.groupes_en_cours.join(', ')}</p>
             {/if}
           {/if}
           <p>
