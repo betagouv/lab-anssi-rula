@@ -3,7 +3,9 @@ from datetime import date
 import pytest
 
 from projets.analyse import (
+    CorpusProjetModifie,
     EtapeAbsente,
+    EtapeAnalyse,
     EtapeInaccessible,
     ProjetSansEntretien,
     ServiceAnalyseProjet,
@@ -13,6 +15,28 @@ from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.projets.depot_projets_de_test import DepotProjetsDeTest
 from infra.memoire.depot_analyse import DepotAnalyseMemoire
 from projets.analyse import BlocPrompt
+
+
+class AdaptateurAlbertModifieCorpusDeTest(AdaptateurAlbertDeTest):
+    def __init__(self, depot: DepotProjetsDeTest, projet_id: int) -> None:
+        super().__init__()
+        self._depot = depot
+        self._projet_id = projet_id
+
+    def completer(
+        self, messages: list[dict[str, str]], temperature: float = 0.0
+    ) -> str:
+        self._depot.ajouter_entretien(
+            self._projet_id, "C", date(2026, 8, 26), "B", "Suite", ""
+        )
+        return "Résultat obsolète"
+
+
+class DepotAnalyseRefuseRevisionDeTest(DepotAnalyseMemoire):
+    def enregistrer_etape_si_revision(
+        self, projet_id: int, cle: str, prompt: str, brouillon: str, revision: int
+    ) -> EtapeAnalyse | None:
+        return None
 
 
 def test_assemble_les_blocs_dans_l_ordre_et_omet_les_vides() -> None:
@@ -71,6 +95,34 @@ def test_generation_exige_la_validation_de_l_etape_precedente() -> None:
 
     service.valider(projet.id, "scan-neutre")
     assert service.generer(projet.id, "points-a-retenir").brouillon == "Résultat"
+
+
+def test_refuse_enregistrer_une_etape_si_le_corpus_change_pendant_le_calcul() -> None:
+    projets = DepotProjetsDeTest()
+    projet = projets.ajouter(1, "Recherche", "")
+    projets.ajouter_entretien(projet.id, "A", date(2026, 8, 25), "B", "Texte", "")
+    service = ServiceAnalyseProjet(
+        projets,
+        DepotAnalyseMemoire(),
+        AdaptateurAlbertModifieCorpusDeTest(projets, projet.id),
+    )
+
+    with pytest.raises(CorpusProjetModifie):
+        service.generer(projet.id, "scan-neutre")
+
+
+def test_refuse_enregistrer_une_etape_si_le_depot_detecte_une_revision_obsolete() -> (
+    None
+):
+    projets = DepotProjetsDeTest()
+    projet = projets.ajouter(1, "Recherche", "")
+    projets.ajouter_entretien(projet.id, "A", date(2026, 8, 25), "B", "Texte", "")
+    service = ServiceAnalyseProjet(
+        projets, DepotAnalyseRefuseRevisionDeTest(), AdaptateurAlbertDeTest()
+    )
+
+    with pytest.raises(CorpusProjetModifie):
+        service.generer(projet.id, "scan-neutre")
 
 
 def test_refuse_projet_et_etape_inconnus_ou_sans_entretien() -> None:

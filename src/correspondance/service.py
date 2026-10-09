@@ -4,7 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from adaptateurs.albert import AdaptateurAlbert
-from correspondance.depot import Cle, Cluster, DepotCorrespondance, DepotCorrespondancesCalculees, Feature, Membre
+from correspondance.depot import (
+    Cle,
+    Cluster,
+    DepotCorrespondance,
+    DepotCorrespondancesCalculees,
+    Feature,
+    Membre,
+)
 
 
 @dataclass(frozen=True)
@@ -39,9 +46,12 @@ class ServiceCorrespondance:
         manquantes = self._depot.features_sans_embedding(produit_id)
         if manquantes:
             vecteurs = self._albert.plonger([f.texte for f in manquantes])
-            self._depot.enregistrer_embeddings([(f.source, f.id, v) for f, v in zip(manquantes, vecteurs)])
+            self._depot.enregistrer_embeddings(
+                [(f.source, f.id, v) for f, v in zip(manquantes, vecteurs)]
+            )
         clusters = self._regrouper(
-            self._depot.lister_features(produit_id), self._depot.paires_proches(self._seuil, produit_id)
+            self._depot.lister_features(produit_id),
+            self._depot.paires_proches(self._seuil, produit_id),
         )
         clusters = self._valider(clusters)
         clusters = self._nommer(clusters)
@@ -57,15 +67,21 @@ class ServiceCorrespondance:
                 continue
             contenu = "\n".join(f"{i}. {m.texte}" for i, m in enumerate(c.membres))
             try:
-                reponse = self._albert.completer([
-                    {"role": "system", "content": self._prompt_validation},
-                    {"role": "user", "content": contenu},
-                ])
+                reponse = self._albert.completer(
+                    [
+                        {"role": "system", "content": self._prompt_validation},
+                        {"role": "user", "content": contenu},
+                    ]
+                )
                 sous_groupes: list[list[int]] = json.loads(reponse.strip())
                 for indices in sous_groupes:
                     membres = [c.membres[i] for i in indices if 0 <= i < len(c.membres)]
                     if membres:
-                        result.append(Cluster(libelle="", occurrences=len(membres), membres=membres))
+                        result.append(
+                            Cluster(
+                                libelle="", occurrences=len(membres), membres=membres
+                            )
+                        )
             except (json.JSONDecodeError, ValueError, IndexError):
                 result.append(c)
         return result
@@ -77,7 +93,10 @@ class ServiceCorrespondance:
                 libelle = self._albert.completer(
                     [
                         {"role": "system", "content": self._prompt_libelle},
-                        {"role": "user", "content": "\n".join(f"- {m.texte}" for m in c.membres)},
+                        {
+                            "role": "user",
+                            "content": "\n".join(f"- {m.texte}" for m in c.membres),
+                        },
                     ]
                 ).strip()
             else:
@@ -88,10 +107,14 @@ class ServiceCorrespondance:
             if not libelle and c.membres:
                 libelle = c.membres[0].texte
 
-            result.append(Cluster(libelle=libelle, occurrences=c.occurrences, membres=c.membres))
+            result.append(
+                Cluster(libelle=libelle, occurrences=c.occurrences, membres=c.membres)
+            )
         return result
 
-    def _regrouper(self, features: list[Feature], paires: list[tuple[Cle, Cle]]) -> list[Cluster]:
+    def _regrouper(
+        self, features: list[Feature], paires: list[tuple[Cle, Cle]]
+    ) -> list[Cluster]:
         parent = {(f.source, f.id): (f.source, f.id) for f in features}
 
         def racine(c: Cle) -> Cle:
@@ -111,7 +134,9 @@ class ServiceCorrespondance:
             groupes[racine((f.source, f.id))].append(f)
         clusters = [
             Cluster(
-                libelle=max(membres, key=lambda f: (degre[(f.source, f.id)], -len(f.texte))).texte,
+                libelle=max(
+                    membres, key=lambda f: (degre[(f.source, f.id)], -len(f.texte))
+                ).texte,
                 occurrences=len(membres),
                 membres=[
                     Membre(

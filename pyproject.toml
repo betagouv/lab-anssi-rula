@@ -10,6 +10,7 @@ dependencies = [
     "pydantic",
     "python-multipart",
     "httpx",
+    "pypdf",
     "slowapi",
     "starlette",
 ]

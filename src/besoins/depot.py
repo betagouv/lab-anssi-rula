@@ -19,10 +19,17 @@ class BesoinDetecte(NamedTuple):
 
 class DepotBesoinsDetectes(ABC):
     @abstractmethod
-    def remplacer_source(self, source: str, besoins: list[tuple[int, str, str, str | None, int | None]], produit_id: int | None = None) -> list[BesoinDetecte]: ...
+    def remplacer_source(
+        self,
+        source: str,
+        besoins: list[tuple[int, str, str, str | None, int | None]],
+        produit_id: int | None = None,
+    ) -> list[BesoinDetecte]: ...
 
     @abstractmethod
-    def lister(self, source: str | None = None, produit_id: int | None = None) -> list[BesoinDetecte]: ...
+    def lister(
+        self, source: str | None = None, produit_id: int | None = None
+    ) -> list[BesoinDetecte]: ...
 
     @abstractmethod
     def restaurer(self, besoins: list[BesoinDetecte], produit_id: int) -> None: ...

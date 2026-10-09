@@ -1,5 +1,5 @@
 from adaptateurs.albert import AdaptateurAlbert
-from projets.depot import DepotProjets, ScanProjet
+from projets.depot import DepotProjets, ScanProjet, SourceAnalyseProjet
 
 
 class ProjetIntrouvable(ValueError):
@@ -7,6 +7,10 @@ class ProjetIntrouvable(ValueError):
 
 
 class ProjetDejaExistant(ValueError):
+    pass
+
+
+class CorpusProjetModifie(ValueError):
     pass
 
 
@@ -19,14 +23,14 @@ class ServiceScansProjets:
         self._prompt = prompt
 
     def generer(self, projet_id: int) -> ScanProjet:
-        entretiens = self._depot.lister_entretiens(projet_id)
-        if not self._depot.obtenir(projet_id):
+        projet = self._depot.obtenir(projet_id)
+        if not projet:
             raise ProjetIntrouvable
-        contenu = "\n\n".join(
-            f"## {e.participant}\n{e.contenu}\n{e.note_moderateur}" for e in entretiens
-        )
-        return self._depot.enregistrer_scan(
+        sources = self._depot.lister_sources_analyse(projet_id)
+        contenu = "\n\n".join(self._formater_source(source) for source in sources)
+        scan = self._depot.enregistrer_scan_si_revision(
             projet_id,
+            projet.revision_corpus,
             self._albert.completer(
                 [
                     {"role": "system", "content": self._prompt},
@@ -34,4 +38,22 @@ class ServiceScansProjets:
                 ],
                 temperature=0.3,
             ),
+        )
+        if scan is None:
+            raise CorpusProjetModifie
+        return scan
+
+    @staticmethod
+    def _formater_source(source: SourceAnalyseProjet) -> str:
+        if source.type_source == "ux":
+            return (
+                f"## {source.participant}\n{source.contenu}\n{source.note_moderateur}"
+            )
+        locuteurs = ", ".join(
+            f"{locuteur['identifiant']}: {locuteur['role']}"
+            for locuteur in source.locuteurs
+        )
+        return (
+            f"## Transcript {source.type_source} — {source.date_entretien}\n"
+            f"{locuteurs}\n{source.contexte}\n{source.contenu}"
         )

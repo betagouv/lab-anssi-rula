@@ -7,6 +7,7 @@ class Albert(NamedTuple):
     cle_api: str
     modele: str
     modele_embeddings: str
+    delai_transcripts: int = 180
 
 
 class Correspondance(NamedTuple):
@@ -56,6 +57,7 @@ def charge_configuration() -> Configuration:
             cle_api=os.environ.get("ALBERT_CLE_API", ""),
             modele=os.environ.get("ALBERT_MODELE", "openweight-medium"),
             modele_embeddings=os.environ.get("ALBERT_MODELE_EMBEDDINGS", "BAAI/bge-m3"),
+            delai_transcripts=int(os.environ.get("ALBERT_DELAI_TRANSCRIPTS", "180")),
         ),
         base_de_donnees=BaseDeDonnees(
             hote=_variable("DB_HOTE", "localhost", "POSTGRESQL_ADDON_HOST"),

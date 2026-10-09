@@ -8,7 +8,9 @@ class DepotTranscriptsMemoire(DepotTranscripts):
         self._transcripts: list[Transcript] = []
         self._prochain_id = 1
 
-    def ajouter(self, identite_id: int, produit_id: int, date_entretien: date, contenu: str) -> Transcript:
+    def ajouter(
+        self, identite_id: int, produit_id: int, date_entretien: date, contenu: str
+    ) -> Transcript:
         now = datetime.now()
         transcript = Transcript(
             id=self._prochain_id,
@@ -29,7 +31,14 @@ class DepotTranscriptsMemoire(DepotTranscripts):
     def obtenir(self, id: int) -> Transcript | None:
         return next((t for t in self._transcripts if t.id == id), None)
 
-    def modifier(self, id: int, identite_id: int, produit_id: int, date_entretien: date, contenu: str) -> Transcript | None:
+    def modifier(
+        self,
+        id: int,
+        identite_id: int,
+        produit_id: int,
+        date_entretien: date,
+        contenu: str,
+    ) -> Transcript | None:
         for i, t in enumerate(self._transcripts):
             if t.id == id:
                 updated = Transcript(

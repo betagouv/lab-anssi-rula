@@ -11,6 +11,7 @@ from configuration import charge_configuration
 from infra.postgres.depot_projets import DepotProjetsPostgres
 from infra.postgres.depot_analyse import DepotAnalysePostgres
 from projets.analyse import (
+    CorpusProjetModifie as CorpusEtapesModifie,
     DepotAnalyse,
     EtapeAbsente,
     EtapeInaccessible,
@@ -19,6 +20,7 @@ from projets.analyse import (
 )
 from projets.depot import DepotProjets
 from projets.service import (
+    CorpusProjetModifie as CorpusScanModifie,
     ProjetDejaExistant,
     ProjetIntrouvable,
     ServiceScansProjets,
@@ -255,7 +257,9 @@ def ajouter_source(
     if body.projet_id is not None:
         projet = depot.obtenir(body.projet_id)
         if not projet or projet.produit_id != produit_id:
-            raise HTTPException(status_code=404, detail="Projet introuvable pour ce produit.")
+            raise HTTPException(
+                status_code=404, detail="Projet introuvable pour ce produit."
+            )
         nom = None
         brief = ""
     else:
@@ -310,6 +314,10 @@ def generer_scan(
         return service.generer(id)._asdict()
     except ProjetIntrouvable:
         raise HTTPException(status_code=404)
+    except CorpusScanModifie as erreur:
+        raise HTTPException(
+            status_code=409, detail="Le corpus a changé pendant le scan."
+        ) from erreur
 
 
 @routeur.put("/projets/{id}/scan")
@@ -333,6 +341,10 @@ def valider_scan(
 
 
 def _erreur_analyse(erreur: ValueError) -> HTTPException:
+    if isinstance(erreur, CorpusEtapesModifie):
+        return HTTPException(
+            status_code=409, detail="Le corpus a changé pendant l’analyse."
+        )
     if isinstance(erreur, EtapeInaccessible):
         return HTTPException(
             status_code=409,

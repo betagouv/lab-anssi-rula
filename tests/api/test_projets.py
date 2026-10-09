@@ -22,6 +22,7 @@ from tests.projets.depot_projets_de_test import DepotProjetsDeTest
 from infra.memoire.depot_produits import DepotProduitsMemoire
 from infra.memoire.depot_analyse import DepotAnalyseMemoire
 from projets.analyse import ServiceAnalyseProjet
+from projets.analyse import CorpusProjetModifie
 from validation_transcript.service import ServiceValidationTranscript
 from serveur import app
 
@@ -61,6 +62,28 @@ def entretien_payload() -> dict:
 def test_nom_projet_vide_est_refuse() -> None:
     with pytest.raises(HTTPException, match="obligatoire"):
         _nom_projet("   ")
+
+
+def test_erreur_analyse_signale_un_corpus_obsolete() -> None:
+    assert _erreur_analyse(CorpusProjetModifie()).status_code == 409
+
+
+def test_api_refuse_un_scan_devenu_obsolete(contexte_projets) -> None:
+    client, depot, _ = contexte_projets()
+    projet = depot.ajouter(1, "Projet", "")
+    depot.ajouter_entretien(projet.id, "A", date(2026, 8, 25), "B", "Texte", "")
+
+    class AdaptateurAlbertObsoleteDeTest(AdaptateurAlbertDeTest):
+        def completer(
+            self, messages: list[dict[str, str]], temperature: float = 0.0
+        ) -> str:
+            depot.ajouter_entretien(projet.id, "C", date(2026, 8, 26), "B", "Suite", "")
+            return "Scan obsolète"
+
+    service = ServiceScansProjets(depot, AdaptateurAlbertObsoleteDeTest(), "prompt")
+    app.dependency_overrides[fabrique_service_scan] = lambda: service
+
+    assert client.post(f"/api/projets/{projet.id}/scan").status_code == 409
 
 
 def test_parcours_projet(contexte_projets) -> None:

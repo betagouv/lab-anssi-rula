@@ -23,5 +23,7 @@ def lister(depot: DepotIdentites = Depends(fabrique_depot_identites)) -> list[di
 
 
 @routeur.post("/identites", status_code=201)
-def ajouter(body: NouvelleIdentite, depot: DepotIdentites = Depends(fabrique_depot_identites)) -> dict:
+def ajouter(
+    body: NouvelleIdentite, depot: DepotIdentites = Depends(fabrique_depot_identites)
+) -> dict:
     return depot.ajouter(body.nom)._asdict()

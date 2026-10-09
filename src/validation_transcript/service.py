@@ -23,6 +23,9 @@ class ReponseValidationTranscriptInvalide(ReponseAlbertInvalide):
 _CATEGORIES = {
     "identite",
     "donnee_personnelle",
+    "coordonnees",
+    "organisation",
+    "secret",
     "donnee_sensible",
     "information_technique",
     "technologie_ou_produit",
@@ -57,13 +60,29 @@ class ServiceValidationTranscript:
         self._systeme_prompt = systeme_prompt
 
     def valider(self, contenu: str) -> ValidationTranscript:
-        reponse = self._albert.completer_json(
-            [
-                {"role": "system", "content": self._systeme_prompt},
-                {"role": "user", "content": contenu},
-            ],
-            "validation_transcript",
-            _SCHEMA,
+        return self._valider(contenu, False)
+
+    def valider_pdf(self, contenu: str) -> ValidationTranscript:
+        return self._valider(contenu, True)
+
+    def _valider(self, contenu: str, pdf: bool) -> ValidationTranscript:
+        messages = [
+            {"role": "system", "content": self._systeme_prompt},
+            {"role": "user", "content": contenu},
+        ]
+        reponse = (
+            self._albert.completer_json_raisonnement(
+                messages,
+                "validation_transcript_pdf",
+                _SCHEMA,
+                "high",
+            )
+            if pdf
+            else self._albert.completer_json(
+                messages,
+                "validation_transcript",
+                _SCHEMA,
+            )
         )
         try:
             valeur = json.loads(reponse)

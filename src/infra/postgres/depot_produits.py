@@ -3,7 +3,9 @@ from infra.postgres.depot_nomme import DepotNommePostgres
 from produits.depot import DepotProduits, Produit
 
 
-class DepotProduitsPostgres(DepotNommePostgres[Produit], DepotProduits):  # pragma: no cover
+class DepotProduitsPostgres(
+    DepotNommePostgres[Produit], DepotProduits
+):  # pragma: no cover
     def __init__(self, config: BaseDeDonnees) -> None:
         super().__init__(
             config,

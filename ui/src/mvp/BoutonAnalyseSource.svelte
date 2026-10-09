@@ -8,9 +8,10 @@
     <a href={`#/produits/${produitId}/sources/transcript`}
       >Entretiens utilisateurs UX</a
     >
-    <a href={`#/produits/${produitId}/sources/bizdev`}>CSV BizDev</a>
-    <a href={`#/produits/${produitId}/sources/featurebase`}>Demandes featuresBases</a
-    >
+    <a href={`#/produits/${produitId}/sources/bizdev`}>Tableur BizDev</a>
+    <a href={`#/produits/${produitId}/sources/featurebase`}>FeatureBase</a>
+    <a href={`#/produits/${produitId}/transcripts/produit`}>Transcripts produit</a>
+    <a href={`#/produits/${produitId}/transcripts/bizdev`}>Transcripts BizDev</a>
   </nav>
 </details>
 

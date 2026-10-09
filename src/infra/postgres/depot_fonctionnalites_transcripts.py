@@ -5,13 +5,17 @@ from fonctionnalites.depot import DepotFonctionnalitesTranscripts, Fonctionnalit
 from infra.connexion_base_de_donnees import avec_connexion
 
 
-class DepotFonctionnalitesTranscriptsPostgres(DepotFonctionnalitesTranscripts):  # pragma: no cover
+class DepotFonctionnalitesTranscriptsPostgres(
+    DepotFonctionnalitesTranscripts
+):  # pragma: no cover
     def __init__(self, config: BaseDeDonnees) -> None:
         self._config = config
         self._connexion: Any = None
 
     @avec_connexion
-    def ajouter_toutes(self, transcript_id: int, items: list[tuple[str, str | None]]) -> list[Fonctionnalite]:
+    def ajouter_toutes(
+        self, transcript_id: int, items: list[tuple[str, str | None]]
+    ) -> list[Fonctionnalite]:
         with self._connexion.cursor() as cur:
             cur.executemany(
                 "INSERT INTO fonctionnalites_transcripts (transcript_id, contenu, verbatim) VALUES (%s, %s, %s)",
@@ -26,10 +30,30 @@ class DepotFonctionnalitesTranscriptsPostgres(DepotFonctionnalitesTranscripts): 
                 "SELECT id, transcript_id, contenu, verbatim, cree_le FROM fonctionnalites_transcripts WHERE transcript_id = %s ORDER BY id",
                 (transcript_id,),
             )
-            return [Fonctionnalite(id=r[0], transcript_id=r[1], contenu=r[2], verbatim=r[3], cree_le=r[4]) for r in cur.fetchall()]
+            return [
+                Fonctionnalite(
+                    id=r[0],
+                    transcript_id=r[1],
+                    contenu=r[2],
+                    verbatim=r[3],
+                    cree_le=r[4],
+                )
+                for r in cur.fetchall()
+            ]
 
     @avec_connexion
     def lister(self) -> list[Fonctionnalite]:
         with self._connexion.cursor() as cur:
-            cur.execute("SELECT id, transcript_id, contenu, verbatim, cree_le FROM fonctionnalites_transcripts ORDER BY transcript_id, id")
-            return [Fonctionnalite(id=r[0], transcript_id=r[1], contenu=r[2], verbatim=r[3], cree_le=r[4]) for r in cur.fetchall()]
+            cur.execute(
+                "SELECT id, transcript_id, contenu, verbatim, cree_le FROM fonctionnalites_transcripts ORDER BY transcript_id, id"
+            )
+            return [
+                Fonctionnalite(
+                    id=r[0],
+                    transcript_id=r[1],
+                    contenu=r[2],
+                    verbatim=r[3],
+                    cree_le=r[4],
+                )
+                for r in cur.fetchall()
+            ]

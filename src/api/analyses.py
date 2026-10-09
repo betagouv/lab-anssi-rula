@@ -10,7 +10,9 @@ from configuration import charge_configuration
 from infra.postgres.depot_analyses_transcripts import DepotAnalysesTranscriptsPostgres
 from transcripts.depot import DepotTranscripts
 
-_systeme_prompt = (Path(__file__).parent.parent / "prompts" / "analyse_transcript.md").read_text()
+_systeme_prompt = (
+    Path(__file__).parent.parent / "prompts" / "analyse_transcript.md"
+).read_text()
 
 routeur = APIRouter()
 
@@ -32,7 +34,9 @@ def fabrique_service_analyse(
 
 
 @routeur.post("/analyses/transcripts/{transcript_id}", status_code=201)
-def analyser(transcript_id: int, service: ServiceAnalyse = Depends(fabrique_service_analyse)) -> dict:
+def analyser(
+    transcript_id: int, service: ServiceAnalyse = Depends(fabrique_service_analyse)
+) -> dict:
     try:
         return service.analyser(transcript_id)._asdict()
     except ValueError:
@@ -42,7 +46,9 @@ def analyser(transcript_id: int, service: ServiceAnalyse = Depends(fabrique_serv
 
 
 @routeur.get("/analyses/transcripts/{transcript_id}")
-def obtenir_analyse(transcript_id: int, service: ServiceAnalyse = Depends(fabrique_service_analyse)) -> dict:
+def obtenir_analyse(
+    transcript_id: int, service: ServiceAnalyse = Depends(fabrique_service_analyse)
+) -> dict:
     analyse = service.obtenir(transcript_id)
     if analyse is None:
         raise HTTPException(status_code=404)
@@ -50,5 +56,7 @@ def obtenir_analyse(transcript_id: int, service: ServiceAnalyse = Depends(fabriq
 
 
 @routeur.get("/analyses")
-def lister_analyses(service: ServiceAnalyse = Depends(fabrique_service_analyse)) -> list[dict]:
+def lister_analyses(
+    service: ServiceAnalyse = Depends(fabrique_service_analyse),
+) -> list[dict]:
     return [a._asdict() for a in service.lister()]
