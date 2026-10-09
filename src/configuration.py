@@ -7,6 +7,11 @@ class Albert(NamedTuple):
     cle_api: str
     modele: str
     modele_embeddings: str
+    delai_transcripts: int = 180
+    max_completion_tokens_transcripts: int = 16384
+    temperature_transcripts: float = 1.0
+    top_p_transcripts: float = 1.0
+    parallelisme_anonymisation: int = 8
 
 
 class Correspondance(NamedTuple):
@@ -42,6 +47,12 @@ def _variable(nom: str, defaut: str, *noms_secours: str) -> str:
     return defaut
 
 
+def _valider_parallelisme_anonymisation(valeur: int) -> int:
+    if valeur < 1:
+        raise ValueError("ALBERT_PARALLELISME_ANONYMISATION doit être positif.")
+    return valeur
+
+
 def charge_configuration() -> Configuration:
     return Configuration(
         rula=Rula(
@@ -56,6 +67,17 @@ def charge_configuration() -> Configuration:
             cle_api=os.environ.get("ALBERT_CLE_API", ""),
             modele=os.environ.get("ALBERT_MODELE", "openweight-medium"),
             modele_embeddings=os.environ.get("ALBERT_MODELE_EMBEDDINGS", "BAAI/bge-m3"),
+            delai_transcripts=int(os.environ.get("ALBERT_DELAI_TRANSCRIPTS", "180")),
+            max_completion_tokens_transcripts=int(
+                os.environ.get("ALBERT_MAX_COMPLETION_TOKENS_TRANSCRIPTS", "16384")
+            ),
+            temperature_transcripts=float(
+                os.environ.get("ALBERT_TEMPERATURE_TRANSCRIPTS", "1.0")
+            ),
+            top_p_transcripts=float(os.environ.get("ALBERT_TOP_P_TRANSCRIPTS", "1.0")),
+            parallelisme_anonymisation=_valider_parallelisme_anonymisation(
+                int(os.environ.get("ALBERT_PARALLELISME_ANONYMISATION", "8"))
+            ),
         ),
         base_de_donnees=BaseDeDonnees(
             hote=_variable("DB_HOTE", "localhost", "POSTGRESQL_ADDON_HOST"),

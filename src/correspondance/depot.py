@@ -30,21 +30,29 @@ class Cluster(NamedTuple):
 
 class DepotCorrespondance(ABC):
     @abstractmethod
-    def features_sans_embedding(self, produit_id: int | None = None) -> list[Feature]: ...
+    def features_sans_embedding(
+        self, produit_id: int | None = None
+    ) -> list[Feature]: ...
 
     @abstractmethod
-    def enregistrer_embeddings(self, items: list[tuple[str, int, list[float]]]) -> None: ...
+    def enregistrer_embeddings(
+        self, items: list[tuple[str, int, list[float]]]
+    ) -> None: ...
 
     @abstractmethod
     def lister_features(self, produit_id: int | None = None) -> list[Feature]: ...
 
     @abstractmethod
-    def paires_proches(self, seuil: float, produit_id: int | None = None) -> list[tuple[Cle, Cle]]: ...
+    def paires_proches(
+        self, seuil: float, produit_id: int | None = None
+    ) -> list[tuple[Cle, Cle]]: ...
 
 
 class DepotCorrespondancesCalculees(ABC):
     @abstractmethod
-    def sauvegarder(self, clusters: list[Cluster], produit_id: int | None = None) -> None: ...
+    def sauvegarder(
+        self, clusters: list[Cluster], produit_id: int | None = None
+    ) -> None: ...
 
     @abstractmethod
     def charger(self, produit_id: int | None = None) -> list[Cluster]: ...

@@ -12,7 +12,9 @@ class DepotTranscriptsPostgres(DepotTranscripts):  # pragma: no cover
         self._connexion: Any = None
 
     @avec_connexion
-    def ajouter(self, identite_id: int, produit_id: int, date_entretien: date, contenu: str) -> Transcript:
+    def ajouter(
+        self, identite_id: int, produit_id: int, date_entretien: date, contenu: str
+    ) -> Transcript:
         with self._connexion.cursor() as cur:
             cur.execute(
                 """
@@ -24,18 +26,31 @@ class DepotTranscriptsPostgres(DepotTranscripts):  # pragma: no cover
             )
             row = cur.fetchone()
             return Transcript(
-                id=row[0], identite_id=row[1], produit_id=row[2],
-                date_entretien=row[3], contenu=row[4], cree_le=row[5], modifie_le=row[6],
+                id=row[0],
+                identite_id=row[1],
+                produit_id=row[2],
+                date_entretien=row[3],
+                contenu=row[4],
+                cree_le=row[5],
+                modifie_le=row[6],
             )
 
     @avec_connexion
     def lister(self) -> list[Transcript]:
         with self._connexion.cursor() as cur:
             cur.execute(
-                "SELECT id, identite_id, produit_id, date_entretien, contenu, cree_le, modifie_le FROM transcripts ORDER BY cree_le DESC"
+                "SELECT id, identite_id, produit_id, date_entretien, contenu, cree_le, modifie_le FROM transcripts WHERE type_source = 'ux' ORDER BY cree_le DESC"
             )
             return [
-                Transcript(id=r[0], identite_id=r[1], produit_id=r[2], date_entretien=r[3], contenu=r[4], cree_le=r[5], modifie_le=r[6])
+                Transcript(
+                    id=r[0],
+                    identite_id=r[1],
+                    produit_id=r[2],
+                    date_entretien=r[3],
+                    contenu=r[4],
+                    cree_le=r[5],
+                    modifie_le=r[6],
+                )
                 for r in cur.fetchall()
             ]
 
@@ -43,22 +58,37 @@ class DepotTranscriptsPostgres(DepotTranscripts):  # pragma: no cover
     def obtenir(self, id: int) -> Transcript | None:
         with self._connexion.cursor() as cur:
             cur.execute(
-                "SELECT id, identite_id, produit_id, date_entretien, contenu, cree_le, modifie_le FROM transcripts WHERE id = %s",
+                "SELECT id, identite_id, produit_id, date_entretien, contenu, cree_le, modifie_le FROM transcripts WHERE id = %s AND type_source = 'ux'",
                 (id,),
             )
             row = cur.fetchone()
             if row is None:
                 return None
-            return Transcript(id=row[0], identite_id=row[1], produit_id=row[2], date_entretien=row[3], contenu=row[4], cree_le=row[5], modifie_le=row[6])
+            return Transcript(
+                id=row[0],
+                identite_id=row[1],
+                produit_id=row[2],
+                date_entretien=row[3],
+                contenu=row[4],
+                cree_le=row[5],
+                modifie_le=row[6],
+            )
 
     @avec_connexion
-    def modifier(self, id: int, identite_id: int, produit_id: int, date_entretien: date, contenu: str) -> Transcript | None:
+    def modifier(
+        self,
+        id: int,
+        identite_id: int,
+        produit_id: int,
+        date_entretien: date,
+        contenu: str,
+    ) -> Transcript | None:
         with self._connexion.cursor() as cur:
             cur.execute(
                 """
                 UPDATE transcripts
                 SET identite_id = %s, produit_id = %s, date_entretien = %s, contenu = %s, modifie_le = NOW()
-                WHERE id = %s
+                WHERE id = %s AND type_source = 'ux'
                 RETURNING id, identite_id, produit_id, date_entretien, contenu, cree_le, modifie_le
                 """,
                 (identite_id, produit_id, date_entretien, contenu, id),
@@ -66,10 +96,21 @@ class DepotTranscriptsPostgres(DepotTranscripts):  # pragma: no cover
             row = cur.fetchone()
             if row is None:
                 return None
-            return Transcript(id=row[0], identite_id=row[1], produit_id=row[2], date_entretien=row[3], contenu=row[4], cree_le=row[5], modifie_le=row[6])
+            return Transcript(
+                id=row[0],
+                identite_id=row[1],
+                produit_id=row[2],
+                date_entretien=row[3],
+                contenu=row[4],
+                cree_le=row[5],
+                modifie_le=row[6],
+            )
 
     @avec_connexion
     def supprimer(self, id: int) -> bool:
         with self._connexion.cursor() as cur:
-            cur.execute("DELETE FROM transcripts WHERE id = %s RETURNING id", (id,))
+            cur.execute(
+                "DELETE FROM transcripts WHERE id = %s AND type_source = 'ux' RETURNING id",
+                (id,),
+            )
             return cur.fetchone() is not None

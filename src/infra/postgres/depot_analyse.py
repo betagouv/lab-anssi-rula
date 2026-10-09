@@ -31,7 +31,10 @@ class DepotAnalysePostgres(DepotAnalyse):  # pragma: no cover
     @avec_connexion
     def configuration_existe(self, projet_id: int) -> bool:
         with self._connexion.cursor() as cur:
-            cur.execute("SELECT EXISTS (SELECT 1 FROM prompts_projets WHERE projet_id = %s)", (projet_id,))
+            cur.execute(
+                "SELECT EXISTS (SELECT 1 FROM prompts_projets WHERE projet_id = %s)",
+                (projet_id,),
+            )
             return cur.fetchone()[0]
 
     @avec_connexion
@@ -39,10 +42,15 @@ class DepotAnalysePostgres(DepotAnalyse):  # pragma: no cover
         self, projet_id: int, blocs: list[BlocPrompt]
     ) -> list[BlocPrompt]:
         with self._connexion.cursor() as cur:
-            cur.execute("DELETE FROM prompts_projets WHERE projet_id = %s", (projet_id,))
+            cur.execute(
+                "DELETE FROM prompts_projets WHERE projet_id = %s", (projet_id,)
+            )
             cur.executemany(
                 "INSERT INTO prompts_projets (projet_id, cle, libelle, contenu, ordre) VALUES (%s, %s, %s, %s, %s)",
-                [(projet_id, bloc.cle, bloc.libelle, bloc.contenu, bloc.ordre) for bloc in blocs],
+                [
+                    (projet_id, bloc.cle, bloc.libelle, bloc.contenu, bloc.ordre)
+                    for bloc in blocs
+                ],
             )
         return blocs
 
@@ -86,12 +94,62 @@ class DepotAnalysePostgres(DepotAnalyse):  # pragma: no cover
             )
             return EtapeAnalyse(*cur.fetchone())
 
+    def _revision_verrouillee(
+        self, curseur: Any, projet_id: int, revision: int
+    ) -> bool:
+        curseur.execute(
+            "SELECT revision_corpus FROM projets_recherche WHERE id = %s FOR UPDATE",
+            (projet_id,),
+        )
+        projet = curseur.fetchone()
+        return projet is not None and projet[0] == revision
+
     @avec_connexion
-    def modifier_etape(self, projet_id: int, cle: str, brouillon: str) -> EtapeAnalyse | None:
+    def enregistrer_etape_si_revision(
+        self, projet_id: int, cle: str, prompt: str, brouillon: str, revision: int
+    ) -> EtapeAnalyse | None:
+        with self._connexion.cursor() as cur:
+            if not self._revision_verrouillee(cur, projet_id, revision):
+                return None
+            cur.execute(
+                """UPDATE etapes_analyses SET prompt = %s, brouillon = %s, valide = NULL,
+                   statut = 'brouillon', modifie_le = NOW()
+                   WHERE projet_id = %s AND cle = %s AND EXISTS (
+                       SELECT 1 FROM projets_recherche WHERE id = %s AND revision_corpus = %s
+                   ) RETURNING projet_id, cle, libelle, ordre, prompt, brouillon, valide,
+                             statut, cree_le, modifie_le""",
+                (prompt, brouillon, projet_id, cle, projet_id, revision),
+            )
+            row = cur.fetchone()
+            return EtapeAnalyse(*row) if row else None
+
+    @avec_connexion
+    def modifier_etape(
+        self, projet_id: int, cle: str, brouillon: str
+    ) -> EtapeAnalyse | None:
         with self._connexion.cursor() as cur:
             cur.execute(
                 "UPDATE etapes_analyses SET brouillon = %s, valide = NULL, statut = 'brouillon', modifie_le = NOW() WHERE projet_id = %s AND cle = %s RETURNING projet_id, cle, libelle, ordre, prompt, brouillon, valide, statut, cree_le, modifie_le",
                 (brouillon, projet_id, cle),
+            )
+            row = cur.fetchone()
+            return EtapeAnalyse(*row) if row else None
+
+    @avec_connexion
+    def modifier_etape_si_revision(
+        self, projet_id: int, cle: str, brouillon: str, revision: int
+    ) -> EtapeAnalyse | None:
+        with self._connexion.cursor() as cur:
+            if not self._revision_verrouillee(cur, projet_id, revision):
+                return None
+            cur.execute(
+                """UPDATE etapes_analyses SET brouillon = %s, valide = NULL,
+                   statut = 'brouillon', modifie_le = NOW()
+                   WHERE projet_id = %s AND cle = %s AND EXISTS (
+                       SELECT 1 FROM projets_recherche WHERE id = %s AND revision_corpus = %s
+                   ) RETURNING projet_id, cle, libelle, ordre, prompt, brouillon, valide,
+                             statut, cree_le, modifie_le""",
+                (brouillon, projet_id, cle, projet_id, revision),
             )
             row = cur.fetchone()
             return EtapeAnalyse(*row) if row else None
@@ -102,6 +160,25 @@ class DepotAnalysePostgres(DepotAnalyse):  # pragma: no cover
             cur.execute(
                 "UPDATE etapes_analyses SET valide = brouillon, statut = 'validee', modifie_le = NOW() WHERE projet_id = %s AND cle = %s AND brouillon IS NOT NULL RETURNING projet_id, cle, libelle, ordre, prompt, brouillon, valide, statut, cree_le, modifie_le",
                 (projet_id, cle),
+            )
+            row = cur.fetchone()
+            return EtapeAnalyse(*row) if row else None
+
+    @avec_connexion
+    def valider_etape_si_revision(
+        self, projet_id: int, cle: str, revision: int
+    ) -> EtapeAnalyse | None:
+        with self._connexion.cursor() as cur:
+            if not self._revision_verrouillee(cur, projet_id, revision):
+                return None
+            cur.execute(
+                """UPDATE etapes_analyses SET valide = brouillon, statut = 'validee',
+                   modifie_le = NOW() WHERE projet_id = %s AND cle = %s
+                   AND brouillon IS NOT NULL AND EXISTS (
+                       SELECT 1 FROM projets_recherche WHERE id = %s AND revision_corpus = %s
+                   ) RETURNING projet_id, cle, libelle, ordre, prompt, brouillon, valide,
+                             statut, cree_le, modifie_le""",
+                (projet_id, cle, projet_id, revision),
             )
             row = cur.fetchone()
             return EtapeAnalyse(*row) if row else None

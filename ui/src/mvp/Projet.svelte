@@ -106,6 +106,9 @@
         <button class="menu-lien" type="button" onclick={() => (ouvert = true)}
           >Ajouter un transcript</button
         >
+        <a href={'#/projets/' + projet.id + '/transcripts/produit'}
+          >Importer un transcript produit PDF</a
+        >
         <a href={'#/projets/' + projet.id + '/sources/bizdev'}
           >Importer des entretiens BizDev</a
         >

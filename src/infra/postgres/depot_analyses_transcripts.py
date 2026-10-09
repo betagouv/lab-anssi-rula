@@ -18,7 +18,9 @@ class DepotAnalysesTranscriptsPostgres(DepotAnalysesTranscripts):  # pragma: no 
                 (transcript_id, contenu),
             )
             row = cur.fetchone()
-            return AnalyseTranscript(id=row[0], transcript_id=row[1], contenu=row[2], cree_le=row[3])
+            return AnalyseTranscript(
+                id=row[0], transcript_id=row[1], contenu=row[2], cree_le=row[3]
+            )
 
     @avec_connexion
     def obtenir_par_transcript(self, transcript_id: int) -> AnalyseTranscript | None:
@@ -30,7 +32,9 @@ class DepotAnalysesTranscriptsPostgres(DepotAnalysesTranscripts):  # pragma: no 
             row = cur.fetchone()
             if row is None:
                 return None
-            return AnalyseTranscript(id=row[0], transcript_id=row[1], contenu=row[2], cree_le=row[3])
+            return AnalyseTranscript(
+                id=row[0], transcript_id=row[1], contenu=row[2], cree_le=row[3]
+            )
 
     @avec_connexion
     def lister(self) -> list[AnalyseTranscript]:
@@ -39,6 +43,8 @@ class DepotAnalysesTranscriptsPostgres(DepotAnalysesTranscripts):  # pragma: no 
                 "SELECT id, transcript_id, contenu, cree_le FROM analyses_transcripts ORDER BY cree_le DESC"
             )
             return [
-                AnalyseTranscript(id=r[0], transcript_id=r[1], contenu=r[2], cree_le=r[3])
+                AnalyseTranscript(
+                    id=r[0], transcript_id=r[1], contenu=r[2], cree_le=r[3]
+                )
                 for r in cur.fetchall()
             ]

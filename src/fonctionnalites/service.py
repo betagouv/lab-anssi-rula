@@ -29,7 +29,10 @@ class ServiceFonctionnalites:
         if self._depot_fonctionnalites.obtenir_par_transcript(transcript_id):
             raise FonctionnalitesDejaExistantes
         reponse = self._albert.completer(
-            [{"role": "system", "content": self._systeme_prompt}, {"role": "user", "content": t.contenu}],
+            [
+                {"role": "system", "content": self._systeme_prompt},
+                {"role": "user", "content": t.contenu},
+            ],
             temperature=0.1,
         )
         items = [(r["fonctionnalite"], r.get("verbatim")) for r in json.loads(reponse)]

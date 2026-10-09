@@ -113,18 +113,28 @@ def test_import_featurebase_sans_projet_est_scopé_produit(contexte_sources) -> 
     assert projets.lister(1) == []
 
 
-def test_import_produit_refuse_csv_invalide_et_produit_inconnu(contexte_sources) -> None:
+def test_import_produit_refuse_csv_invalide_et_produit_inconnu(
+    contexte_sources,
+) -> None:
     client, _, _, _ = contexte_sources
-    assert client.post(
-        "/api/produits/1/sources/featurebase",
-        data={"produit_seul": "true"},
-        files={"fichier": ("idees.csv", b"Titre,Nombre\nA,1\n", "text/csv")},
-    ).status_code == 400
-    assert client.post(
-        "/api/produits/99/sources/bizdev",
-        data={"produit_seul": "true"},
-        files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
-    ).status_code == 404
+    assert (
+        client.post(
+            "/api/produits/1/sources/featurebase",
+            data={"produit_seul": "true"},
+            files={"fichier": ("idees.csv", b"Titre,Nombre\nA,1\n", "text/csv")},
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/api/produits/99/sources/bizdev",
+            data={"produit_seul": "true"},
+            files={"fichier": ("retours.csv", CSV_BIZDEV.encode(), "text/csv")},
+        ).status_code
+        == 404
+    )
+
+
 def test_import_featurebase_cree_un_projet(contexte_sources) -> None:
     client, _, projets, _ = contexte_sources
     reponse = client.post(

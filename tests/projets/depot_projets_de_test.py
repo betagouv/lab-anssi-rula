@@ -1,6 +1,13 @@
 from datetime import date, datetime
 
-from projets.depot import DepotProjets, Entretien, Projet, ScanProjet, SourceProjet
+from projets.depot import (
+    DepotProjets,
+    Entretien,
+    Projet,
+    ScanProjet,
+    SourceAnalyseProjet,
+    SourceProjet,
+)
 from projets.service import ProjetDejaExistant
 
 
@@ -58,6 +65,7 @@ class DepotProjetsDeTest(DepotProjets):
             datetime.now(),
         )
         self.entretiens.append(entretien)
+        self._invalider_projet(projet_id)
         return entretien
 
     def ajouter_source(
@@ -94,6 +102,22 @@ class DepotProjetsDeTest(DepotProjets):
             if entretien.projet_id == projet_id
         ]
 
+    def lister_sources_analyse(self, projet_id: int) -> list[SourceAnalyseProjet]:
+        return [
+            SourceAnalyseProjet(
+                entretien.id,
+                "ux",
+                entretien.participant,
+                entretien.date_entretien,
+                entretien.moderateur,
+                entretien.contenu,
+                entretien.note_moderateur,
+                "",
+                [],
+            )
+            for entretien in self.lister_entretiens(projet_id)
+        ]
+
     def obtenir_entretien(self, projet_id: int, entretien_id: int) -> Entretien | None:
         return next(
             (
@@ -108,6 +132,16 @@ class DepotProjetsDeTest(DepotProjets):
         scan = ScanProjet(projet_id, brouillon, None, datetime.now(), datetime.now())
         self.scans[projet_id] = scan
         return scan
+
+    def enregistrer_scan_si_revision(
+        self, projet_id: int, revision: int, brouillon: str
+    ) -> ScanProjet | None:
+        projet = self.obtenir(projet_id)
+        return (
+            self.enregistrer_scan(projet_id, brouillon)
+            if projet and projet.revision_corpus == revision
+            else None
+        )
 
     def obtenir_scan(self, projet_id: int) -> ScanProjet | None:
         return self.scans.get(projet_id)
@@ -127,3 +161,11 @@ class DepotProjetsDeTest(DepotProjets):
         )
         self.scans[projet_id] = valide
         return valide
+
+    def _invalider_projet(self, projet_id: int) -> None:
+        projet = self.obtenir(projet_id)
+        if projet:
+            self.projets[self.projets.index(projet)] = projet._replace(
+                revision_corpus=projet.revision_corpus + 1
+            )
+        self.scans.pop(projet_id, None)

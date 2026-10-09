@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from configuration import BaseDeDonnees
@@ -85,73 +86,19 @@ def test_script_execute_les_migrations(monkeypatch):
     assert appels == [config]
 
 
-def test_refonte_mvp_reinitialise_et_recree_le_catalogue() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "015_refonte_mvp_produits.sql"
-    ).read_text()
+def test_une_migration_unifiee_remplace_les_migrations_historiques() -> None:
+    racine = Path(__file__).parents[1]
+    chemins = list((racine / "migrations").glob("*.sql"))
+    historique = json.loads(
+        (racine / "tests" / "fixtures" / "migrations_legacy.json").read_text()
+    )
+    contenu = chemins[0].read_text()
 
-    assert "TRUNCATE analyses" in contenu
-    assert "retours_bizdev" in contenu
-    assert "idees_featurebase" in contenu
-
-
-def test_projets_uniques_reinitialise_la_base_locale() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "016_projets_uniques_reset.sql"
-    ).read_text()
-
-    assert "TRUNCATE analyses" in contenu
-    assert "scans_projets" in contenu
-    assert "lower(btrim(nom))" in contenu
-    assert "INSERT INTO produits (nom) VALUES ('MQC'), ('MSC'), ('MSS')" in contenu
-
-
-def test_prompts_et_etapes_sont_migres() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "017_prompts_etapes.sql"
-    ).read_text()
-
-    assert "CREATE TABLE prompts_produits" in contenu
-    assert "CREATE TABLE prompts_projets" in contenu
-    assert "CREATE TABLE etapes_analyses" in contenu
-    assert "contexte_produit" in contenu
-
-    statut = (
-        Path(__file__).parents[1] / "migrations" / "018_statut_etapes.sql"
-    ).read_text()
-    assert "ADD COLUMN IF NOT EXISTS statut" in statut
-
-
-def test_sources_csv_peuvent_etre_rattachees_a_un_projet() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "019_sources_projets.sql"
-    ).read_text()
-
-    assert "retours_bizdev" in contenu and "projet_id" in contenu
-    assert "idees_featurebase" in contenu and "projet_id" in contenu
-    assert "produit_projet_idx" in contenu
-
-
-def test_analyse_transverse_ajoute_le_perimetre_produit() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "020_analyse_transverse_produit.sql"
-    ).read_text()
-    assert "ADD COLUMN IF NOT EXISTS produit_id" in contenu
-    assert "backfill" not in contenu.lower()
-    assert "features_embeddables" in contenu
-    assert "jsonb_array_elements" in contenu
-
-
-def test_analyse_transverse_conserve_la_date_du_calcul() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "021_calculs_transverses.sql"
-    ).read_text()
-    assert "calculs_transverses" in contenu
-
-
-def test_entretiens_de_projet_sont_rattaches_a_leur_produit() -> None:
-    contenu = (
-        Path(__file__).parents[1] / "migrations" / "022_transcripts_produit.sql"
-    ).read_text()
-    assert "SET produit_id = p.produit_id" in contenu
-    assert "t.projet_id = p.id" in contenu
+    assert [chemin.name for chemin in chemins] == ["001_schema_unifie.sql"]
+    assert len(historique) == 22
+    assert "migrations_executees" not in contenu
+    assert "DROP TABLE IF EXISTS calculs_transverses" in contenu
+    assert "CREATE TABLE jobs_analyse_transcripts" in contenu
+    assert "type_source IN ('ux', 'produit', 'bizdev')" in contenu
+    assert "FOREIGN KEY (projet_id, produit_id)" in contenu
+    assert "TRUNCATE" not in contenu

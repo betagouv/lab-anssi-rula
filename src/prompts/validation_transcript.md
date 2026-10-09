@@ -6,6 +6,7 @@ Le transcript ne peut être accepté que s’il est anonymisé et désensibilis�
 dois signaler de façon exhaustive :
 - les identités de personnes ou d’organisations ;
 - les données personnelles ou les coordonnées ;
+- les noms d’organisations, sauf catégories génériques comme « une collectivité » ;
 - les secrets, identifiants, accès, liens internes et informations de sécurité
   sensibles ;
 - les informations techniques suffisamment précises pour faciliter une attaque ;

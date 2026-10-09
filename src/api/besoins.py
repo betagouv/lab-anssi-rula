@@ -3,7 +3,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 
 from adaptateurs.albert import AdaptateurAlbertReel
-from api.fonctionnalites import fabrique_depot_fonctionnalites, fabrique_service_fonctionnalites
+from api.fonctionnalites import (
+    fabrique_depot_fonctionnalites,
+    fabrique_service_fonctionnalites,
+)
 from api.idees import fabrique_depot_idees
 from api.retours_bizdev import fabrique_depot_retours_bizdev
 from api.transcripts import fabrique_depot_transcripts
@@ -32,8 +35,12 @@ def fabrique_depot_besoins() -> DepotBesoinsDetectes:  # pragma: no cover
 def fabrique_dependances_besoins(
     depot: DepotBesoinsDetectes = Depends(fabrique_depot_besoins),
     depot_transcripts: DepotTranscripts = Depends(fabrique_depot_transcripts),
-    depot_fonctionnalites: DepotFonctionnalitesTranscripts = Depends(fabrique_depot_fonctionnalites),
-    service_fonctionnalites: ServiceFonctionnalites = Depends(fabrique_service_fonctionnalites),
+    depot_fonctionnalites: DepotFonctionnalitesTranscripts = Depends(
+        fabrique_depot_fonctionnalites
+    ),
+    service_fonctionnalites: ServiceFonctionnalites = Depends(
+        fabrique_service_fonctionnalites
+    ),
     depot_idees: DepotIdees = Depends(fabrique_depot_idees),
     depot_retours: DepotRetoursBizDev = Depends(fabrique_depot_retours_bizdev),
 ) -> DependancesBesoins:  # pragma: no cover
@@ -59,14 +66,29 @@ def fabrique_service_besoins(
 
 
 @routeur.get("/besoins")
-def lister_besoins(source: str | None = None, produit_id: int | None = None, service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins)) -> list[dict]:
-    if source not in {None, "transcript", "idee", "retour_bizdev"}:
+def lister_besoins(
+    source: str | None = None,
+    produit_id: int | None = None,
+    service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins),
+) -> list[dict]:
+    if source not in {
+        None,
+        "transcript",
+        "transcript_produit",
+        "transcript_bizdev",
+        "idee",
+        "retour_bizdev",
+    }:
         raise HTTPException(status_code=400, detail=f"Source inconnue : {source}")
     return [besoin._asdict() for besoin in service.lister(source, produit_id)]
 
 
 @routeur.post("/besoins/analyser/{source}")
-def analyser_besoins(source: str, produit_id: int | None = None, service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins)) -> list[dict]:
+def analyser_besoins(
+    source: str,
+    produit_id: int | None = None,
+    service: ServiceBesoinsDetectes = Depends(fabrique_service_besoins),
+) -> list[dict]:
     try:
         return [besoin._asdict() for besoin in service.analyser(source, produit_id)]
     except SourceBesoinInconnue:

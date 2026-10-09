@@ -9,6 +9,7 @@ class Projet(NamedTuple):
     nom: str
     brief: str
     cree_le: datetime
+    revision_corpus: int = 1
 
 
 class Entretien(NamedTuple):
@@ -33,6 +34,18 @@ class ScanProjet(NamedTuple):
 class SourceProjet(NamedTuple):
     projet: Projet
     entretien: Entretien
+
+
+class SourceAnalyseProjet(NamedTuple):
+    id: int
+    type_source: str
+    participant: str | None
+    date_entretien: date
+    moderateur: str | None
+    contenu: str
+    note_moderateur: str
+    contexte: str
+    locuteurs: list[dict[str, str]]
 
 
 class DepotProjets(ABC):
@@ -77,10 +90,25 @@ class DepotProjets(ABC):
     def lister_entretiens(self, projet_id: int) -> list[Entretien]: ...
 
     @abstractmethod
-    def obtenir_entretien(self, projet_id: int, entretien_id: int) -> Entretien | None: ...
+    def lister_sources_analyse(self, projet_id: int) -> list[SourceAnalyseProjet]: ...
+
+    @abstractmethod
+    def obtenir_entretien(
+        self, projet_id: int, entretien_id: int
+    ) -> Entretien | None: ...
 
     @abstractmethod
     def enregistrer_scan(self, projet_id: int, brouillon: str) -> ScanProjet: ...
+
+    def enregistrer_scan_si_revision(
+        self, projet_id: int, revision: int, brouillon: str
+    ) -> ScanProjet | None:
+        projet = self.obtenir(projet_id)
+        return (
+            self.enregistrer_scan(projet_id, brouillon)
+            if projet and projet.revision_corpus == revision
+            else None
+        )
 
     @abstractmethod
     def obtenir_scan(self, projet_id: int) -> ScanProjet | None: ...

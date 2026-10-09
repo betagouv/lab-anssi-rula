@@ -8,7 +8,9 @@ class DepotCorrespondancesCalculeesMemoire(DepotCorrespondancesCalculees):
         self._clusters: dict[int | None, list[Cluster]] = {}
         self._dates: dict[int | None, datetime] = {}
 
-    def sauvegarder(self, clusters: list[Cluster], produit_id: int | None = None) -> None:
+    def sauvegarder(
+        self, clusters: list[Cluster], produit_id: int | None = None
+    ) -> None:
         self._clusters[produit_id] = list(clusters)
         self._dates[produit_id] = datetime.now()
 

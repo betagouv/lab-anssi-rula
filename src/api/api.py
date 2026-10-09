@@ -11,6 +11,7 @@ from api.produits import routeur as routeur_produits
 from api.projets import routeur as routeur_projets
 from api.retours_bizdev import routeur as routeur_retours_bizdev
 from api.transcripts import routeur as routeur_transcripts
+from api.transcripts_pdf import routeur as routeur_transcripts_pdf
 from configuration import charge_configuration
 from infra.connexion_base_de_donnees import base_de_donnees_est_disponible
 
@@ -20,6 +21,7 @@ routeur.include_router(routeur_identites)
 routeur.include_router(routeur_produits)
 routeur.include_router(routeur_projets)
 routeur.include_router(routeur_transcripts)
+routeur.include_router(routeur_transcripts_pdf)
 routeur.include_router(routeur_analyses)
 routeur.include_router(routeur_besoins)
 routeur.include_router(routeur_fonctionnalites)
