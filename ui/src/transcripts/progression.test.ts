@@ -15,7 +15,7 @@ function progression(
     phase,
     groupes_termines: termines,
     groupes_total: total,
-    groupe_en_cours: null,
+    groupes_en_cours: [],
     duree_secondes: 0,
   };
 }
