@@ -1,7 +1,9 @@
 from concurrent.futures import Executor, ThreadPoolExecutor
 import asyncio
 from datetime import date, datetime, timedelta, timezone
+import logging
 from pathlib import Path
+import time
 from typing import Callable, Literal
 from uuid import uuid4
 
@@ -28,6 +30,7 @@ from transcripts_pdf.service import Locuteur, ServicePreparationTranscript
 from validation_transcript.service import ServiceValidationTranscript
 
 routeur = APIRouter()
+_JOURNAL = logging.getLogger(__name__)
 _EXECUTEUR = ThreadPoolExecutor(max_workers=2)
 _EXECUTEUR_PREPARATION = ThreadPoolExecutor(max_workers=1)
 _PREPARATIONS: dict[str, dict] = {}
@@ -90,8 +93,20 @@ def fabrique_service_transcripts_pdf(
     )
 
 
+def fabrique_service_transcripts_pdf_travail() -> ServiceTranscriptsPdf:
+    return fabrique_service_transcripts_pdf(
+        fabrique_depot_transcripts_pdf(),
+        fabrique_service_validation_pdf(),
+        fabrique_service_analyse_pdf(),
+    )
+
+
 def fabrique_executeur() -> Executor:
     return _EXECUTEUR
+
+
+def fabrique_executeur_preparation() -> Executor:
+    return _EXECUTEUR_PREPARATION
 
 
 @routeur.post("/transcripts-pdf/preparation", status_code=202)
@@ -100,6 +115,7 @@ async def preparer(
     contexte: str = Form(""),
     fichier: UploadFile = File(),
     service: ServicePreparationTranscript = Depends(fabrique_service_preparation_pdf),
+    executeur: Executor = Depends(fabrique_executeur_preparation),
 ) -> dict:
     _nettoyer_preparations()
     if (
@@ -115,8 +131,15 @@ async def preparer(
     _PREPARATIONS[jeton] = {
         "statut": "en_cours",
         "expire": datetime.now(timezone.utc) + _TTL_PREPARATION,
+        "soumis_monotonic": time.monotonic(),
+        "progression": {
+            "phase": "en_attente",
+            "groupes_termines": 0,
+            "groupes_total": None,
+            "groupe_en_cours": None,
+        },
     }
-    _EXECUTEUR_PREPARATION.submit(
+    executeur.submit(
         _executer_preparation,
         jeton,
         service,
@@ -125,7 +148,11 @@ async def preparer(
         type_source,
         contexte,
     )
-    return {"jeton": jeton, "statut": "en_cours"}
+    return {
+        "jeton": jeton,
+        "statut": "en_cours",
+        "progression": _progression_publique(_PREPARATIONS[jeton]),
+    }
 
 
 @routeur.get("/transcripts-pdf/preparation/{jeton}")
@@ -137,10 +164,28 @@ def obtenir_preparation(jeton: str) -> dict:
             status_code=404, detail="Préparation expirée ou introuvable."
         )
     if preparation["statut"] == "echec":
-        return {"statut": "echec", "erreur": preparation["erreur"]}
+        return {
+            "statut": "echec",
+            "erreur": preparation["erreur"],
+            "progression": _progression_publique(preparation),
+        }
     if preparation["statut"] == "termine":
-        return {"statut": "termine", **preparation["resultat"]}
-    return {"statut": "en_cours"}
+        return {
+            "statut": "termine",
+            "progression": _progression_publique(preparation),
+            **preparation["resultat"],
+        }
+    return {
+        "statut": "en_cours",
+        "progression": _progression_publique(preparation),
+    }
+
+
+def _progression_publique(preparation: dict) -> dict:
+    return {
+        **preparation["progression"],
+        "duree_secondes": round(time.monotonic() - preparation["soumis_monotonic"], 1),
+    }
 
 
 def _executer_preparation(
@@ -151,8 +196,26 @@ def _executer_preparation(
     type_source: str,
     contexte: str,
 ) -> None:
+    def actualiser_progression(
+        phase: str,
+        groupes_termines: int,
+        groupes_total: int | None,
+        groupe_en_cours: int | None,
+    ) -> None:
+        if jeton in _PREPARATIONS:
+            _PREPARATIONS[jeton]["progression"].update(
+                {
+                    "phase": phase,
+                    "groupes_termines": groupes_termines,
+                    "groupes_total": groupes_total,
+                    "groupe_en_cours": groupe_en_cours,
+                }
+            )
+
     try:
-        preparation = service.preparer(nom_fichier, fichier, type_source, contexte)
+        preparation = service.preparer(
+            nom_fichier, fichier, type_source, contexte, actualiser_progression
+        )
         resultat = {
             "type_source": preparation.type_source,
             "nom_source": preparation.nom_source,
@@ -165,12 +228,22 @@ def _executer_preparation(
             ],
         }
         if jeton in _PREPARATIONS:
+            actualiser_progression(
+                "termine",
+                _PREPARATIONS[jeton]["progression"]["groupes_termines"],
+                _PREPARATIONS[jeton]["progression"]["groupes_total"],
+                None,
+            )
             _PREPARATIONS[jeton].update(statut="termine", resultat=resultat)
     except ErreurPdf as erreur:
         if jeton in _PREPARATIONS:
+            _PREPARATIONS[jeton]["progression"].update(
+                phase="echec", groupe_en_cours=None
+            )
             _PREPARATIONS[jeton].update(statut="echec", erreur=str(erreur))
     except Exception:
         if jeton in _PREPARATIONS:
+            _PREPARATIONS[jeton]["progression"].update(phase="echec")
             _PREPARATIONS[jeton].update(
                 statut="echec", erreur="La préparation du transcript a échoué."
             )
@@ -338,7 +411,14 @@ async def surveille_jobs(
 
 
 def _executer_job(job_id: int, service: ServiceTranscriptsPdf | None = None) -> None:
-    (service or fabrique_service_transcripts_pdf()).executer_job(job_id)
+    try:
+        (service or fabrique_service_transcripts_pdf_travail()).executer_job(job_id)
+    except Exception as erreur:
+        _JOURNAL.error(
+            "transcript_pdf_worker_error job_id=%s exception_type=%s",
+            job_id,
+            type(erreur).__name__,
+        )
 
 
 def _source_dict(source: SourceTranscriptPdf) -> dict:

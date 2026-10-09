@@ -71,7 +71,7 @@ class ServiceValidationTranscript:
             {"role": "user", "content": contenu},
         ]
         reponse = (
-            self._albert.completer_json_raisonnement(
+            self._albert.completer_json_raisonnement_transcript(
                 messages,
                 "validation_transcript_pdf",
                 _SCHEMA,

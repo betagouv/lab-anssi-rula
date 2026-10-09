@@ -1,6 +1,7 @@
 import json
+import logging
 import re
-from typing import NamedTuple, TypedDict, cast
+from typing import Callable, NamedTuple, TypedDict, cast
 from uuid import uuid4
 
 from adaptateurs.albert import AdaptateurAlbert
@@ -21,9 +22,37 @@ _CATEGORIES = (
 _ROLES = ("interne", "externe", "indetermine")
 _TAILLE_FRAGMENT = 2000
 _CHEVAUCHEMENT_FRAGMENT = 100
+_JOURNAL = logging.getLogger("uvicorn.error")
 
 
-def _schema_preparation(speaker_ids: set[str]) -> dict[str, object]:
+class ErreurPreparationInvalide(ValueError):
+    def __init__(
+        self,
+        code: str,
+        message: str = "Réponse de préparation invalide.",
+        champ: str | None = None,
+        nombre_attendu: int | None = None,
+        nombre_recu: int | None = None,
+        type_recu: str | None = None,
+    ) -> None:
+        self.code = code
+        self.champ = champ
+        self.nombre_attendu = nombre_attendu
+        self.nombre_recu = nombre_recu
+        self.type_recu = type_recu
+        super().__init__(message)
+
+
+def _schema_preparation(
+    speaker_ids: set[str], fragments: list["Fragment"]
+) -> dict[str, object]:
+    token_ids = sorted(
+        {
+            token_id
+            for fragment in fragments
+            for token_id in range(len(_tokeniser(fragment.contenu)))
+        }
+    )
     return {
         "type": "object",
         "properties": {
@@ -32,11 +61,22 @@ def _schema_preparation(speaker_ids: set[str]) -> dict[str, object]:
                 "items": {
                     "type": "object",
                     "properties": {
-                        "valeur": {"type": "string"},
                         "categorie": {"type": "string", "enum": list(_CATEGORIES)},
-                        "champ": {"type": "string", "enum": ["transcript", "contexte"]},
+                        "fragment_id": {
+                            "type": "integer",
+                            "enum": sorted(
+                                {fragment.fragment_id for fragment in fragments}
+                            ),
+                        },
+                        "token_debut": {"type": "integer", "enum": token_ids},
+                        "token_fin": {"type": "integer", "enum": token_ids},
                     },
-                    "required": ["valeur", "categorie", "champ"],
+                    "required": [
+                        "categorie",
+                        "fragment_id",
+                        "token_debut",
+                        "token_fin",
+                    ],
                     "additionalProperties": False,
                 },
             },
@@ -69,10 +109,64 @@ class Locuteur(NamedTuple):
     justification: str
 
 
+def _journaliser_groupe(
+    albert: AdaptateurAlbert,
+    numero: int,
+    total: int,
+    fragments: list["Fragment"],
+    locuteurs: int,
+    erreur: Exception | None,
+    phase: str = "groupe",
+    caracteres_serialises: int | None = None,
+) -> None:
+    metriques = getattr(albert, "metriques_dernier_flux", {})
+    diagnostic: dict[str, object] = {
+        "groupe": numero,
+        "groupes": total,
+        "caracteres_source": sum(len(fragment.contenu) for fragment in fragments),
+        "caracteres_serialises": caracteres_serialises,
+        "locuteurs": locuteurs,
+        "exception": type(erreur).__name__ if erreur else None,
+        "code_validation": getattr(erreur, "code", None),
+        "champ": getattr(erreur, "champ", None),
+        "nombre_attendu": getattr(erreur, "nombre_attendu", None),
+        "nombre_recu": getattr(erreur, "nombre_recu", None),
+        "type_recu": getattr(erreur, "type_recu", None),
+        "phase": phase,
+    }
+    diagnostic.update(
+        {
+            cle: metriques[cle]
+            for cle in (
+                "modele",
+                "budget_completion",
+                "statut_http",
+                "finish_reason",
+                "duree_totale_s",
+                "evenements",
+                "raisonnement_caracteres",
+                "contenu_caracteres",
+                "request_id",
+            )
+            if isinstance(metriques, dict) and cle in metriques
+        }
+    )
+    _JOURNAL.info("Diagnostic préparation transcript : %s", diagnostic)
+
+
 class Remplacement(TypedDict):
+    categorie: str
+    fragment_id: int
+    token_debut: int
+    token_fin: int
+
+
+class RemplacementResolu(TypedDict):
     valeur: str
     categorie: str
     champ: str
+    debut: int
+    fin: int
 
 
 class LocuteurPrepare(TypedDict):
@@ -87,6 +181,7 @@ class Fragment(NamedTuple):
     contenu: str
     tour_id: int | None = None
     speaker_id: str | None = None
+    offset_debut: int = 0
 
 
 class RemplacementVisible(NamedTuple):
@@ -122,58 +217,116 @@ class ServicePreparationTranscript:
         fichier: bytes,
         type_source: str,
         contexte: str,
+        progression: Callable[[str, int, int | None, int | None], None] | None = None,
     ) -> PreparationTranscript:
         if type_source not in {"produit", "bizdev"}:
             raise ValueError("Type de source invalide.")
+        if progression:
+            progression("extraction", 0, None, None)
         texte, date_source = extraire_pdf(nom_fichier, fichier)
         locuteurs_origine = anonymiser_locuteurs(texte)[1]
         identifiants = dict(locuteurs_origine)
-        fragments = _grouper_fragments(
-            _fragments_transcript(texte, identifiants)
-            + (_fragments_champ("contexte", contexte) if contexte else [])
-        )
+        fragments = [
+            fragment._replace(fragment_id=index)
+            for index, fragment in enumerate(
+                _fragments_transcript(texte, identifiants)
+                + (_fragments_champ("contexte", contexte) if contexte else []),
+                1,
+            )
+            if _tokeniser(fragment.contenu)
+        ]
+        groupes = _grouper_fragments(fragments)
+        if progression:
+            progression("anonymisation", 0, len(groupes), 1 if groupes else None)
         valeurs: list[PreparationLue] = []
-        for fragments_groupe in fragments:
+        remplacements_resolus: list[RemplacementResolu] = []
+        for numero_groupe, fragments_groupe in enumerate(groupes, 1):
             speakers_segment = {
                 fragment.speaker_id
                 for fragment in fragments_groupe
                 if fragment.champ == "transcript" and fragment.speaker_id
             }
-            reponse = self._albert.completer_json_raisonnement_preparation(
-                [
-                    {"role": "system", "content": self._prompt},
-                    {
-                        "role": "user",
-                        "content": f"TYPE: {type_source}\nFRAGMENTS:\n{json.dumps([fragment._asdict() for fragment in fragments_groupe], ensure_ascii=False)}",
-                    },
-                ],
-                "preparation_transcript",
-                _schema_preparation(speakers_segment),
-                "high",
+            phase = "appel_albert"
+            fragments_json = json.dumps(
+                [_serialiser_fragment(fragment) for fragment in fragments_groupe],
+                ensure_ascii=False,
             )
-            valeur = _lire_preparation(reponse)
-            if speakers_segment != {
-                locuteur["speaker_id"] for locuteur in valeur["locuteurs"]
-            }:
-                raise ValueError("Réponse de préparation invalide.")
-            for remplacement in valeur["remplacements"]:
-                if not any(
-                    fragment.champ == remplacement["champ"]
-                    and remplacement["valeur"] in fragment.contenu
-                    for fragment in fragments_groupe
-                ):
-                    raise ValueError("Réponse de préparation invalide.")
+            contenu_message = f"TYPE: {type_source}\nFRAGMENTS:\n{fragments_json}"
+            caracteres_serialises = len(contenu_message)
+            try:
+                reponse = self._albert.completer_json_raisonnement_preparation(
+                    [
+                        {"role": "system", "content": self._prompt},
+                        {
+                            "role": "user",
+                            "content": contenu_message,
+                        },
+                    ],
+                    "preparation_transcript",
+                    _schema_preparation(speakers_segment, fragments_groupe),
+                    "high",
+                )
+                phase = "lecture_reponse"
+                valeur = _lire_preparation(reponse)
+                phase = "validation_locuteurs"
+                if speakers_segment != {
+                    locuteur["speaker_id"] for locuteur in valeur["locuteurs"]
+                }:
+                    raise ErreurPreparationInvalide(
+                        "ensemble_speakers_inattendu",
+                        champ="locuteurs",
+                        nombre_attendu=len(speakers_segment),
+                        nombre_recu=len(valeur["locuteurs"]),
+                    )
+                phase = "validation_remplacements"
+                remplacements_resolus.extend(
+                    _resoudre_remplacements(valeur["remplacements"], fragments_groupe)
+                )
+            except Exception as erreur:
+                _journaliser_groupe(
+                    self._albert,
+                    numero_groupe,
+                    len(groupes),
+                    fragments_groupe,
+                    len(speakers_segment),
+                    erreur,
+                    phase,
+                    caracteres_serialises,
+                )
+                raise
+            _journaliser_groupe(
+                self._albert,
+                numero_groupe,
+                len(groupes),
+                fragments_groupe,
+                len(speakers_segment),
+                None,
+                caracteres_serialises=caracteres_serialises,
+            )
             valeurs.append(valeur)
+            if progression:
+                progression(
+                    "anonymisation",
+                    numero_groupe,
+                    len(groupes),
+                    numero_groupe + 1 if numero_groupe < len(groupes) else None,
+                )
+        if progression:
+            progression("finalisation", len(groupes), len(groupes), None)
         labels = locuteurs_origine
-        remplacements = _positions_valides(
-            [
-                remplacement
-                for valeur in valeurs
-                for remplacement in valeur["remplacements"]
-            ],
-            texte,
-            contexte,
-        )
+        try:
+            remplacements = _positions_valides(remplacements_resolus, texte, contexte)
+        except Exception as erreur:
+            _journaliser_groupe(
+                self._albert,
+                len(groupes),
+                len(groupes),
+                groupes[-1],
+                len(labels),
+                erreur,
+                "fusion_finale",
+            )
+            raise
         compteurs: dict[str, int] = {}
         anonymises: dict[tuple[str, str], str] = {}
         positions_texte: list[tuple[int, int, str]] = []
@@ -216,7 +369,7 @@ class ServicePreparationTranscript:
         originaux_par_id = {anonyme: original for original, anonyme in labels}
         locuteurs = []
         for _, identifiant in labels:
-            voix = votes[identifiant]
+            voix = votes.get(identifiant, [])
             roles_connus = {
                 vote["role"] for vote in voix if vote["role"] != "indetermine"
             }
@@ -253,30 +406,62 @@ def _lire_preparation(reponse: str) -> PreparationLue:
     try:
         valeur = json.loads(reponse)
     except json.JSONDecodeError as erreur:
-        raise ValueError("Réponse de préparation invalide.") from erreur
+        raise ErreurPreparationInvalide("json_illisible") from erreur
     if not isinstance(valeur, dict) or set(valeur) != {"remplacements", "locuteurs"}:
-        raise ValueError("Réponse de préparation invalide.")
+        raise ErreurPreparationInvalide(
+            "structure_premier_niveau",
+            champ="racine",
+            nombre_attendu=2,
+            nombre_recu=len(valeur) if isinstance(valeur, dict) else None,
+            type_recu=type(valeur).__name__,
+        )
     if not isinstance(valeur["remplacements"], list):
-        raise ValueError("Réponse de préparation invalide.")
+        raise ErreurPreparationInvalide(
+            "structure_remplacements",
+            champ="remplacements",
+            type_recu=type(valeur["remplacements"]).__name__,
+        )
     if isinstance(valeur["locuteurs"], dict):
+        if any(
+            not isinstance(details, dict) for details in valeur["locuteurs"].values()
+        ):
+            raise ErreurPreparationInvalide(
+                "structure_locuteurs",
+                champ="locuteurs",
+                type_recu="details_non_objet",
+            )
         valeur["locuteurs"] = [
             {"speaker_id": speaker_id, **details}
             for speaker_id, details in valeur["locuteurs"].items()
         ]
     if not isinstance(valeur["locuteurs"], list):
-        raise ValueError("Réponse de préparation invalide.")
+        raise ErreurPreparationInvalide(
+            "structure_locuteurs",
+            champ="locuteurs",
+            type_recu=type(valeur["locuteurs"]).__name__,
+        )
     for item in valeur["remplacements"]:
         if (
             not isinstance(item, dict)
-            or set(item) != {"valeur", "categorie", "champ"}
-            or not isinstance(item["valeur"], str)
-            or not item["valeur"]
+            or set(item) != {"categorie", "fragment_id", "token_debut", "token_fin"}
             or not isinstance(item["categorie"], str)
             or item["categorie"] not in _CATEGORIES
-            or not isinstance(item["champ"], str)
-            or item["champ"] not in {"transcript", "contexte"}
+            or not isinstance(item["fragment_id"], int)
+            or isinstance(item["fragment_id"], bool)
+            or not isinstance(item["token_debut"], int)
+            or isinstance(item["token_debut"], bool)
+            or not isinstance(item["token_fin"], int)
+            or isinstance(item["token_fin"], bool)
+            or item["token_debut"] < 0
+            or item["token_fin"] < item["token_debut"]
         ):
-            raise ValueError("Réponse de préparation invalide.")
+            raise ErreurPreparationInvalide(
+                "structure_remplacements",
+                champ="remplacements",
+                nombre_attendu=4,
+                nombre_recu=len(item) if isinstance(item, dict) else None,
+                type_recu=type(item).__name__,
+            )
     for item in valeur["locuteurs"]:
         if (
             not isinstance(item, dict)
@@ -286,14 +471,22 @@ def _lire_preparation(reponse: str) -> PreparationLue:
             or not isinstance(item["justification"], str)
             or item["role"] not in _ROLES
         ):
-            raise ValueError("Réponse de préparation invalide.")
+            raise ErreurPreparationInvalide(
+                "structure_locuteurs",
+                champ="locuteurs",
+                nombre_attendu=3,
+                nombre_recu=len(item) if isinstance(item, dict) else None,
+                type_recu=type(item).__name__,
+            )
     return cast(PreparationLue, valeur)
 
 
 def _fragments_champ(champ: str, texte: str) -> list[Fragment]:
     pas = _TAILLE_FRAGMENT - _CHEVAUCHEMENT_FRAGMENT
     return [
-        Fragment(champ, index, texte[debut : debut + _TAILLE_FRAGMENT])
+        Fragment(
+            champ, index, texte[debut : debut + _TAILLE_FRAGMENT], offset_debut=debut
+        )
         for index, debut in enumerate(range(0, len(texte), pas))
     ]
 
@@ -316,20 +509,20 @@ def _grouper_fragments(fragments: list[Fragment]) -> list[list[Fragment]]:
 
 def _fragments_transcript(texte: str, identifiants: dict[str, str]) -> list[Fragment]:
     reperes = list(re.finditer(r"(?m)^([A-Za-z]{7}_[0-9]{2}|None):[ \t]*", texte))
-    blocs: list[tuple[str | None, str]] = []
+    blocs: list[tuple[str | None, str, int]] = []
     debut = 0
     for index, repere in enumerate(reperes):
         if repere.start() > debut:
-            blocs.append((None, texte[debut : repere.start()]))
+            blocs.append((None, texte[debut : repere.start()], debut))
         fin = reperes[index + 1].start() if index + 1 < len(reperes) else len(texte)
-        blocs.append((identifiants[repere[1]], texte[repere.end() : fin]))
+        blocs.append((identifiants[repere[1]], texte[repere.end() : fin], repere.end()))
         debut = fin
     if not reperes:
-        blocs.append((None, texte))
+        blocs.append((None, texte, 0))
     fragments = []
     tour_id = 0
     pas = _TAILLE_FRAGMENT - _CHEVAUCHEMENT_FRAGMENT
-    for speaker_id, contenu in blocs:
+    for speaker_id, contenu, offset in blocs:
         for fragment_id, debut_fragment in enumerate(range(0, len(contenu), pas)):
             fragments.append(
                 Fragment(
@@ -338,6 +531,7 @@ def _fragments_transcript(texte: str, identifiants: dict[str, str]) -> list[Frag
                     contenu[debut_fragment : debut_fragment + _TAILLE_FRAGMENT],
                     tour_id,
                     speaker_id,
+                    offset + debut_fragment,
                 )
             )
         tour_id += 1
@@ -351,35 +545,95 @@ def _decouper(texte: str, par_tour: bool = False) -> list[str]:
     ]
 
 
+def _tokeniser(texte: str) -> list[tuple[str, int, int]]:
+    return [
+        (match.group(), match.start(), match.end())
+        for match in re.finditer(r"\w+|[^\w\s]", texte)
+    ]
+
+
+def _serialiser_fragment(fragment: Fragment) -> dict[str, object]:
+    return {
+        "champ": fragment.champ,
+        "fragment_id": fragment.fragment_id,
+        "tour_id": fragment.tour_id,
+        "speaker_id": fragment.speaker_id,
+        "contenu": fragment.contenu,
+        "tokens": [
+            {"token_id": index, "contenu": token}
+            for index, (token, _, _) in enumerate(_tokeniser(fragment.contenu))
+        ],
+    }
+
+
+def _resoudre_remplacements(
+    remplacements: list[Remplacement], fragments: list[Fragment]
+) -> list[RemplacementResolu]:
+    fragments_par_id = {fragment.fragment_id: fragment for fragment in fragments}
+    resultat = []
+    for remplacement in remplacements:
+        fragment = fragments_par_id.get(remplacement["fragment_id"])
+        if fragment is None:
+            raise ErreurPreparationInvalide(
+                "fragment_absent", champ="fragment_id", nombre_attendu=1, nombre_recu=0
+            )
+        tokens = _tokeniser(fragment.contenu)
+        debut_token = remplacement["token_debut"]
+        fin_token = remplacement["token_fin"]
+        if debut_token >= len(tokens) or fin_token >= len(tokens):
+            raise ErreurPreparationInvalide(
+                "token_absent",
+                champ="tokens",
+                nombre_attendu=len(tokens),
+                nombre_recu=fin_token,
+            )
+        debut_local = tokens[debut_token][1]
+        fin_local = tokens[fin_token][2]
+        resultat.append(
+            {
+                "valeur": fragment.contenu[debut_local:fin_local],
+                "categorie": remplacement["categorie"],
+                "champ": fragment.champ,
+                "debut": fragment.offset_debut + debut_local,
+                "fin": fragment.offset_debut + fin_local,
+            }
+        )
+    return cast(list[RemplacementResolu], resultat)
+
+
 def _positions_valides(
-    remplacements: list[Remplacement], texte: str, contexte: str
-) -> list[tuple[Remplacement, int, int]]:
+    remplacements: list[RemplacementResolu], texte: str, contexte: str
+) -> list[tuple[RemplacementResolu, int, int]]:
     champs = {"transcript": texte, "contexte": contexte}
-    positions: list[tuple[Remplacement, int, int]] = []
-    valeurs: set[tuple[str, str, str]] = set()
-    categories: dict[tuple[str, str], str] = {}
+    positions: list[tuple[RemplacementResolu, int, int]] = []
+    valeurs: set[tuple[str, int, int, str]] = set()
+    categories: dict[tuple[str, int, int], str] = {}
     for remplacement in remplacements:
         champ = remplacement["champ"]
         valeur = remplacement["valeur"]
-        if champ not in champs or not valeur:
-            raise ValueError("Réponse de préparation invalide.")
-        cle = (champ, valeur)
+        debut = remplacement["debut"]
+        fin = remplacement["fin"]
+        if (
+            champ not in champs
+            or not valeur
+            or debut < 0
+            or fin <= debut
+            or fin > len(champs[champ])
+            or champs[champ][debut:fin] != valeur
+        ):
+            raise ErreurPreparationInvalide("remplacement_invalide")
+        cle = (champ, debut, fin)
         if cle in categories and categories[cle] != remplacement["categorie"]:
-            raise ValueError("Une valeur a plusieurs catégories d’anonymisation.")
+            raise ErreurPreparationInvalide(
+                "categories_incompatibles",
+                "Une valeur a plusieurs catégories d’anonymisation.",
+            )
         categories[cle] = remplacement["categorie"]
         deduplication = (*cle, remplacement["categorie"])
         if deduplication in valeurs:
             continue
         valeurs.add(deduplication)
-        texte_champ = champs[champ]
-        occurrences = []
-        debut = texte_champ.find(valeur)
-        while debut >= 0:
-            occurrences.append((debut, debut + len(valeur)))
-            debut = texte_champ.find(valeur, debut + 1)
-        if not occurrences:
-            raise ValueError("Réponse de préparation invalide.")
-        positions.extend((remplacement, debut, fin) for debut, fin in occurrences)
+        positions.append((remplacement, debut, fin))
     triees = sorted(
         positions,
         key=lambda element: (
@@ -388,7 +642,7 @@ def _positions_valides(
             -(element[2] - element[1]),
         ),
     )
-    resultat: list[tuple[Remplacement, int, int]] = []
+    resultat: list[tuple[RemplacementResolu, int, int]] = []
     for position in triees:
         chevauchements = [
             precedent
@@ -401,16 +655,23 @@ def _positions_valides(
             precedent[0]["categorie"] != position[0]["categorie"]
             for precedent in chevauchements
         ):
-            raise ValueError(
-                "Les valeurs d’anonymisation ont des catégories incompatibles."
+            raise ErreurPreparationInvalide(
+                "categories_incompatibles",
+                "Les valeurs d’anonymisation ont des catégories incompatibles.",
             )
         if any(
             precedent[1] <= position[1] and precedent[2] >= position[2]
             for precedent in chevauchements
         ):
-            continue
+            if all(
+                precedent[0]["categorie"] == position[0]["categorie"]
+                for precedent in chevauchements
+            ):
+                continue
         if chevauchements:
-            raise ValueError("Les valeurs d’anonymisation se chevauchent.")
+            raise ErreurPreparationInvalide(
+                "chevauchement", "Les valeurs d’anonymisation se chevauchent."
+            )
         resultat.append(position)
     return resultat
 
