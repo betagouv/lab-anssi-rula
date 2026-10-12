@@ -13,6 +13,7 @@
     lirePreparation,
     type ResultatPreparation,
   } from './suivi-preparation';
+  import RemplacementsTranscript from './RemplacementsTranscript.svelte';
 
   let {
     produitId,
@@ -547,31 +548,7 @@
       <label class="fr-label" for="transcript">Transcript anonymisé</label>
       <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
       ></textarea>
-      {#if remplacements.length}
-        <h2>Remplacements proposés</h2>
-        <table>
-          <thead
-            ><tr
-              ><th>Champ</th><th>Valeur détectée</th><th>Remplacement</th><th
-                >Catégorie</th
-              ></tr
-            ></thead
-          >
-          <tbody
-            >{#each remplacements as remplacement (remplacement.champ + remplacement.valeur_originale)}
-              <tr
-                ><td
-                  >{remplacement.champ === 'transcript'
-                    ? 'Transcript'
-                    : 'Contexte'}</td
-                ><td>{remplacement.valeur_originale}</td><td
-                  >{remplacement.valeur_anonyme}</td
-                ><td>{remplacement.categorie}</td></tr
-              >
-            {/each}</tbody
-          >
-        </table>
-      {/if}
+      <RemplacementsTranscript {remplacements} />
       <div class="fr-input-group">
         <label class="fr-label" for="contexte-edite">Contexte anonymisé</label>
         <textarea class="fr-input" id="contexte-edite" bind:value={contexte} rows="4"
