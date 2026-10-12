@@ -13,8 +13,10 @@
     lirePreparation,
     type ResultatPreparation,
   } from './suivi-preparation';
+  import NotificationAnalyseTranscript from './NotificationAnalyseTranscript.svelte';
+  import { notificationApresAnalyse } from './notification-analyse';
   import RemplacementsTranscript from './RemplacementsTranscript.svelte';
-  import ResultatAnalyse from './ResultatAnalyse.svelte';
+  import PanneauAnalyseTranscript from './PanneauAnalyseTranscript.svelte';
 
   let {
     produitId,
@@ -52,11 +54,15 @@
   let selectionProjet = $state(0);
   let transcriptId = $state<number | null>(null);
   let analyse = $state<unknown>(null);
+  let analyseEnCours = $state(false);
+  let analyseErreur = $state('');
+  let notificationAnalyse = $state<'prete' | 'echec' | ''>('');
+  let ongletActif = $state<'analyse' | 'transcript'>('analyse');
   let relancerAnalyse = $state(false);
   const contenuAnalyse = $derived(
     typeof analyse === 'object' && analyse !== null && 'contenu' in analyse
       ? (analyse.contenu as Record<string, unknown>)
-      : {}
+      : null
   );
   let erreur = $state('');
   let enCours = $state(false);
@@ -122,6 +128,18 @@
     terminer?.();
   }
 
+  function selectionnerOnglet(onglet: 'analyse' | 'transcript') {
+    ongletActif = onglet;
+    if (onglet === 'analyse') notificationAnalyse = '';
+  }
+
+  function naviguerOnglets(event: KeyboardEvent, onglet: 'analyse' | 'transcript') {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    const suivant = onglet === 'analyse' ? 'transcript' : 'analyse';
+    selectionnerOnglet(suivant);
+    document.getElementById(`onglet-${suivant}`)?.focus();
+  }
+
   onMount(() => {
     monte = true;
     selectionProjet = projetId ?? 0;
@@ -173,6 +191,10 @@
   async function consulter(id: number) {
     enCours = true;
     progression = null;
+    analyseEnCours = false;
+    analyseErreur = '';
+    notificationAnalyse = '';
+    ongletActif = 'analyse';
     try {
       const source = await fetch(`/api/transcripts-pdf/${id}`).then((reponse) =>
         reponse.json()
@@ -341,10 +363,13 @@
   }
 
   async function analyser() {
-    if (!transcriptId) return;
+    if (!transcriptId || enCours) return;
     enCours = true;
+    analyseEnCours = true;
     progression = null;
     erreur = '';
+    analyseErreur = '';
+    notificationAnalyse = '';
     try {
       const reponse = await fetch(
         `/api/transcripts-pdf/${transcriptId}/analyse?relancer=${relancerAnalyse}`,
@@ -352,19 +377,25 @@
       );
       const resultat = await reponse.json();
       if (!reponse.ok) throw new Error(resultat.detail ?? 'Analyse impossible.');
-      if (resultat.analyse) analyse = resultat.analyse;
-      else {
-        analyse = { statut: 'en_cours' };
+      let terminee = Boolean(resultat.analyse);
+      if (resultat.analyse) {
+        analyse = resultat.analyse;
+      } else {
         for (let tentative = 0; tentative < 90; tentative += 1) {
           await new Promise((resoudre) => setTimeout(resoudre, 2000));
           const suivi = await fetch(`/api/transcripts-pdf/${transcriptId}/job`).then(
             (r) => r.json()
           );
           if (suivi.statut === 'termine') {
-            relancerAnalyse = false;
-            analyse = await fetch(
+            const resultatAnalyse = await fetch(
               `/api/transcripts-pdf/${transcriptId}/analyse`
             ).then((r) => r.json());
+            if (!resultatAnalyse)
+              throw new Error(
+                'L’analyse est terminée, mais son résultat est introuvable.'
+              );
+            analyse = resultatAnalyse;
+            terminee = true;
             break;
           }
           if (suivi.statut === 'echec') {
@@ -373,10 +404,18 @@
           }
         }
       }
+      if (!terminee)
+        throw new Error(
+          'Le suivi de l’analyse a dépassé le délai. Vous pouvez le reprendre.'
+        );
+      relancerAnalyse = false;
+      notificationAnalyse = notificationApresAnalyse(ongletActif, 'prete');
     } catch (cause) {
-      erreur = cause instanceof Error ? cause.message : 'Analyse impossible.';
+      analyseErreur = cause instanceof Error ? cause.message : 'Analyse impossible.';
+      notificationAnalyse = notificationApresAnalyse(ongletActif, 'echec');
     } finally {
       enCours = false;
+      analyseEnCours = false;
     }
   }
 </script>
@@ -591,24 +630,74 @@
   {:else}
     <h2>{nomSource}</h2>
     <p>Date : {dateEntretien}</p>
-    <h3>Transcript anonymisé</h3>
-    <pre>{contenu}</pre>
-    {#if contexte}<h3>Contexte</h3>
-      <p>{contexte}</p>{/if}
-    <ul>
-      {#each locuteurs as locuteur (locuteur.identifiant)}<li>
-          {locuteur.identifiant} — {locuteur.role} : {locuteur.justification}
-        </li>{/each}
-    </ul>
-    <button class="fr-btn fr-btn--secondary" onclick={() => (edition = true)}
-      >Modifier</button
-    >
-    <button class="fr-btn" disabled={enCours} onclick={analyser}
-      >Lancer l’analyse</button
-    >
-    {#if analyse}
-      <ResultatAnalyse contenu={contenuAnalyse} />
+    <div class="onglets" role="tablist" aria-label="Contenu du transcript">
+      <button
+        id="onglet-analyse"
+        class:actif={ongletActif === 'analyse'}
+        role="tab"
+        aria-selected={ongletActif === 'analyse'}
+        aria-controls="panneau-analyse"
+        tabindex={ongletActif === 'analyse' ? 0 : -1}
+        onclick={() => selectionnerOnglet('analyse')}
+        onkeydown={(event) => naviguerOnglets(event, 'analyse')}
+        >Analyse générée{#if notificationAnalyse}<span class="indicateur-onglet"
+            >{notificationAnalyse === 'prete' ? 'Résultat prêt' : 'Erreur'}</span
+          >{/if}</button
+      >
+      <button
+        id="onglet-transcript"
+        class:actif={ongletActif === 'transcript'}
+        role="tab"
+        aria-selected={ongletActif === 'transcript'}
+        aria-controls="panneau-transcript"
+        tabindex={ongletActif === 'transcript' ? 0 : -1}
+        onclick={() => selectionnerOnglet('transcript')}
+        onkeydown={(event) => naviguerOnglets(event, 'transcript')}
+        >Transcript brut</button
+      >
+    </div>
+    {#if notificationAnalyse}
+      <NotificationAnalyseTranscript
+        statut={notificationAnalyse}
+        voirAnalyse={() => selectionnerOnglet('analyse')}
+      />
     {/if}
+    <div
+      id="panneau-analyse"
+      role="tabpanel"
+      aria-labelledby="onglet-analyse"
+      hidden={ongletActif !== 'analyse'}
+    >
+      <PanneauAnalyseTranscript
+        contenu={contenuAnalyse}
+        chargement={analyseEnCours}
+        desactive={enCours}
+        erreur={analyseErreur}
+        relancer={relancerAnalyse}
+        lancer={analyser}
+      />
+    </div>
+    <div
+      id="panneau-transcript"
+      role="tabpanel"
+      aria-labelledby="onglet-transcript"
+      hidden={ongletActif !== 'transcript'}
+    >
+      <h3>Transcript anonymisé</h3>
+      <pre class="transcript">{contenu}</pre>
+      {#if contexte}<h3>Contexte</h3>
+        <p>{contexte}</p>{/if}
+      <ul>
+        {#each locuteurs as locuteur (locuteur.identifiant)}<li>
+            {locuteur.identifiant} — {locuteur.role} : {locuteur.justification}
+          </li>{/each}
+      </ul>
+      <button
+        class="fr-btn fr-btn--secondary"
+        type="button"
+        onclick={() => (edition = true)}>Modifier</button
+      >
+    </div>
   {/if}
 </main>
 
@@ -638,6 +727,48 @@
   }
   button {
     margin-top: 1.5rem;
+  }
+  .onglets {
+    border-bottom: 1px solid var(--border-default-grey);
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    overflow-x: auto;
+  }
+  .onglets button {
+    background: transparent;
+    border: 0;
+    border-bottom: 0.25rem solid transparent;
+    color: var(--text-action-high-blue-france);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font: inherit;
+    padding: 0.75rem 0;
+    white-space: nowrap;
+  }
+  .onglets button.actif {
+    border-color: var(--border-action-high-blue-france);
+    font-weight: 700;
+  }
+  .indicateur-onglet {
+    background: var(--background-contrast-info);
+    border-radius: 0.25rem;
+    color: var(--text-default-info);
+    font-size: 0.875rem;
+    margin-left: 0.5rem;
+    padding: 0.125rem 0.375rem;
+  }
+  [role='tabpanel'] {
+    margin-top: 1.5rem;
+  }
+  .transcript {
+    background: var(--background-alt-grey);
+    border-left: 0.25rem solid var(--border-default-grey);
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    padding: 1.5rem;
+    white-space: pre-wrap;
   }
   fieldset {
     margin-top: 1.5rem;
