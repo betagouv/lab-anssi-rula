@@ -1,5 +1,11 @@
 type RouteProduit = {
-  nom: 'dashboard' | 'projets' | 'nouveau' | 'source' | 'source-liste';
+  nom:
+    | 'dashboard'
+    | 'projets'
+    | 'nouveau'
+    | 'source'
+    | 'source-liste'
+    | 'source-pdf';
   produitId: number;
   source?: 'transcript' | 'bizdev' | 'featurebase';
 };
@@ -22,12 +28,15 @@ type RouteSourceProjet = {
   source: 'bizdev' | 'featurebase';
 };
 
+type RoutePdfProjet = { nom: 'source-pdf-projet'; projetId: number };
+
 export type RouteMvp =
   | { nom: 'entree' }
   | RouteProduit
   | RouteProjet
   | RouteEntretien
-  | RouteSourceProjet;
+  | RouteSourceProjet
+  | RoutePdfProjet;
 
 function id(value: string | undefined): number | null {
   const nombre = Number(value);
@@ -38,6 +47,18 @@ export function routeMvp(hash: string): RouteMvp | null {
   const segments = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   if (!segments.length) return { nom: 'entree' };
   const produitId = id(segments[1]);
+  if (
+    segments[0] === 'produits' &&
+    produitId &&
+    segments[2] === 'transcripts' &&
+    segments.length === 4 &&
+    ['produit', 'bizdev'].includes(segments[3] ?? '')
+  )
+    return {
+      nom: 'source-pdf',
+      produitId,
+      source: segments[3] === 'produit' ? 'transcript' : 'bizdev',
+    };
   if (
     segments[0] === 'produits' &&
     produitId &&
@@ -71,6 +92,14 @@ export function routeMvp(hash: string): RouteMvp | null {
     };
   const projetId = id(segments[1]);
   const entretienId = id(segments[3]);
+  if (
+    segments[0] === 'projets' &&
+    projetId &&
+    segments[2] === 'transcripts' &&
+    segments.length === 4 &&
+    segments[3] === 'produit'
+  )
+    return { nom: 'source-pdf-projet', projetId };
   if (
     segments[0] === 'projets' &&
     projetId &&

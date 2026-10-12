@@ -26,6 +26,7 @@
   import DetailFeatureBase from './fonctionnalites/DetailFeatureBase.svelte';
   import ListeAnalyses from './analyses/ListeAnalyses.svelte';
   import { vueDepuisHash } from './navigation/routage';
+  import ImportTranscriptPdf from './transcripts/ImportTranscriptPdf.svelte';
 
   let produits = $state<Produit[]>([]);
   let projets = $state<Projet[]>([]);
@@ -106,6 +107,11 @@
   <NouveauProjet {produit} oncree={versProjet} />
 {:else if route?.nom === 'source' && produit && route.source}
   <AjouterSource {produit} source={route.source} />
+{:else if route?.nom === 'source-pdf' && produit && route.source}
+  <ImportTranscriptPdf
+    produitId={produit.id}
+    typeSource={route.source === 'transcript' ? 'produit' : 'bizdev'}
+  />
 {:else if route?.nom === 'source-liste' && route.source === 'bizdev'}
   <ListeRetoursBizDev produitInitialId={route.produitId} />
 {:else if route?.nom === 'source-liste' && route.source === 'featurebase'}
@@ -117,6 +123,12 @@
     produit={projetProduit}
     source={route.source}
     projetInitialId={projet.id}
+  />
+{:else if route?.nom === 'source-pdf-projet' && projet}
+  <ImportTranscriptPdf
+    produitId={projet.produit_id}
+    projetId={projet.id}
+    typeSource="produit"
   />
 {:else if projet && route?.nom === 'projet'}
   <ProjetVue {projet} produitNom={produitEntete} />
