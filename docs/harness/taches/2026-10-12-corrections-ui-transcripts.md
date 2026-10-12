@@ -16,18 +16,21 @@ Rendre la source produit, son verbatim et son analyse PDF faciles à consulter d
 - [x] Un transcript PDF produit est libellé comme transcript produit, ouvre son entretien, et son verbatim reste visible dans l’analyse transverse.
 - [x] La page d’entretien permet d’alterner entre l’analyse PDF générée et le transcript brut.
 - [x] La gravité apparaît sur une ligne distincte du sentiment.
+- [x] Le transcript brut s’affiche dans un panneau gris plafonné à 60 % de la hauteur de la fenêtre et défilable indépendamment de la page.
 
 ## Plan
 
 1. Corriger le libellé, le lien et le verbatim transverse.
 2. Séparer visuellement le sentiment et la gravité.
 3. Ajouter l’onglet de consultation de l’analyse PDF à l’entretien.
+4. Afficher le transcript brut dans un panneau gris défilable.
 
 ## Validation
 
-- Commandes ciblées : `pnpm test`, `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` en conteneur Linux jetable; 70 tests réussis, Svelte sans erreur ni avertissement.
-- `bash scripts/harness.sh complet` : Ruff et mypy réussis; 286 tests backend réussis, 2 ignorés, couverture 100 %. L’étape front lancée via WSL ne trouve pas le binaire Rollup Linux dans les dépendances Windows; les commandes frontend équivalentes ont réussi en conteneur Linux jetable.
-- PR #22 : tous les checks GitHub réussissent, tête `fb891d3`.
+- `bash scripts/harness.sh complet` : Ruff et mypy réussis; 286 tests backend réussis, 2 ignorés, couverture 100 %. L’étape frontend sous WSL ne trouve pas `@rollup/rollup-linux-x64-gnu` dans les dépendances Windows.
+- Contrôles frontend dans un conteneur Linux avec le dépôt complet monté : `pnpm test`, `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm svelte:check` et `pnpm build` réussis; 70 tests passés, Svelte sans erreur ni avertissement.
+- `git diff --check` réussi.
+- PR #22 : checks précédemment passés sur `fb891d3`; à relancer sur le nouveau commit après push.
 - `bash scripts/harness.sh audit` : non requis.
 
 ## Décisions
