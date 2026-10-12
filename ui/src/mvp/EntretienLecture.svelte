@@ -161,6 +161,8 @@
   pre {
     background: var(--background-alt-grey);
     border-left: 0.25rem solid var(--border-default-grey);
+    max-height: 60vh;
+    overflow-y: auto;
     padding: 1.5rem;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
