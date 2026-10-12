@@ -16,6 +16,8 @@ Permettre d’importer des entretiens utilisateurs et des retours BizDev en PDF,
 - [x] PDF natif valide jusqu’à 10 Mo, 50 pages et 100 000 caractères extrait sans troncature; erreurs explicites si chiffré, illisible ou sans texte.
 - [x] Tours locuteur `[7 lettres]_[2 chiffres]:` normalisés en `SPEAKER_XX`, continuité inter-pages préservée, bandeau de téléchargement supprimé et date d’origine proposée puis validée. Le préfixe `None:` devient un locuteur distinct au rôle indéterminé.
 - [x] Les appels de préparation Albert reçoivent les champs originaux éphémères par groupes de fragments de tours ou de contexte de 2 000 caractères source maximum. Le modèle renvoie des plages de tokens explicites; Python résout et vérifie les tranches exactes dans le fragment fourni, puis applique les remplacements sans recherche floue ni cascade. Le garde-fou PDF et l’analyse utilisent le chemin strict exigeant un arrêt normal et un contenu non vide. PDF, texte brut, tokens et correspondances restent éphémères et ne sont ni persistés ni journalisés.
+- [x] L’effort de raisonnement de l’analyse PDF est configurable (`ALBERT_EFFORT_ANALYSE_TRANSCRIPTS`, `low|medium|high`, défaut `medium`) et reste séparé de l’anonymisation `high`; schéma strict, budget et citations vérifiées restent inchangés.
+- [x] Le schéma privé des citations limite chaque `tour_id` et les bornes inclusives à la taille de ce tour; Python revérifie puis reconstruit les citations exactes. Les références privées disparaissent avant persistance publique `pdf-v1`.
 - [x] Validation humaine requise avant analyse; toutes les références et citations proviennent des tours existants et restent exactes.
 - [x] Sources produit associées à produit et projet; sources BizDev associées au seul produit; analyses individuelles et transverses respectent ces périmètres.
 - [x] Jobs persistants et idempotents reprenables après interruption; résultat lié à une révision, génération obsolète rejetée.
@@ -76,3 +78,15 @@ Vérifications du lot : backend complet (267 passés, 2 ignorés, 100 % couvertu
 Le suivi conserve le jeton en mémoire après une interruption réseau. Les GET de suivi, lecture JSON comprise, expirent après 10 secondes; le bouton « Reprendre le suivi » ne relance jamais le POST. La durée continue localement depuis la dernière métadonnée serveur et les minuteries/requêtes sont annulées au démontage. Un POST tardif après démontage ne modifie pas l’état de l’interface. Une préparation terminale en échec ou un jeton introuvable libère le suivi et présente un message adapté.
 
 Vérification frontend après ce correctif : ESLint, Prettier, svelte-check (0 erreur, 0 avertissement) et Vitest (65 tests) réussis dans un conteneur jetable. La revue architecture/Sol a accepté le code sous réserve de ce dernier run vert. Aucun contrôle backend ni redémarrage backend n’est associé à ce lot.
+
+## Correction du rendu des remplacements
+
+Le diagnostic navigateur du 9 octobre a constaté 67 remplacements dont seulement 62 clés UI uniques, alors que le jeton avait déjà atteint `termine` (18/18), que le contenu était présent et que `enCours` était faux. Cinq lignes partageaient la clé `champ + valeur_originale` malgré des catégories distinctes; le DOM visible restait à 17/18. Le tableau est maintenant rendu sans clé, car ses lignes sont en lecture seule et n’ont pas d’identité locale mutable.
+
+Vérification ciblée : le rendu Svelte SSR d’une fixture synthétique contenant deux lignes avec même champ et valeur, mais catégories et pseudonymes différents, affiche les deux lignes (1 test Vitest passé). Ce test ne reproduit pas l’exception de clés du moteur client; la preuve de collision provient de l’inspection CDP du résultat réel sans lecture ni journalisation des valeurs. Après redémarrage du frontend seul, la page et le module chargé répondent HTTP 200 et le module compilé utilise un rendu non keyé. L’analyse du PDF réel et la validation humaine de son aperçu restent à effectuer.
+
+## Confirmation humaine sans seconde vérification Albert
+
+Après l’échec HTTP 502 du garde-fou, la confirmation/modification PDF enregistre directement le contenu soumis par la personne après sa relecture; les contrôles locaux de nom, date, rattachement et locuteurs restent appliqués. L’appel de validation Albert qui bloquait l’enregistrement a été retiré du parcours PDF; l’UX transcript existante reste inchangée et l’analyse PDF démarre séparément sur action explicite.
+
+Tests ciblés seulement : 7 tests backend sur confirmation, modification, absence d’appel Albert/job avant analyse explicite et refus des données structurellement invalides ; 7 réussis (1,97 s, un avertissement de dépréciation Starlette/httpx). Exécution dans l’image backend avec pytest temporairement installé dans `/tmp`, `-o addopts=` pour éviter le seuil de couverture global. Pas de harness complet selon la demande utilisateur.

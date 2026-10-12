@@ -10,6 +10,7 @@ from configuration import (
     Correspondance,
     Rula,
     charge_configuration,
+    _valider_effort_analyse_transcripts,
     _valider_parallelisme_anonymisation,
 )
 
@@ -24,6 +25,7 @@ def test_valeurs_par_defaut():
     assert config.albert.temperature_transcripts == 1.0
     assert config.albert.top_p_transcripts == 1.0
     assert config.albert.parallelisme_anonymisation == 8
+    assert config.albert.effort_analyse_transcripts == "medium"
     assert config.base_de_donnees.port == 5432
     assert config.base_de_donnees.nom == "rula"
     assert config.correspondance.seuil == 0.35
@@ -104,3 +106,34 @@ def test_configuration_charge_parallelisme_depuis_lenvironnement():
         text=True,
     )
     assert resultat.stdout.strip() == "3"
+
+
+def test_configuration_effort_analyse_accepte_uniquement_les_valeurs_connues():
+    assert {
+        valeur: _valider_effort_analyse_transcripts(valeur)
+        for valeur in ("low", "medium", "high")
+    } == {valeur: valeur for valeur in ("low", "medium", "high")}
+    import pytest
+
+    with pytest.raises(ValueError, match="low, medium ou high"):
+        _valider_effort_analyse_transcripts("ultra")
+
+
+def test_configuration_effort_analyse_est_charge_depuis_lenvironnement():
+    code = (
+        "from configuration import charge_configuration; "
+        "print(charge_configuration().albert.effort_analyse_transcripts)"
+    )
+    resultat = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
+        env={
+            **os.environ,
+            "ALBERT_EFFORT_ANALYSE_TRANSCRIPTS": "low",
+            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        },
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    assert resultat.stdout.strip() == "low"

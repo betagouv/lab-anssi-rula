@@ -5,6 +5,7 @@ class ErreurAlbert(Exception):
     def __init__(self, detail: str | None = None) -> None:
         self.detail = detail or self.detail_par_defaut
         super().__init__(self.detail)
+        self.diagnostic: dict[str, str | int | float | None] = {}
 
 
 class ErreurCommunicationAlbert(ErreurAlbert):
