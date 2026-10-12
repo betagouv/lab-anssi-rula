@@ -20,7 +20,9 @@ class DepotAnalysesTranscriptsMemoire(DepotAnalysesTranscripts):
         return analyse
 
     def obtenir_par_transcript(self, transcript_id: int) -> AnalyseTranscript | None:
-        return next((a for a in self._analyses if a.transcript_id == transcript_id), None)
+        return next(
+            (a for a in self._analyses if a.transcript_id == transcript_id), None
+        )
 
     def lister(self) -> list[AnalyseTranscript]:
         return list(self._analyses)

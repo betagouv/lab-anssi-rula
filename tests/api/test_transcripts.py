@@ -103,9 +103,7 @@ def test_refuse_si_albert_renvoie_un_json_invalide(
     reponse = client.post("/api/transcripts", json=PAYLOAD)
 
     assert reponse.status_code == 502
-    assert reponse.json() == {
-        "detail": "L'API Albert a renvoyé une réponse invalide."
-    }
+    assert reponse.json() == {"detail": "L'API Albert a renvoyé une réponse invalide."}
     assert client.get("/api/transcripts").json() == []
 
 
