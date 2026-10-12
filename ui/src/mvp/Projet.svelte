@@ -4,12 +4,14 @@
     listerEntretiens,
     obtenirConfigurationAnalyse,
     ProjetNonConforme,
+    supprimerProjet,
     type RaisonRefusProjet,
     type Entretien,
     type EtapeAnalyse,
     type Projet,
   } from '../api/projets';
   import Contenu from './Contenu.svelte';
+  import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
   import FormulaireEntretien from './FormulaireEntretien.svelte';
   import Guide from './Guide.svelte';
   import ResultatGardeFou from './ResultatGardeFou.svelte';
@@ -100,23 +102,33 @@
       <a href={'#/produits/' + projet.produit_id + '/projets'}>← Projets</a>
       <p>Produit : <strong>{produitNom ?? projet.produit_id}</strong></p>
     </div>
-    <details class="menu">
-      <summary class="fr-btn">Ajouter des données</summary>
-      <nav aria-label="Ajouter des données au projet">
-        <button class="menu-lien" type="button" onclick={() => (ouvert = true)}
-          >Ajouter un transcript</button
-        >
-        <a href={'#/projets/' + projet.id + '/transcripts/produit'}
-          >Importer un transcript produit PDF</a
-        >
-        <a href={'#/projets/' + projet.id + '/sources/bizdev'}
-          >Importer des entretiens BizDev</a
-        >
-        <a href={'#/projets/' + projet.id + '/sources/featurebase'}
-          >Importer des demandes FeatureBase</a
-        >
-      </nav>
-    </details>
+    <div class="actions-entete">
+      <SuppressionConfirmee
+        modalId={`suppression-projet-${projet.id}`}
+        titre="Supprimer ce projet ?"
+        description="Le projet, ses entretiens, ses transcripts produit et leurs analyses, ainsi que ses données d’analyse seront supprimés définitivement. Les données produit sans lien avec ce projet seront conservées."
+        onconfirmer={() => supprimerProjet(projet.id)}
+        onsucces={() =>
+          (window.location.hash = `#/produits/${projet.produit_id}/projets`)}
+      />
+      <details class="menu">
+        <summary class="fr-btn">Ajouter des données</summary>
+        <nav aria-label="Ajouter des données au projet">
+          <button class="menu-lien" type="button" onclick={() => (ouvert = true)}
+            >Ajouter un transcript</button
+          >
+          <a href={'#/projets/' + projet.id + '/transcripts/produit'}
+            >Importer un transcript produit PDF</a
+          >
+          <a href={'#/projets/' + projet.id + '/sources/bizdev'}
+            >Importer des entretiens BizDev</a
+          >
+          <a href={'#/projets/' + projet.id + '/sources/featurebase'}
+            >Importer des demandes FeatureBase</a
+          >
+        </nav>
+      </details>
+    </div>
   </div>
 
   <h1>{projet.nom}</h1>
@@ -218,6 +230,12 @@
     display: flex;
     gap: 1.5rem;
     justify-content: space-between;
+  }
+  .actions-entete {
+    align-items: start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
   .entete-projet a,
   section > a,
@@ -365,6 +383,7 @@
   }
   @media (max-width: 48rem) {
     .entete-projet,
+    .actions-entete,
     .titre-section,
     .analyses li {
       align-items: stretch;

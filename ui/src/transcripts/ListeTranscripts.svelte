@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Vue, Transcript } from '../types';
-  import { listerTranscripts } from '../api/transcripts';
+  import { listerTranscripts, supprimerTranscript } from '../api/transcripts';
   import { requete } from '../api/requete';
   import { hashDepuisVue } from '../navigation/routage';
+  import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
 
   let { onnaviquer }: { onnaviquer: (v: Vue) => void } = $props();
 
@@ -157,6 +158,14 @@
                     onnaviquer({ nom: 'sources:entretiens:modification', id: t.id })}
                   >Modifier</button
                 >
+                <SuppressionConfirmee
+                  modalId={`suppression-entretien-${t.id}`}
+                  titre={`Supprimer l’entretien ${t.id} ?`}
+                  description="Le transcript UX, son analyse et ses données dérivées seront supprimés définitivement."
+                  onconfirmer={() => supprimerTranscript(t.id)}
+                  onsucces={() =>
+                    (transcripts = transcripts.filter((item) => item.id !== t.id))}
+                />
               </td>
             </tr>
           {/each}

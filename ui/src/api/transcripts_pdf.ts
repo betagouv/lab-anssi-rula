@@ -10,6 +10,9 @@ export type SourceTranscriptPdf = {
 export const obtenirSourceTranscriptPdf = (transcriptId: number) =>
   requete<SourceTranscriptPdf>(`/api/transcripts-pdf/${transcriptId}`);
 
+export const supprimerTranscriptPdf = (transcriptId: number) =>
+  requete<void>(`/api/transcripts-pdf/${transcriptId}`, { method: 'DELETE' });
+
 export const obtenirAnalyseTranscriptPdf = (transcriptId: number) =>
   requete<AnalyseTranscriptPdf | null>(
     `/api/transcripts-pdf/${transcriptId}/analyse`

@@ -181,7 +181,9 @@ def test_modification_retourne_404_si_la_source_disparait() -> None:
         "",
         _payload()["locuteurs"],
     )
-    albert = AdaptateurAlbertDeTest().avec_erreur(AssertionError("Analyse non demandée."))
+    albert = AdaptateurAlbertDeTest().avec_erreur(
+        AssertionError("Analyse non demandée.")
+    )
     app.dependency_overrides[fabrique_service_transcripts_pdf] = lambda: (
         ServiceModificationRaceDeTest(
             depot,
@@ -216,6 +218,7 @@ def test_lit_modifie_supprime_et_analyse_une_source() -> None:
     job = depot.reclamer_job(depot.creer_job(source.id).id)
     assert job is not None
     assert depot.finaliser(job, {"resume": "Résumé."}, [], "pdf-v1", "bizdev-v1")
+    depot.fonctionnalites.append({"transcript_id": source.id, "contenu": "Besoin"})
 
     assert client.get(f"/api/transcripts-pdf/{source.id}").status_code == 200
     assert client.get(f"/api/transcripts-pdf/{source.id}/job").status_code == 200
@@ -231,6 +234,9 @@ def test_lit_modifie_supprime_et_analyse_une_source() -> None:
     assert client.delete(f"/api/transcripts-pdf/{source.id}").status_code == 204
     assert client.delete(f"/api/transcripts-pdf/{source.id}").status_code == 404
     assert client.get(f"/api/transcripts-pdf/{source.id}/job").status_code == 404
+    assert depot.obtenir(source.id) is None
+    assert depot.obtenir_analyse(source.id) is None
+    assert depot.fonctionnalites == []
 
 
 def test_preparation_pdf_et_erreurs_de_traitement() -> None:
