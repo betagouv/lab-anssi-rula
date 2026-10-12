@@ -23,7 +23,7 @@ export type AnalyseTransverse = {
 };
 
 export type PassageTransverse = {
-  source: 'transcript' | 'idee' | 'retour_bizdev';
+  source: SourceBesoin;
   source_id: number | null;
   transcript_id: number | null;
   projet_id: number | null;
