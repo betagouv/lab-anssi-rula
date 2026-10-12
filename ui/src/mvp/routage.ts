@@ -10,6 +10,12 @@ type RouteProduit = {
   source?: 'transcript' | 'bizdev' | 'featurebase';
 };
 
+type RouteTranscriptProduit = {
+  nom: 'transcript-produit';
+  produitId: number;
+  transcriptId: number;
+};
+
 type RouteProjet = {
   nom: 'projet' | 'configuration' | 'analyse' | 'scan' | 'detail';
   projetId: number;
@@ -33,6 +39,7 @@ type RoutePdfProjet = { nom: 'source-pdf-projet'; projetId: number };
 export type RouteMvp =
   | { nom: 'entree' }
   | RouteProduit
+  | RouteTranscriptProduit
   | RouteProjet
   | RouteEntretien
   | RouteSourceProjet
@@ -47,6 +54,16 @@ export function routeMvp(hash: string): RouteMvp | null {
   const segments = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   if (!segments.length) return { nom: 'entree' };
   const produitId = id(segments[1]);
+  const transcriptId = id(segments[4]);
+  if (
+    segments[0] === 'produits' &&
+    produitId &&
+    segments[2] === 'transcripts' &&
+    segments[3] === 'produit' &&
+    segments.length === 5 &&
+    transcriptId
+  )
+    return { nom: 'transcript-produit', produitId, transcriptId };
   if (
     segments[0] === 'produits' &&
     produitId &&

@@ -7,12 +7,10 @@ export function libelleSource(source: PassageTransverse['source']) {
   return source === 'idee' ? 'FeatureBase' : 'BizDev';
 }
 
-export function lienPassage(passage: PassageTransverse) {
-  if (
-    (passage.source === 'transcript' || passage.source === 'transcript_produit') &&
-    passage.projet_id &&
-    passage.transcript_id
-  )
+export function lienPassage(passage: PassageTransverse, produitId: number) {
+  if (passage.source === 'transcript_produit' && passage.transcript_id)
+    return `#/produits/${produitId}/transcripts/produit/${passage.transcript_id}`;
+  if (passage.source === 'transcript' && passage.projet_id && passage.transcript_id)
     return `#/projets/${passage.projet_id}/entretiens/${passage.transcript_id}`;
   if (passage.source === 'idee' && passage.source_id)
     return `#/sources/featurebase/${passage.source_id}`;

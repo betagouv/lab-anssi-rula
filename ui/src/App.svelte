@@ -19,6 +19,7 @@
   import EtapeAnalyse from './mvp/EtapeAnalyse.svelte';
   import Detail from './mvp/Detail.svelte';
   import EntretienLecture from './mvp/EntretienLecture.svelte';
+  import EntretienTranscriptPdf from './mvp/EntretienTranscriptPdf.svelte';
   import { routeMvp } from './mvp/routage';
   import ListeRetoursBizDev from './retours/ListeRetoursBizDev.svelte';
   import DetailRetourBizDev from './retours/DetailRetourBizDev.svelte';
@@ -111,6 +112,11 @@
   <ImportTranscriptPdf
     produitId={produit.id}
     typeSource={route.source === 'transcript' ? 'produit' : 'bizdev'}
+  />
+{:else if route?.nom === 'transcript-produit' && produit}
+  <EntretienTranscriptPdf
+    produitId={route.produitId}
+    transcriptId={route.transcriptId}
   />
 {:else if route?.nom === 'source-liste' && route.source === 'bizdev'}
   <ListeRetoursBizDev produitInitialId={route.produitId} />
