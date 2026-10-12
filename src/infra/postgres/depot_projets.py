@@ -5,10 +5,17 @@ import psycopg2
 
 from configuration import BaseDeDonnees
 from infra.connexion_base_de_donnees import avec_connexion
-from projets.depot import DepotProjets, Entretien, Projet, ScanProjet, SourceProjet
+from projets.depot import (
+    DepotProjets,
+    Entretien,
+    Projet,
+    ScanProjet,
+    SourceAnalyseProjet,
+    SourceProjet,
+)
 from projets.service import ProjetDejaExistant
 
-_COLONNES_PROJET = "id, produit_id, nom, brief, cree_le"
+_COLONNES_PROJET = "id, produit_id, nom, brief, cree_le, revision_corpus"
 _COLONNES_ENTRETIEN = (
     "id, projet_id, participant, date_entretien, moderateur, contenu, "
     "note_moderateur, cree_le"
@@ -47,7 +54,7 @@ class DepotProjetsPostgres(DepotProjets):  # pragma: no cover
         with self._connexion.cursor() as cur:
             try:
                 cur.execute(
-                    "INSERT INTO projets_recherche (produit_id, nom, brief) VALUES (%s, %s, %s) RETURNING id, produit_id, nom, brief, cree_le",
+                    f"INSERT INTO projets_recherche (produit_id, nom, brief) VALUES (%s, %s, %s) RETURNING {_COLONNES_PROJET}",
                     (produit_id, nom, brief),
                 )
             except psycopg2.errors.UniqueViolation as erreur:
@@ -131,7 +138,7 @@ class DepotProjetsPostgres(DepotProjets):  # pragma: no cover
                 if projet_id is None:
                     try:
                         cur.execute(
-                            "INSERT INTO projets_recherche (produit_id, nom, brief) VALUES (%s, %s, %s) RETURNING id, produit_id, nom, brief, cree_le",
+                            f"INSERT INTO projets_recherche (produit_id, nom, brief) VALUES (%s, %s, %s) RETURNING {_COLONNES_PROJET}",
                             (produit_id, nom, brief),
                         )
                     except psycopg2.errors.UniqueViolation as erreur:
@@ -166,6 +173,18 @@ class DepotProjetsPostgres(DepotProjets):  # pragma: no cover
             return [Entretien(*row) for row in cur.fetchall()]
 
     @avec_connexion
+    def lister_sources_analyse(self, projet_id: int) -> list[SourceAnalyseProjet]:
+        with self._connexion.cursor() as cur:
+            cur.execute(
+                "SELECT id, type_source, participant, date_entretien, moderateur, contenu, "
+                "note_moderateur, contexte, locuteurs FROM transcripts "
+                "WHERE projet_id = %s AND confirme = TRUE AND type_source IN ('ux', 'produit') "
+                "ORDER BY cree_le, id",
+                (projet_id,),
+            )
+            return [SourceAnalyseProjet(*row) for row in cur.fetchall()]
+
+    @avec_connexion
     def enregistrer_scan(self, projet_id: int, brouillon: str) -> ScanProjet:
         with self._connexion.cursor() as cur:
             cur.execute(
@@ -173,6 +192,30 @@ class DepotProjetsPostgres(DepotProjets):  # pragma: no cover
                 (projet_id, brouillon),
             )
             return ScanProjet(*cur.fetchone())
+
+    @avec_connexion
+    def enregistrer_scan_si_revision(
+        self, projet_id: int, revision: int, brouillon: str
+    ) -> ScanProjet | None:
+        with self._connexion.cursor() as cur:
+            cur.execute(
+                "SELECT revision_corpus FROM projets_recherche WHERE id = %s FOR UPDATE",
+                (projet_id,),
+            )
+            projet = cur.fetchone()
+            if projet is None or projet[0] != revision:
+                return None
+            cur.execute(
+                """INSERT INTO scans_projets (projet_id, revision, brouillon)
+                   SELECT id, revision_corpus, %s FROM projets_recherche
+                   WHERE id = %s AND revision_corpus = %s
+                   ON CONFLICT (projet_id) DO UPDATE SET revision = EXCLUDED.revision,
+                       brouillon = EXCLUDED.brouillon, valide = NULL, modifie_le = NOW()
+                   RETURNING projet_id, brouillon, valide, cree_le, modifie_le""",
+                (brouillon, projet_id, revision),
+            )
+            row = cur.fetchone()
+            return ScanProjet(*row) if row else None
 
     @avec_connexion
     def obtenir_scan(self, projet_id: int) -> ScanProjet | None:

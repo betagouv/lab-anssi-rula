@@ -48,7 +48,11 @@ class DepotAnalyseMemoire(DepotAnalyse):
 
     def lister_etapes(self, projet_id: int) -> list[EtapeAnalyse]:
         return sorted(
-            (etape for (id_projet, _), etape in self.etapes.items() if id_projet == projet_id),
+            (
+                etape
+                for (id_projet, _), etape in self.etapes.items()
+                if id_projet == projet_id
+            ),
             key=lambda etape: etape.ordre,
         )
 
@@ -69,7 +73,9 @@ class DepotAnalyseMemoire(DepotAnalyse):
         self.etapes[(projet_id, cle)] = resultat
         return resultat
 
-    def modifier_etape(self, projet_id: int, cle: str, brouillon: str) -> EtapeAnalyse | None:
+    def modifier_etape(
+        self, projet_id: int, cle: str, brouillon: str
+    ) -> EtapeAnalyse | None:
         etape = self.obtenir_etape(projet_id, cle)
         if not etape:
             return None

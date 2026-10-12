@@ -2,6 +2,7 @@ from datetime import date
 
 import pytest
 
+from projets.depot import DepotProjets
 from projets.service import ProjetIntrouvable, ServiceScansProjets
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.projets.depot_projets_de_test import DepotProjetsDeTest
@@ -19,3 +20,14 @@ def test_genere_un_scan_des_entretiens() -> None:
 def test_refuse_un_projet_absent() -> None:
     with pytest.raises(ProjetIntrouvable):
         ServiceScansProjets(DepotProjetsDeTest(), AdaptateurAlbertDeTest(), "prompt").generer(1)
+
+
+def test_enregistre_scan_si_revision_identique() -> None:
+    depot = DepotProjetsDeTest()
+    projet = depot.ajouter(1, "Recherche", "")
+
+    scan = DepotProjets.enregistrer_scan_si_revision(
+        depot, projet.id, projet.revision_corpus, "Scan"
+    )
+
+    assert scan == depot.obtenir_scan(projet.id)

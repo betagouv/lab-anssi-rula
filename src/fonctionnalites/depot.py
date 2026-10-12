@@ -13,7 +13,9 @@ class Fonctionnalite(NamedTuple):
 
 class DepotFonctionnalitesTranscripts(ABC):
     @abstractmethod
-    def ajouter_toutes(self, transcript_id: int, items: list[tuple[str, str | None]]) -> list[Fonctionnalite]: ...
+    def ajouter_toutes(
+        self, transcript_id: int, items: list[tuple[str, str | None]]
+    ) -> list[Fonctionnalite]: ...
 
     @abstractmethod
     def obtenir_par_transcript(self, transcript_id: int) -> list[Fonctionnalite]: ...
