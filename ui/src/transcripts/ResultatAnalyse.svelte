@@ -41,11 +41,11 @@
                   </footer>
                 </blockquote>{/if}
               {#if 'sentiment' in element}<p>
-                  Sentiment : {String(
-                    element.sentiment
-                  )}{#if 'gravite' in element && element.gravite}
-                    · Gravité : {String(element.gravite)}{/if}
-                </p>{/if}
+                  Sentiment : {String(element.sentiment)}
+                </p>
+                {#if 'gravite' in element && element.gravite}<p>
+                    Gravité : {String(element.gravite)}
+                  </p>{/if}{/if}
             {/if}
           </li>
         {/each}

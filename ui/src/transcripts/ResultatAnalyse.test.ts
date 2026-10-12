@@ -19,13 +19,23 @@ describe('rendu d’une analyse de transcript PDF', () => {
               gravite: 'faible',
             },
           ],
+          points_negatifs: [
+            {
+              description: 'La gestion est répétitive',
+              sentiment: 'négatif',
+              gravite: 'élevée',
+            },
+          ],
         },
       },
     });
     expect(body).toContain('Synthèse utilisateur');
     expect(body).toContain('Gestion des droits');
     expect(body).toContain('C’est très pratique.');
-    expect(body).toContain('Sentiment : positif');
-    expect(body).toContain('Gravité : faible');
+    expect(body).toContain('<p>Sentiment : positif</p>');
+    expect(body).toContain('<p>Gravité : faible</p>');
+    expect(body).toContain('<p>Sentiment : négatif</p>');
+    expect(body).toContain('<p>Gravité : élevée</p>');
+    expect(body).not.toContain('· Gravité');
   });
 });
