@@ -196,6 +196,14 @@ def obtenir(id: int, depot: DepotProjets = Depends(fabrique_depot_projets)) -> d
     return projet._asdict()
 
 
+@routeur.delete("/projets/{id}", status_code=204)
+def supprimer_projet(
+    id: int, depot: DepotProjets = Depends(fabrique_depot_projets)
+) -> None:
+    if not depot.supprimer(id):
+        raise HTTPException(status_code=404)
+
+
 @routeur.get("/projets/{id}/entretiens")
 def lister_entretiens(
     id: int, depot: DepotProjets = Depends(fabrique_depot_projets)

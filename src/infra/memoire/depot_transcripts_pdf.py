@@ -101,6 +101,11 @@ class DepotTranscriptsPdfMemoire(DepotTranscriptsPdf):
             for analyse in self.analyses
             if analyse.transcript_id != transcript_id
         ]
+        self.fonctionnalites = [
+            feature
+            for feature in self.fonctionnalites
+            if feature["transcript_id"] != transcript_id
+        ]
         self.jobs = [job for job in self.jobs if job.transcript_id != transcript_id]
         return True
 

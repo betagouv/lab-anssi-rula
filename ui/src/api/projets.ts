@@ -105,6 +105,8 @@ export const listerProduits = () => requete<Produit[]>('/api/produits');
 export const listerProjets = (produitId: number) =>
   requete<Projet[]>(`/api/projets?produit_id=${produitId}`);
 export const obtenirProjet = (id: number) => requete<Projet>(`/api/projets/${id}`);
+export const supprimerProjet = (id: number) =>
+  requete<void>(`/api/projets/${id}`, { method: 'DELETE' });
 export const creerProjet = (body: {
   produit_id: number;
   nom: string;

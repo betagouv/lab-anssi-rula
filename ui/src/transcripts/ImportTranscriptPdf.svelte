@@ -17,6 +17,8 @@
   import { notificationApresAnalyse } from './notification-analyse';
   import RemplacementsTranscript from './RemplacementsTranscript.svelte';
   import PanneauAnalyseTranscript from './PanneauAnalyseTranscript.svelte';
+  import { supprimerTranscriptPdf } from '../api/transcripts_pdf';
+  import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
 
   let {
     produitId,
@@ -219,6 +221,20 @@
       erreur = cause instanceof Error ? cause.message : 'Lecture impossible.';
     } finally {
       enCours = false;
+    }
+  }
+
+  function apresSuppression(id: number) {
+    sources = sources.filter((source) => source.id !== id);
+    if (transcriptId === id) {
+      transcriptId = null;
+      analyse = null;
+      contenu = '';
+      contexte = '';
+      nomSource = '';
+      dateEntretien = '';
+      locuteurs = [];
+      edition = false;
     }
   }
 
@@ -428,7 +444,8 @@
     <h2>Transcripts enregistrés</h2>
     <table>
       <thead
-        ><tr><th>Nom de source</th><th>Date</th><th>Projet</th><th></th></tr></thead
+        ><tr><th>Nom de source</th><th>Date</th><th>Projet</th><th>Actions</th></tr
+        ></thead
       >
       <tbody
         >{#each sources as source (source.id)}
@@ -439,10 +456,20 @@
               >{projets.find((projet) => projet.id === source.projet_id)?.nom ??
                 '—'}</td
             ><td
-              ><button
-                class="fr-btn fr-btn--secondary"
-                onclick={() => consulter(source.id)}>Consulter</button
-              ></td
+              ><div class="actions-source">
+                <button
+                  class="fr-btn fr-btn--secondary"
+                  type="button"
+                  onclick={() => consulter(source.id)}>Consulter</button
+                >
+                <SuppressionConfirmee
+                  modalId={`suppression-transcript-${source.id}`}
+                  titre={`Supprimer le transcript « ${source.nom_source} » ?`}
+                  description="Le transcript PDF, son analyse générée et ses données dérivées seront supprimés définitivement."
+                  onconfirmer={() => supprimerTranscriptPdf(source.id)}
+                  onsucces={() => apresSuppression(source.id)}
+                />
+              </div></td
             ></tr
           >
         {/each}</tbody
@@ -707,6 +734,11 @@
     margin: 2rem auto;
     max-width: 1000px;
     padding: 0 1rem;
+  }
+  .actions-source {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
   label {
     display: block;

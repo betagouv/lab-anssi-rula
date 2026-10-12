@@ -64,6 +64,21 @@ def test_nom_projet_vide_est_refuse() -> None:
         _nom_projet("   ")
 
 
+def test_supprimer_projet_supprime_ses_donnees_rattachees(contexte_projets) -> None:
+    client, depot, _ = contexte_projets()
+    projet = depot.ajouter(1, "À supprimer", "Brief")
+    entretien = depot.ajouter_entretien(
+        projet.id, "A", date(2026, 8, 25), "B", "Texte", ""
+    )
+    depot.enregistrer_scan(projet.id, "Scan")
+
+    assert client.delete(f"/api/projets/{projet.id}").status_code == 204
+    assert depot.obtenir(projet.id) is None
+    assert depot.obtenir_entretien(projet.id, entretien.id) is None
+    assert depot.obtenir_scan(projet.id) is None
+    assert client.delete(f"/api/projets/{projet.id}").status_code == 404
+
+
 def test_erreur_analyse_signale_un_corpus_obsolete() -> None:
     assert _erreur_analyse(CorpusProjetModifie()).status_code == 409
 
