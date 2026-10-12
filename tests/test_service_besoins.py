@@ -14,6 +14,7 @@ from infra.memoire.depot_idees import DepotIdeesMemoire
 from infra.memoire.depot_retours_bizdev import DepotRetoursBizDevMemoire
 from infra.memoire.depot_transcripts import DepotTranscriptsMemoire
 from adaptateurs.albert import AdaptateurAlbert
+from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 
 
 class _AlbertSelonReponse(AdaptateurAlbert):
@@ -88,3 +89,17 @@ def test_preparer_transcripts_inclut_les_transcripts_du_produit() -> None:
 def test_preparer_refuse_une_source_inconnue() -> None:
     with pytest.raises(SourceBesoinInconnue):
         _service(_AlbertSelonReponse("")).preparer("inconnue")
+
+
+def test_transcript_pdf_reutilise_les_besoins_extraits_sans_second_appel_llm() -> None:
+    albert = AdaptateurAlbertDeTest()
+    service = _service(albert)
+    service._depot.remplacer_source(
+        "transcript_produit",
+        [(9, "Action", "Action", "Verbatim exact.", 4)],
+        3,
+    )
+
+    assert service._produits_de_source("transcript_produit") == {3}
+    assert service.analyser("transcript_produit", 3)[0].verbatim == "Verbatim exact."
+    assert albert.messages_recus == []

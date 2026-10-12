@@ -66,6 +66,10 @@ class ProjetSansEntretien(AnalyseProjetErreur):
     pass
 
 
+class CorpusProjetModifie(AnalyseProjetErreur):
+    pass
+
+
 def assemble_prompt(blocs: list[BlocPrompt], etape: str) -> str:
     valeurs = {bloc.cle: bloc.contenu.strip() for bloc in blocs}
     cle_consigne = f"consigne_{etape}"
@@ -89,11 +93,15 @@ def assemble_prompt(blocs: list[BlocPrompt], etape: str) -> str:
 
 class DepotAnalyse(ABC):
     @abstractmethod
-    def lister_blocs_produit(self, produit_id: int) -> list[BlocPrompt]:  # pragma: no cover
+    def lister_blocs_produit(
+        self, produit_id: int
+    ) -> list[BlocPrompt]:  # pragma: no cover
         ...
 
     @abstractmethod
-    def lister_blocs_projet(self, projet_id: int) -> list[BlocPrompt]:  # pragma: no cover
+    def lister_blocs_projet(
+        self, projet_id: int
+    ) -> list[BlocPrompt]:  # pragma: no cover
         ...
 
     @abstractmethod
@@ -106,7 +114,9 @@ class DepotAnalyse(ABC):
         ...
 
     @abstractmethod
-    def initialiser_etapes(self, projet_id: int) -> list[EtapeAnalyse]:  # pragma: no cover
+    def initialiser_etapes(
+        self, projet_id: int
+    ) -> list[EtapeAnalyse]:  # pragma: no cover
         ...
 
     @abstractmethod
@@ -114,7 +124,9 @@ class DepotAnalyse(ABC):
         ...
 
     @abstractmethod
-    def obtenir_etape(self, projet_id: int, cle: str) -> EtapeAnalyse | None:  # pragma: no cover
+    def obtenir_etape(
+        self, projet_id: int, cle: str
+    ) -> EtapeAnalyse | None:  # pragma: no cover
         ...
 
     @abstractmethod
@@ -123,16 +135,37 @@ class DepotAnalyse(ABC):
     ) -> EtapeAnalyse:  # pragma: no cover
         ...
 
-    @abstractmethod
-    def modifier_etape(self, projet_id: int, cle: str, brouillon: str) -> EtapeAnalyse | None:  # pragma: no cover
-        ...
+    def enregistrer_etape_si_revision(
+        self, projet_id: int, cle: str, prompt: str, brouillon: str, revision: int
+    ) -> EtapeAnalyse | None:
+        return self.enregistrer_etape(projet_id, cle, prompt, brouillon)
 
     @abstractmethod
-    def valider_etape(self, projet_id: int, cle: str) -> EtapeAnalyse | None:  # pragma: no cover
+    def modifier_etape(
+        self, projet_id: int, cle: str, brouillon: str
+    ) -> EtapeAnalyse | None:  # pragma: no cover
         ...
 
+    def modifier_etape_si_revision(
+        self, projet_id: int, cle: str, brouillon: str, revision: int
+    ) -> EtapeAnalyse | None:
+        return self.modifier_etape(projet_id, cle, brouillon)
+
     @abstractmethod
-    def invalider_etapes_suivantes(self, projet_id: int, ordre: int) -> None:  # pragma: no cover
+    def valider_etape(
+        self, projet_id: int, cle: str
+    ) -> EtapeAnalyse | None:  # pragma: no cover
+        ...
+
+    def valider_etape_si_revision(
+        self, projet_id: int, cle: str, revision: int
+    ) -> EtapeAnalyse | None:
+        return self.valider_etape(projet_id, cle)
+
+    @abstractmethod
+    def invalider_etapes_suivantes(
+        self, projet_id: int, ordre: int
+    ) -> None:  # pragma: no cover
         ...
 
 
@@ -181,21 +214,29 @@ class ServiceAnalyseProjet:
         )
 
     def generer(self, projet_id: int, cle: str) -> EtapeAnalyse:
+        projet = self._projets.obtenir(projet_id)
+        if not projet:
+            raise EtapeAbsente
         definition = next((etape for etape in ETAPES if etape[0] == cle), None)
         if not definition:
             raise EtapeAbsente
         configuration = self.configuration(projet_id)
         etape = next(etape for etape in configuration.etapes if etape.cle == cle)
-        precedentes = [item for item in configuration.etapes if item.ordre < etape.ordre]
+        precedentes = [
+            item for item in configuration.etapes if item.ordre < etape.ordre
+        ]
         if precedentes and any(item.valide is None for item in precedentes):
             raise EtapeInaccessible
-        entretiens = self._projets.lister_entretiens(projet_id)
-        if not entretiens:
+        sources = self._projets.lister_sources_analyse(projet_id)
+        if not sources:
             raise ProjetSansEntretien
         prompt = assemble_prompt(configuration.blocs, cle)
         donnees = "\n\n".join(
-            f"## {entretien.participant}\n{entretien.contenu}\n{entretien.note_moderateur}"
-            for entretien in entretiens
+            f"## {source.type_source} — {source.date_entretien}\n"
+            f"{source.participant or ''} {source.moderateur or ''}\n"
+            f"{', '.join(f'{locuteur["identifiant"]}: {locuteur["role"]}' for locuteur in source.locuteurs)}\n"
+            f"{source.contexte}\n{source.contenu}\n{source.note_moderateur}"
+            for source in sources
         )
         precedentes_validees = "\n\n".join(
             item.valide for item in precedentes if item.valide is not None
@@ -209,17 +250,42 @@ class ServiceAnalyseProjet:
             ],
             temperature=0.3,
         )
+        projet_courant = self._projets.obtenir(projet_id)
+        if (
+            projet_courant is None
+            or projet_courant.revision_corpus != projet.revision_corpus
+        ):
+            raise CorpusProjetModifie
+        enregistree = self._analyses.enregistrer_etape_si_revision(
+            projet_id, cle, prompt, resultat, projet.revision_corpus
+        )
+        if enregistree is None:
+            raise CorpusProjetModifie
         self._analyses.invalider_etapes_suivantes(projet_id, etape.ordre)
-        return self._analyses.enregistrer_etape(projet_id, cle, prompt, resultat)
+        return enregistree
 
     def modifier(self, projet_id: int, cle: str, contenu: str) -> EtapeAnalyse:
-        etape = self._analyses.modifier_etape(projet_id, cle, contenu)
+        projet = self._projets.obtenir(projet_id)
+        etape = (
+            self._analyses.modifier_etape_si_revision(
+                projet_id, cle, contenu, projet.revision_corpus
+            )
+            if projet
+            else None
+        )
         if not etape:
             raise EtapeAbsente
         return etape
 
     def valider(self, projet_id: int, cle: str) -> EtapeAnalyse:
-        etape = self._analyses.valider_etape(projet_id, cle)
+        projet = self._projets.obtenir(projet_id)
+        etape = (
+            self._analyses.valider_etape_si_revision(
+                projet_id, cle, projet.revision_corpus
+            )
+            if projet
+            else None
+        )
         if not etape:
             raise EtapeAbsente
         return etape
