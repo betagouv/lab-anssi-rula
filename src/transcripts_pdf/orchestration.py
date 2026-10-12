@@ -1,9 +1,10 @@
-import json
 import re
+import logging
+import time
 from datetime import date
 from typing import NamedTuple
 
-from transcripts_pdf.analyse import ServiceAnalysePdf
+from transcripts_pdf.analyse import ErreurAnalysePdf, ServiceAnalysePdf
 from transcripts_pdf.depot import (
     AnalyseTranscriptPdf,
     DepotTranscriptsPdf,
@@ -11,17 +12,12 @@ from transcripts_pdf.depot import (
     SourceTranscriptPdf,
 )
 from transcripts_pdf.service import Locuteur
-from validation_transcript.service import ServiceValidationTranscript
+
+_JOURNAL = logging.getLogger("uvicorn.error")
 
 
 class SourcePdfInvalide(ValueError):
     pass
-
-
-class SourcePdfNonAnonyme(ValueError):
-    def __init__(self, problemes: list[dict[str, str]]) -> None:
-        super().__init__("Des éléments doivent être anonymisés.")
-        self.problemes = problemes
 
 
 class ResultatAnalyseSource(NamedTuple):
@@ -33,12 +29,10 @@ class ServiceTranscriptsPdf:
     def __init__(
         self,
         depot: DepotTranscriptsPdf,
-        garde_fou: ServiceValidationTranscript,
         analyseur: ServiceAnalysePdf,
         delai_albert: int = 180,
     ) -> None:
         self._depot = depot
-        self._garde_fou = garde_fou
         self._analyseur = analyseur
         self._duree_bail_secondes = max(360, delai_albert + 60)
 
@@ -53,17 +47,22 @@ class ServiceTranscriptsPdf:
         contexte: str,
         locuteurs: list[Locuteur],
     ) -> SourceTranscriptPdf:
-        if not re.fullmatch(
-            r"(?:reunion-_[a-z]{3}-[a-z]{4}-[a-z]{3}_-du-\d{4}-\d{2}-\d{2}-a-\d{2}_\d{2}|"
-            rf"transcript-{type_source}-(?:sans-date|\d{{4}}-\d{{2}}-\d{{2}})-[0-9a-f]{{8}})\.pdf",
+        if type_source not in {"produit", "bizdev"}:
+            raise SourcePdfInvalide("Le type de source est invalide.")
+        correspondance = re.fullmatch(
+            r"(?:reunion-_[a-z]{3}-[a-z]{4}-[a-z]{3}_-du-\d{4}-\d{2}-\d{2}-a-\d{2}_\d{2}\.pdf|"
+            r"transcript-(?P<type_source>produit|bizdev)-(?:sans-date|\d{4}-\d{2}-\d{2})-[0-9a-f]{8}\.pdf)",
             nom_source,
             re.IGNORECASE,
+        )
+        type_nom = correspondance.group("type_source") if correspondance else None
+        if correspondance is None or (
+            type_nom is not None and type_nom.casefold() != type_source
         ):
             raise SourcePdfInvalide("Le nom de source est invalide.")
         date_validee = self._verifier(
             type_source, produit_id, projet_id, date_entretien, contenu, locuteurs
         )
-        self._verifier_anonymisation(contenu, contexte, locuteurs)
         return self._depot.ajouter(
             type_source,
             produit_id,
@@ -100,7 +99,6 @@ class ServiceTranscriptsPdf:
             contenu,
             locuteurs,
         )
-        self._verifier_anonymisation(contenu, contexte, locuteurs)
         return self._depot.modifier(
             transcript_id,
             date_validee,
@@ -139,6 +137,7 @@ class ServiceTranscriptsPdf:
         ):
             self._depot.echouer(job.id, job.jeton, "Le corpus a changé.")
             return
+        debut_analyse = time.monotonic()
         try:
             analyse = self._analyseur.analyser(
                 source.type_source,
@@ -147,32 +146,77 @@ class ServiceTranscriptsPdf:
                 source.locuteurs,
                 "pdf-v1",
             )
-            self._depot.finaliser(
+        except ErreurAnalysePdf as erreur:
+            mesures = erreur.mesures
+            _JOURNAL.error(
+                "transcript_pdf_analysis_failed transcript_id=%s job_id=%s phase=%s code=%s exception_type=ErreurAnalysePdf duration_s=%s model=%s temperature=%s top_p=%s reasoning=%s budget=%s http_status=%s finish_reason=%s content_type=%s content_chars=%s reasoning_type=%s reasoning_chars=%s refus_present=%s choices=%s message_keys=%s reference_index=%s tour_id=%s speaker_id=%s tokens_tour=%s token_debut=%s token_fin=%s",
+                source.id,
+                job.id,
+                erreur.phase,
+                erreur.code,
+                erreur.duree_secondes,
+                mesures.get("modele"),
+                mesures.get("temperature"),
+                mesures.get("top_p"),
+                mesures.get("raisonnement"),
+                mesures.get("budget_completion"),
+                mesures.get("statut_http"),
+                mesures.get("finish_reason"),
+                mesures.get("contenu_type"),
+                mesures.get("contenu_caracteres"),
+                mesures.get("raisonnement_type"),
+                mesures.get("raisonnement_caracteres"),
+                mesures.get("refus_present"),
+                mesures.get("choix_nombre"),
+                mesures.get("message_champs_nombre"),
+                mesures.get("reference_index"),
+                mesures.get("tour_id"),
+                mesures.get("speaker_id"),
+                mesures.get("tokens_tour"),
+                mesures.get("token_debut"),
+                mesures.get("token_fin"),
+            )
+            self._depot.echouer(job.id, job.jeton, "Analyse impossible.")
+            return
+        except Exception as erreur:
+            _JOURNAL.error(
+                "transcript_pdf_analysis_failed transcript_id=%s job_id=%s phase=analyse code=exception_inattendue exception_type=%s duration_s=%s",
+                source.id,
+                job.id,
+                type(erreur).__name__,
+                round(time.monotonic() - debut_analyse, 3),
+            )
+            self._depot.echouer(job.id, job.jeton, "Analyse impossible.")
+            return
+        debut_finalisation = time.monotonic()
+        try:
+            finalise = self._depot.finaliser(
                 job,
                 analyse.contenu,
                 analyse.fonctionnalites,
                 analyse.schema_version,
-                f"{source.type_source}-v1",
+                f"{source.type_source}-v6",
             )
-        except Exception:
+            if not finalise:
+                _JOURNAL.error(
+                    "transcript_pdf_analysis_failed transcript_id=%s job_id=%s phase=finalisation code=claim_ou_revision_invalide exception_type=none duration_s=%s",
+                    source.id,
+                    job.id,
+                    round(time.monotonic() - debut_finalisation, 3),
+                )
+                self._depot.echouer(job.id, job.jeton, "Analyse impossible.")
+        except Exception as erreur:
+            _JOURNAL.error(
+                "transcript_pdf_analysis_failed transcript_id=%s job_id=%s phase=finalisation code=exception_persistance exception_type=%s duration_s=%s",
+                source.id,
+                job.id,
+                type(erreur).__name__,
+                round(time.monotonic() - debut_finalisation, 3),
+            )
             self._depot.echouer(job.id, job.jeton, "Analyse impossible.")
 
     def lister_jobs_a_reprendre(self) -> list[int]:
         return self._depot.lister_jobs_a_reprendre()
-
-    def _verifier_anonymisation(
-        self, contenu: str, contexte: str, locuteurs: list[Locuteur]
-    ) -> None:
-        roles = json.dumps(
-            [locuteur._asdict() for locuteur in locuteurs], ensure_ascii=False
-        )
-        validation = self._garde_fou.valider_pdf(
-            f"TRANSCRIPT:\n{contenu}\nCONTEXTE:\n{contexte}\nLOCUTEURS:\n{roles}"
-        )
-        if not validation.valide:
-            raise SourcePdfNonAnonyme(
-                [probleme._asdict() for probleme in validation.problemes]
-            )
 
     @staticmethod
     def _verifier(

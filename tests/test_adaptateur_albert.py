@@ -3,10 +3,13 @@ import json
 import pytest
 
 from adaptateurs.albert import (
+    AdaptateurAlbert,
+    CompletionTranscript,
     DELAI_MAXIMUM_ALBERT,
     _lire_evenement_flux,
     _lire_reponse_completion,
     _lire_reponse_completion_transcript,
+    _metriques_reponse_transcript,
     _traduit_erreur,
 )
 from adaptateurs.exceptions import (
@@ -15,6 +18,7 @@ from adaptateurs.exceptions import (
     ErreurHTTPAlbert,
     ReponseAlbertInvalide,
 )
+from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 
 
 @pytest.mark.parametrize(
@@ -91,10 +95,51 @@ def test_refuse_une_reponse_completion_tronquee():
         )
 
 
+def test_metriques_reponse_transcript_ne_contiennent_pas_le_contenu() -> None:
+    metriques = _metriques_reponse_transcript(
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {
+                        "content": "TEXTE_PRIVE",
+                        "reasoning": "RAISONNEMENT_PRIVE",
+                    },
+                }
+            ]
+        }
+    )
+
+    assert metriques["finish_reason"] == "stop"
+    assert metriques["contenu_caracteres"] == len("TEXTE_PRIVE")
+    assert metriques["raisonnement_caracteres"] == len("RAISONNEMENT_PRIVE")
+    assert "TEXTE_PRIVE" not in str(metriques)
+    assert "RAISONNEMENT_PRIVE" not in str(metriques)
+
+
 def test_lit_une_reponse_completion_terminee():
     assert (
         _lire_reponse_completion(
             {"choices": [{"finish_reason": "stop", "message": {"content": "{}"}}]}
+        )
+        == "{}"
+    )
+
+
+def test_completion_transcript_conserve_le_diagnostic_sur_une_chaine() -> None:
+    resultat = CompletionTranscript("{}", {"finish_reason": "stop"})
+
+    assert resultat == "{}"
+    assert resultat.diagnostic == {"finish_reason": "stop"}
+
+
+def test_completion_transcript_de_base_reutilise_la_completion_json() -> None:
+    albert = AdaptateurAlbertDeTest().avec_reponse("{}")
+
+    assert (
+        AdaptateurAlbert.completer_json_raisonnement_transcript(
+            albert,
+            [], "schema", {}, "high", 0.5, 0.75
         )
         == "{}"
     )

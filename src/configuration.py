@@ -12,6 +12,7 @@ class Albert(NamedTuple):
     temperature_transcripts: float = 1.0
     top_p_transcripts: float = 1.0
     parallelisme_anonymisation: int = 8
+    effort_analyse_transcripts: str = "medium"
 
 
 class Correspondance(NamedTuple):
@@ -53,6 +54,14 @@ def _valider_parallelisme_anonymisation(valeur: int) -> int:
     return valeur
 
 
+def _valider_effort_analyse_transcripts(valeur: str) -> str:
+    if valeur not in {"low", "medium", "high"}:
+        raise ValueError(
+            "ALBERT_EFFORT_ANALYSE_TRANSCRIPTS doit être low, medium ou high."
+        )
+    return valeur
+
+
 def charge_configuration() -> Configuration:
     return Configuration(
         rula=Rula(
@@ -77,6 +86,9 @@ def charge_configuration() -> Configuration:
             top_p_transcripts=float(os.environ.get("ALBERT_TOP_P_TRANSCRIPTS", "1.0")),
             parallelisme_anonymisation=_valider_parallelisme_anonymisation(
                 int(os.environ.get("ALBERT_PARALLELISME_ANONYMISATION", "8"))
+            ),
+            effort_analyse_transcripts=_valider_effort_analyse_transcripts(
+                os.environ.get("ALBERT_EFFORT_ANALYSE_TRANSCRIPTS", "medium")
             ),
         ),
         base_de_donnees=BaseDeDonnees(

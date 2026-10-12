@@ -24,10 +24,8 @@ from transcripts_pdf.extraction import ErreurPdf, TAILLE_MAXIMALE
 from transcripts_pdf.orchestration import (
     ServiceTranscriptsPdf,
     SourcePdfInvalide,
-    SourcePdfNonAnonyme,
 )
 from transcripts_pdf.service import Locuteur, ServicePreparationTranscript
-from validation_transcript.service import ServiceValidationTranscript
 
 routeur = APIRouter()
 _JOURNAL = logging.getLogger(__name__)
@@ -39,7 +37,6 @@ _EXECUTEUR_GROUPES_PREPARATION = ThreadPoolExecutor(
 _PREPARATIONS: dict[str, dict] = {}
 _TTL_PREPARATION = timedelta(minutes=30)
 _PROMPT = Path(__file__).parent.parent / "prompts"
-_PROMPT_VALIDATION = (_PROMPT / "validation_transcript.md").read_text()
 
 
 class LocuteurBody(BaseModel):
@@ -72,36 +69,38 @@ def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
     )
 
 
-def fabrique_service_validation_pdf() -> ServiceValidationTranscript:
-    return ServiceValidationTranscript(
-        AdaptateurAlbertReel(charge_configuration().albert), _PROMPT_VALIDATION
-    )
-
-
 def fabrique_service_analyse_pdf() -> ServiceAnalysePdf:
+    configuration = charge_configuration().albert
     return ServiceAnalysePdf(
-        AdaptateurAlbertReel(charge_configuration().albert),
+        AdaptateurAlbertReel(configuration),
         {
             "produit": (_PROMPT / "analyse_transcript_produit.md").read_text(),
             "bizdev": (_PROMPT / "analyse_transcript_bizdev.md").read_text(),
         },
+        {
+            "modele": configuration.modele,
+            "temperature": configuration.temperature_transcripts,
+            "top_p": configuration.top_p_transcripts,
+            "raisonnement": configuration.effort_analyse_transcripts,
+            "budget_completion": configuration.max_completion_tokens_transcripts,
+            "delai_maximum_s": configuration.delai_transcripts,
+        },
+        configuration.effort_analyse_transcripts,
     )
 
 
 def fabrique_service_transcripts_pdf(
     depot: DepotTranscriptsPdf = Depends(fabrique_depot_transcripts_pdf),
-    garde_fou: ServiceValidationTranscript = Depends(fabrique_service_validation_pdf),
     analyseur: ServiceAnalysePdf = Depends(fabrique_service_analyse_pdf),
 ) -> ServiceTranscriptsPdf:
     return ServiceTranscriptsPdf(
-        depot, garde_fou, analyseur, charge_configuration().albert.delai_transcripts
+        depot, analyseur, charge_configuration().albert.delai_transcripts
     )
 
 
 def fabrique_service_transcripts_pdf_travail() -> ServiceTranscriptsPdf:
     return fabrique_service_transcripts_pdf(
         fabrique_depot_transcripts_pdf(),
-        fabrique_service_validation_pdf(),
         fabrique_service_analyse_pdf(),
     )
 
@@ -282,14 +281,6 @@ def confirmer(
             body.contexte,
             [Locuteur(**locuteur.model_dump()) for locuteur in body.locuteurs],
         )
-    except SourcePdfNonAnonyme as erreur:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Anonymisez les données signalées avant de confirmer.",
-                "problemes": erreur.problemes,
-            },
-        ) from erreur
     except SourcePdfInvalide as erreur:
         raise HTTPException(status_code=422, detail=str(erreur)) from erreur
     return source._asdict()
@@ -336,14 +327,6 @@ def modifier(
             body.contexte,
             [Locuteur(**locuteur.model_dump()) for locuteur in body.locuteurs],
         )
-    except SourcePdfNonAnonyme as erreur:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Anonymisez les données signalées avant de confirmer.",
-                "problemes": erreur.problemes,
-            },
-        ) from erreur
     except SourcePdfInvalide as erreur:
         raise HTTPException(status_code=422, detail=str(erreur)) from erreur
     if modifie is None:

@@ -9,6 +9,8 @@ class AdaptateurAlbertDeTest(AdaptateurAlbert):
         self._erreur: Exception | None = None
         self.messages_recus: list[list[dict[str, str]]] = []
         self.schemas_recus: list[dict[str, object]] = []
+        self.parametres_transcript: list[tuple[float, float | None, str]] = []
+        self.efforts_recus: list[str] = []
 
     def avec_reponse(self, reponse: str) -> "AdaptateurAlbertDeTest":
         self._reponse = reponse
@@ -47,6 +49,33 @@ class AdaptateurAlbertDeTest(AdaptateurAlbert):
         schema: dict[str, object],
         temperature: float = 0.0,
     ) -> str:
+        self.schemas_recus.append(schema)
+        return self.completer(messages, temperature)
+
+    def completer_json_raisonnement(
+        self,
+        messages: list[dict[str, str]],
+        nom_schema: str,
+        schema: dict[str, object],
+        effort: str,
+        temperature: float = 0.0,
+    ) -> str:
+        self.efforts_recus.append(effort)
+        return self.completer_json(messages, nom_schema, schema, temperature)
+
+    def completer_json_raisonnement_transcript(
+        self,
+        messages: list[dict[str, str]],
+        nom_schema: str,
+        schema: dict[str, object],
+        effort: str,
+        temperature: float = 0.0,
+        top_p: float | None = None,
+    ) -> str:
+        self.parametres_transcript.append(
+            (temperature, top_p, effort)
+        )
+        self.efforts_recus.append(effort)
         self.schemas_recus.append(schema)
         return self.completer(messages, temperature)
 

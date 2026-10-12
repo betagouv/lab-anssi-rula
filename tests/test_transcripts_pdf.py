@@ -328,6 +328,7 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
 
     assert preparation.nom_source == "reunion-_zbq-okak-bsa_-du-2026-04-07-a-10_34.pdf"
     assert "'phase': 'groupe'" in caplog.text
+    assert albert.efforts_recus and set(albert.efforts_recus) == {"high"}
 
 
 def test_preparation_journalise_un_echec_sans_message_exception(caplog) -> None:

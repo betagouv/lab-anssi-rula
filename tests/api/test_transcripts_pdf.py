@@ -14,7 +14,6 @@ from api.transcripts_pdf import (
     fabrique_executeur,
     fabrique_service_preparation_pdf,
     fabrique_service_analyse_pdf,
-    fabrique_service_validation_pdf,
     fabrique_service_transcripts_pdf,
     fabrique_service_transcripts_pdf_travail,
     fabrique_executeur_preparation,
@@ -29,7 +28,6 @@ from transcripts_pdf.analyse import ServiceAnalysePdf
 from transcripts_pdf.depot import SourceTranscriptPdf
 from transcripts_pdf.orchestration import ServiceTranscriptsPdf
 from transcripts_pdf.service import Locuteur, ServicePreparationTranscript
-from validation_transcript.service import ServiceValidationTranscript
 
 
 class ExecuteurDeTest(Executor):
@@ -59,13 +57,16 @@ class ServiceEchecWorkerDeTest(ServiceTranscriptsPdf):
 
 
 def _client(
-    reponse_garde_fou: str,
+    reponse_analyse: str | None,
 ) -> tuple[TestClient, DepotTranscriptsPdfMemoire, FastAPI]:
     depot = DepotTranscriptsPdfMemoire()
-    albert = AdaptateurAlbertDeTest().avec_reponse(reponse_garde_fou)
+    albert = AdaptateurAlbertDeTest()
+    if reponse_analyse is None:
+        albert.avec_erreur(AssertionError("Analyse non demandée."))
+    else:
+        albert.avec_reponse(reponse_analyse)
     service = ServiceTranscriptsPdf(
         depot,
-        ServiceValidationTranscript(albert, "prompt"),
         ServiceAnalysePdf(albert, {"produit": "prompt", "bizdev": "prompt"}),
     )
     app = FastAPI()
@@ -114,21 +115,21 @@ def test_refuse_un_nom_source_invalide() -> None:
     assert client.post("/api/transcripts-pdf", json=body).status_code == 422
 
 
-def test_garde_fou_retourne_les_elements_a_corriger() -> None:
-    client, _, _ = _client(
-        '{"valide": false, "problemes": [{"categorie": "identite", "element": "Nom test", "raison": "Remplacez ce nom."}]}'
-    )
+def test_confirme_apres_validation_humaine_sans_appel_albert_ni_analyse() -> None:
+    client, depot, _ = _client(None)
+    body = _payload()
+    body["contenu"] = "SPEAKER_01: Contenu validé par la personne."
 
-    reponse = client.post("/api/transcripts-pdf", json=_payload())
+    reponse = client.post("/api/transcripts-pdf", json=body)
 
-    assert reponse.status_code == 422
-    assert reponse.json()["detail"]["problemes"][0]["raison"] == "Remplacez ce nom."
+    assert reponse.status_code == 201
+    assert depot.sources[0].contenu == body["contenu"]
+    assert depot.obtenir_analyse(1) is None
+    assert depot.jobs == []
 
 
-def test_modification_garde_fou_retourne_les_elements_a_corriger() -> None:
-    client, depot, _ = _client(
-        '{"valide": false, "problemes": [{"categorie": "secret", "element": "clé", "raison": "Retirez-la."}]}'
-    )
+def test_modification_apres_validation_humaine_sans_appel_albert() -> None:
+    client, depot, _ = _client(None)
     source = depot.ajouter(
         "bizdev",
         1,
@@ -140,10 +141,14 @@ def test_modification_garde_fou_retourne_les_elements_a_corriger() -> None:
         _payload()["locuteurs"],
     )
 
-    reponse = client.put(f"/api/transcripts-pdf/{source.id}", json=_payload())
+    body = _payload()
+    body["contenu"] = "SPEAKER_01: Contenu corrigé et validé par la personne."
+    reponse = client.put(f"/api/transcripts-pdf/{source.id}", json=body)
 
-    assert reponse.status_code == 422
-    assert reponse.json()["detail"]["problemes"][0]["raison"] == "Retirez-la."
+    assert reponse.status_code == 200
+    assert depot.sources[0].contenu == body["contenu"]
+    assert depot.obtenir_analyse(source.id) is None
+    assert depot.jobs == []
 
 
 def test_modification_rejette_date_absente() -> None:
@@ -176,11 +181,10 @@ def test_modification_retourne_404_si_la_source_disparait() -> None:
         "",
         _payload()["locuteurs"],
     )
-    albert = AdaptateurAlbertDeTest().avec_reponse('{"valide": true, "problemes": []}')
+    albert = AdaptateurAlbertDeTest().avec_erreur(AssertionError("Analyse non demandée."))
     app.dependency_overrides[fabrique_service_transcripts_pdf] = lambda: (
         ServiceModificationRaceDeTest(
             depot,
-            ServiceValidationTranscript(albert, "prompt"),
             ServiceAnalysePdf(albert, {"produit": "prompt", "bizdev": "prompt"}),
         )
     )
@@ -352,7 +356,6 @@ def test_factories_and_reprise_jobs() -> None:
     )
     reprendre_jobs(depot, executeur)
     assert executeur.taches == [(_executer_job, (job.id,))]
-    garde_fou = ServiceValidationTranscript(AdaptateurAlbertDeTest(), "prompt")
     analyseur = ServiceAnalysePdf(
         AdaptateurAlbertDeTest(), {"produit": "prompt", "bizdev": "prompt"}
     )
@@ -360,23 +363,16 @@ def test_factories_and_reprise_jobs() -> None:
         fabrique_service_preparation_pdf().__class__.__name__
         == "ServicePreparationTranscript"
     )
-    assert (
-        fabrique_service_validation_pdf().__class__.__name__
-        == "ServiceValidationTranscript"
-    )
     assert fabrique_service_analyse_pdf().__class__.__name__ == "ServiceAnalysePdf"
     service_travail = fabrique_service_transcripts_pdf_travail()
     assert service_travail._depot.__class__.__name__ == "DepotTranscriptsPdfPostgres"
-    assert (
-        service_travail._garde_fou.__class__.__name__ == "ServiceValidationTranscript"
-    )
     assert service_travail._analyseur.__class__.__name__ == "ServiceAnalysePdf"
     assert fabrique_executeur() is not None
     assert (
-        fabrique_service_transcripts_pdf(depot, garde_fou, analyseur).__class__.__name__
+        fabrique_service_transcripts_pdf(depot, analyseur).__class__.__name__
         == "ServiceTranscriptsPdf"
     )
-    service = ServiceTranscriptsPdf(depot, garde_fou, analyseur)
+    service = ServiceTranscriptsPdf(depot, analyseur)
     _executer_job(job.id + 1, service)
 
 
@@ -399,7 +395,6 @@ def test_worker_journalise_le_type_sans_le_message_de_l_exception(caplog) -> Non
     _, depot, _ = _client('{"valide": true, "problemes": []}')
     service = ServiceEchecWorkerDeTest(
         depot,
-        ServiceValidationTranscript(AdaptateurAlbertDeTest(), "prompt"),
         ServiceAnalysePdf(
             AdaptateurAlbertDeTest(), {"produit": "prompt", "bizdev": "prompt"}
         ),

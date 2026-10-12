@@ -60,29 +60,17 @@ class ServiceValidationTranscript:
         self._systeme_prompt = systeme_prompt
 
     def valider(self, contenu: str) -> ValidationTranscript:
-        return self._valider(contenu, False)
+        return self._valider(contenu)
 
-    def valider_pdf(self, contenu: str) -> ValidationTranscript:
-        return self._valider(contenu, True)
-
-    def _valider(self, contenu: str, pdf: bool) -> ValidationTranscript:
+    def _valider(self, contenu: str) -> ValidationTranscript:
         messages = [
             {"role": "system", "content": self._systeme_prompt},
             {"role": "user", "content": contenu},
         ]
-        reponse = (
-            self._albert.completer_json_raisonnement_transcript(
-                messages,
-                "validation_transcript_pdf",
-                _SCHEMA,
-                "high",
-            )
-            if pdf
-            else self._albert.completer_json(
-                messages,
-                "validation_transcript",
-                _SCHEMA,
-            )
+        reponse = self._albert.completer_json(
+            messages,
+            "validation_transcript",
+            _SCHEMA,
         )
         try:
             valeur = json.loads(reponse)

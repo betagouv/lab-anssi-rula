@@ -57,6 +57,53 @@ def _traduit_erreur(erreur: httpx.HTTPError) -> ErreurAlbert:
     return ErreurCommunicationAlbert()
 
 
+def _metriques_reponse_transcript(donnees: Any) -> dict[str, str | int | float | None]:
+    choix = donnees.get("choices") if isinstance(donnees, dict) else None
+    premier = choix[0] if isinstance(choix, list) and choix else None
+    message = premier.get("message") if isinstance(premier, dict) else None
+    contenu = message.get("content") if isinstance(message, dict) else None
+    raisonnement = (
+        message.get("reasoning_content", message.get("reasoning"))
+        if isinstance(message, dict)
+        else None
+    )
+    fin = premier.get("finish_reason") if isinstance(premier, dict) else None
+    return {
+        "choix_nombre": len(choix) if isinstance(choix, list) else 0,
+        "message_champs_nombre": len(message) if isinstance(message, dict) else 0,
+        "finish_reason": fin
+        if isinstance(fin, str)
+        and fin in {"stop", "length", "tool_calls", "content_filter"}
+        else "autre"
+        if isinstance(fin, str)
+        else None,
+        "contenu_type": type(contenu).__name__ if contenu is not None else "absent",
+        "contenu_caracteres": len(contenu) if isinstance(contenu, str) else 0,
+        "raisonnement_type": type(raisonnement).__name__
+        if raisonnement is not None
+        else "absent",
+        "raisonnement_caracteres": len(raisonnement)
+        if isinstance(raisonnement, str)
+        else 0,
+        "refus_present": int(
+            isinstance(message, dict) and bool(message.get("refusal"))
+        ),
+    }
+
+
+class CompletionTranscript(str):
+    diagnostic: dict[str, str | int | float | None]
+
+    def __new__(
+        cls,
+        contenu: str,
+        diagnostic: dict[str, str | int | float | None],
+    ) -> "CompletionTranscript":
+        instance = super().__new__(cls, contenu)
+        instance.diagnostic = diagnostic
+        return instance
+
+
 def _lire_reponse_completion(data: Any) -> str:
     try:
         choix = data["choices"][0]
@@ -130,8 +177,16 @@ class AdaptateurAlbert(ABC):
         nom_schema: str,
         schema: dict[str, object],
         effort: str,
+        temperature: float = 0.0,
+        top_p: float | None = None,
     ) -> str:
-        return self.completer_json_raisonnement(messages, nom_schema, schema, effort)
+        return self.completer_json_raisonnement(
+            messages,
+            nom_schema,
+            schema,
+            effort,
+            temperature,
+        )
 
     @abstractmethod
     def plonger(self, textes: list[str]) -> list[list[float]]: ...
@@ -311,6 +366,19 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
         top_p: float | None = None,
         exiger_reponse_transcript: bool = False,
     ) -> str:
+        debut = time.monotonic()
+        diagnostic: dict[str, str | int | float | None] = {
+            "modele": self._config.modele,
+            "temperature": temperature,
+            "top_p": top_p,
+            "raisonnement": reasoning_effort,
+            "budget_completion": max_completion_tokens,
+            "statut_http": None,
+            "finish_reason": None,
+            "contenu_caracteres": 0,
+            "raisonnement_caracteres": 0,
+            "duree_secondes": None,
+        }
         try:
             with httpx.Client(timeout=delai) as client:
                 corps: dict[str, object] = {
@@ -336,16 +404,52 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                 )
                 reponse.raise_for_status()
         except httpx.HTTPError as erreur:
-            raise _traduit_erreur(erreur) from erreur
+            diagnostic["statut_http"] = (
+                erreur.response.status_code
+                if isinstance(erreur, httpx.HTTPStatusError)
+                and erreur.response is not None
+                else None
+            )
+            traduit = _traduit_erreur(erreur)
+            if exiger_reponse_transcript:
+                diagnostic["duree_secondes"] = round(time.monotonic() - debut, 3)
+                traduit.diagnostic = diagnostic
+            raise traduit from erreur
         try:
+            donnees = reponse.json()
+            if exiger_reponse_transcript:
+                diagnostic.update(_metriques_reponse_transcript(donnees))
             lecteur = (
                 _lire_reponse_completion_transcript
                 if exiger_reponse_transcript
                 else _lire_reponse_completion
             )
-            return lecteur(reponse.json())
-        except (ValueError, KeyError, IndexError, TypeError) as erreur:
-            raise ReponseAlbertInvalide from erreur
+            contenu = lecteur(donnees)
+            if exiger_reponse_transcript:
+                diagnostic["statut_http"] = reponse.status_code
+                diagnostic["duree_secondes"] = round(time.monotonic() - debut, 3)
+                return CompletionTranscript(contenu, diagnostic)
+            return contenu
+        except (
+            ValueError,
+            KeyError,
+            IndexError,
+            TypeError,
+            ReponseAlbertInvalide,
+        ) as erreur:
+            invalide = ReponseAlbertInvalide()
+            if exiger_reponse_transcript:
+                diagnostic["statut_http"] = reponse.status_code
+                diagnostic["duree_secondes"] = round(time.monotonic() - debut, 3)
+                diagnostic["code_reponse"] = (
+                    "json_reponse_invalide"
+                    if isinstance(erreur, ValueError)
+                    else "finish_reason_invalide"
+                    if diagnostic.get("finish_reason") != "stop"
+                    else "contenu_completion_invalide"
+                )
+                invalide.diagnostic = diagnostic
+            raise invalide from erreur
 
     def completer_json_raisonnement_transcript(
         self,
@@ -353,10 +457,12 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
         nom_schema: str,
         schema: dict[str, object],
         effort: str,
+        temperature: float = 0.0,
+        top_p: float | None = None,
     ) -> str:
         return self._completer(
             messages,
-            0.0,
+            temperature,
             {
                 "type": "json_schema",
                 "json_schema": {
@@ -368,6 +474,7 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
             effort,
             self._config.delai_transcripts,
             self._config.max_completion_tokens_transcripts,
+            top_p,
             exiger_reponse_transcript=True,
         )
 
