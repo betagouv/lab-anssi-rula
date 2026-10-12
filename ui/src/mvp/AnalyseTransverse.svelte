@@ -59,7 +59,7 @@
           <summary>{groupe.nom_generique} ({groupe.occurrences})</summary>
           <ul>
             {#each groupe.passages as passage (passage.source + ':' + passage.source_id)}
-              {@const sourceLien = lienPassage(passage)}
+              {@const sourceLien = lienPassage(passage, produit.id)}
               <li>
                 <span class="source">{libelleSource(passage.source)}</span>
                 {#if sourceLien}

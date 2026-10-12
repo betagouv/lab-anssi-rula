@@ -12,6 +12,10 @@ describe('routage MVP', () => {
       { nom: 'source-pdf', produitId: 2, source: 'transcript' },
     ],
     [
+      '#/produits/2/transcripts/produit/8',
+      { nom: 'transcript-produit', produitId: 2, transcriptId: 8 },
+    ],
+    [
       '#/produits/2/transcripts/bizdev',
       { nom: 'source-pdf', produitId: 2, source: 'bizdev' },
     ],

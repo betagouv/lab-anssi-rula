@@ -17,6 +17,6 @@ describe('passage transverse de transcript produit', () => {
   });
 
   it('ouvre l’entretien qui contient le transcript et son verbatim', () => {
-    expect(lienPassage(passage)).toBe('#/projets/4/entretiens/17');
+    expect(lienPassage(passage, 3)).toBe('#/produits/3/transcripts/produit/17');
   });
 });
