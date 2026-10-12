@@ -22,11 +22,13 @@ uv run pytest
 cd ui && pnpm lint:check && pnpm format:check && pnpm svelte:check && pnpm test
 ```
 
-Les quatre contrôles backend (`ruff check`, `mypy`, `pytest`, couverture 100 %) et les contrôles frontend doivent passer avant tout commit.
+Les contrôles backend (`ruff check`, `mypy`, `pytest`) et les contrôles frontend doivent passer avant tout commit. Le rapport de couverture aide à repérer les zones peu vérifiées, sans seuil global obligatoire.
 
 ## Tests
 
 Les dépendances extérieures sont remplacées par des classes `DeTest` implémentant la même interface ABC. Les services reçoivent leurs dépendances par constructeur ; aucun mock ou monkey-patching n'est utilisé.
+
+Les tests ciblent d'abord les règles métier et leurs cas utiles. Ne pas ajouter de test uniquement pour couvrir une branche sans valeur métier.
 
 ## Architecture
 

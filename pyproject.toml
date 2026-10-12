@@ -32,7 +32,7 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-addopts = "--cov=src --cov-report=term-missing --cov-fail-under=100"
+addopts = "--cov=src --cov-report=term-missing"
 
 [tool.coverage.run]
 omit = [
