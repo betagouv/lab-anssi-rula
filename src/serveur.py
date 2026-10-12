@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import cast
+import asyncio
+from typing import Callable, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,6 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from api.api import routeur
+from api.transcripts_pdf import reprendre_jobs, surveille_jobs
 from api.erreurs import detail_erreur_validation
 from adaptateurs.exceptions import ErreurAlbert
 from configuration import charge_configuration
@@ -35,9 +37,7 @@ def gestion_erreur_albert(_: Request, erreur: Exception) -> JSONResponse:
     )
 
 
-def gestion_erreur_validation(
-    _: Request, erreur: Exception
-) -> JSONResponse:
+def gestion_erreur_validation(_: Request, erreur: Exception) -> JSONResponse:
     erreur_validation = cast(RequestValidationError, erreur)
     return JSONResponse(
         status_code=422,
@@ -49,6 +49,23 @@ app.add_exception_handler(ErreurAlbert, gestion_erreur_albert)
 app.add_exception_handler(RequestValidationError, gestion_erreur_validation)
 
 app.include_router(routeur, prefix="/api")
+
+
+async def demarre_surveillance_jobs(
+    app_fastapi: FastAPI = app, scanner: Callable[[], None] = reprendre_jobs
+) -> None:
+    arreter = asyncio.Event()
+    app_fastapi.state.arret_jobs = arreter
+    app_fastapi.state.tache_jobs = asyncio.create_task(surveille_jobs(arreter, scanner))
+
+
+async def arrete_surveillance_jobs(app_fastapi: FastAPI = app) -> None:
+    app_fastapi.state.arret_jobs.set()
+    await app_fastapi.state.tache_jobs
+
+
+app.router.on_startup.append(demarre_surveillance_jobs)
+app.router.on_shutdown.append(arrete_surveillance_jobs)
 
 
 def ajoute_frontend(

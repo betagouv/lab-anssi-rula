@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from projets.depot import DepotProjets, Projet
 from projets.service import ProjetDejaExistant
 from produits.depot import DepotProduits
+
+
 def selectionner_projet(
     produit_id: int,
     projet_id: int | None,
@@ -93,5 +95,10 @@ def importer_csv_produit(
     try:
         sources = importer(produit_id, contenu, None)
     except (KeyError, ValueError) as erreur:
-        raise HTTPException(status_code=400, detail=f"CSV invalide : {erreur}") from erreur
-    return {"produit_id": produit_id, "sources": [source._asdict() for source in sources]}
+        raise HTTPException(
+            status_code=400, detail=f"CSV invalide : {erreur}"
+        ) from erreur
+    return {
+        "produit_id": produit_id,
+        "sources": [source._asdict() for source in sources],
+    }

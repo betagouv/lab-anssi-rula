@@ -23,5 +23,7 @@ def lister(depot: DepotProduits = Depends(fabrique_depot_produits)) -> list[dict
 
 
 @routeur.post("/produits", status_code=201)
-def ajouter(body: NouveauProduit, depot: DepotProduits = Depends(fabrique_depot_produits)) -> dict:
+def ajouter(
+    body: NouveauProduit, depot: DepotProduits = Depends(fabrique_depot_produits)
+) -> dict:
     return depot.ajouter(body.nom)._asdict()

@@ -116,7 +116,13 @@ def analyser(
     try:
         prepares = {
             source: besoins.preparer(source, produit_id)
-            for source in ("transcript", "idee", "retour_bizdev")
+            for source in (
+                "transcript",
+                "transcript_produit",
+                "transcript_bizdev",
+                "idee",
+                "retour_bizdev",
+            )
         }
         for source, elements in prepares.items():
             besoins.remplacer(source, elements, produit_id)
