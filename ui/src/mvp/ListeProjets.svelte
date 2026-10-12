@@ -11,8 +11,10 @@
   <h1>Projets</h1>
   <div class="onglets" aria-label="Données du produit">
     <span>Entretiens utilisateurs UX</span><a
-      href={`#/produits/${produit.id}/donnees/bizdev`}>Entretiens BizDev</a
+      href={`#/produits/${produit.id}/donnees/bizdev`}>Tableur BizDev</a
     ><a href={`#/produits/${produit.id}/donnees/featurebase`}>FeatureBase</a>
+    <a href={`#/produits/${produit.id}/transcripts/produit`}>Transcripts produit</a>
+    <a href={`#/produits/${produit.id}/transcripts/bizdev`}>Transcripts BizDev</a>
   </div>
   {#if projets.length}<div class="tableau">
       <table>
