@@ -14,6 +14,7 @@
     type ResultatPreparation,
   } from './suivi-preparation';
   import RemplacementsTranscript from './RemplacementsTranscript.svelte';
+  import ResultatAnalyse from './ResultatAnalyse.svelte';
 
   let {
     produitId,
@@ -606,57 +607,7 @@
       >Lancer l’analyse</button
     >
     {#if analyse}
-      <section aria-live="polite">
-        <h2>Résumé</h2>
-        <p>{String(contenuAnalyse.resume ?? '')}</p>
-        {#if Array.isArray(contenuAnalyse.themes)}<h2>Thèmes</h2>
-          <ul>
-            {#each contenuAnalyse.themes as theme (theme)}<li>{theme}</li>{/each}
-          </ul>{/if}
-        {#each Object.entries(contenuAnalyse) as [cle, elements] (cle)}
-          {#if Array.isArray(elements) && cle !== 'themes'}
-            <h2>
-              {cle === 'fonctionnalites'
-                ? 'Fonctionnalités évoquées'
-                : cle.replaceAll('_', ' ')}
-            </h2>
-            <ul class="extractions">
-              {#each elements as element, index (`${cle}-${index}`)}
-                <li>
-                  {#if typeof element === 'object' && element !== null}
-                    {#if 'type' in element}<p>Type : {String(element.type)}</p>{/if}
-                    <p>
-                      {String(
-                        'description' in element
-                          ? element.description
-                          : 'action' in element
-                            ? element.action
-                            : ''
-                      )}
-                    </p>
-                    {#if 'verbatim' in element}<blockquote>
-                        « {String(element.verbatim)} »
-                        <footer>
-                          {String(
-                            'speaker_id' in element ? element.speaker_id : ''
-                          )}, tour {String(
-                            'tour_id' in element ? element.tour_id : ''
-                          )}
-                        </footer>
-                      </blockquote>{/if}
-                    {#if 'sentiment' in element}<p>
-                        Sentiment : {String(
-                          element.sentiment
-                        )}{#if 'gravite' in element && element.gravite}
-                          · Gravité : {String(element.gravite)}{/if}
-                      </p>{/if}
-                  {/if}
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        {/each}
-      </section>
+      <ResultatAnalyse contenu={contenuAnalyse} />
     {/if}
   {/if}
 </main>
@@ -716,13 +667,5 @@
     to {
       transform: translateX(185%);
     }
-  }
-  blockquote {
-    border-left: 3px solid var(--border-action-high-blue-france);
-    margin: 0.75rem 0;
-    padding-left: 1rem;
-  }
-  blockquote footer {
-    font-size: 0.875rem;
   }
 </style>

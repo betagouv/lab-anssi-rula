@@ -14,7 +14,7 @@ Rendre la source produit, son verbatim et son analyse PDF faciles à consulter d
 ## Critères d’acceptation
 
 - [x] Un transcript PDF produit est libellé comme transcript produit, ouvre son entretien, et son verbatim reste visible dans l’analyse transverse.
-- [ ] La page d’entretien permet d’alterner entre l’analyse PDF générée et le transcript brut.
+- [x] La page d’entretien permet d’alterner entre l’analyse PDF générée et le transcript brut.
 - [ ] La gravité apparaît sur une ligne distincte du sentiment.
 
 ## Plan
@@ -25,7 +25,7 @@ Rendre la source produit, son verbatim et son analyse PDF faciles à consulter d
 
 ## Validation
 
-- Commandes ciblées pendant l’itération : `pnpm lint:check`, `pnpm format:check`, `pnpm svelte:check`, `pnpm test` dans `ui/` ; 68 tests réussis, Svelte sans erreur ni avertissement.
+- Commandes ciblées pendant l’itération : `pnpm lint:check`, `pnpm format:check`, `pnpm svelte:check`, `pnpm test` dans `ui/` ; 69 tests réussis, Svelte sans erreur ni avertissement.
 - `bash scripts/harness.sh complet` : à compléter.
 - `bash scripts/harness.sh audit` : non requis.
 
@@ -35,7 +35,7 @@ Rendre la source produit, son verbatim et son analyse PDF faciles à consulter d
 
 ## Handoff
 
-- État du code : premier critère corrigé et validé; deux critères restants.
+- État du code : deux premiers critères corrigés et validés; le retour à la ligne de la gravité reste à faire.
 - Prochaine action : implémenter les trois critères en commits atomiques.
 - Risques ou limites : aucun identifié.
 
