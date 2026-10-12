@@ -9,7 +9,12 @@ export type Vue =
   | { nom: 'sources:featurebase:detail'; id: number }
   | { nom: 'analyses' };
 
-export type SourceBesoin = 'transcript' | 'retour_bizdev' | 'idee';
+export type SourceBesoin =
+  | 'transcript'
+  | 'transcript_produit'
+  | 'transcript_bizdev'
+  | 'retour_bizdev'
+  | 'idee';
 
 export type Membre = {
   source: string;

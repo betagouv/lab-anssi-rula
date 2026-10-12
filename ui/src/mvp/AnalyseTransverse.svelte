@@ -3,9 +3,9 @@
     analyserTransverse,
     obtenirAnalyseTransverse,
     type AnalyseTransverse,
-    type PassageTransverse,
   } from '../api/analyse_transverse';
   import type { Produit } from '../api/projets';
+  import { libelleSource, lienPassage } from './passageTransverse';
 
   let { produit }: { produit: Produit } = $props();
   let resultat = $state<AnalyseTransverse | null>(null);
@@ -33,28 +33,6 @@
       enCours = false;
     }
   }
-
-  function lien(passage: PassageTransverse) {
-    if (
-      passage.source === 'transcript' &&
-      passage.projet_id &&
-      passage.transcript_id
-    )
-      return `#/projets/${passage.projet_id}/entretiens/${passage.transcript_id}`;
-    if (passage.source === 'idee' && passage.source_id)
-      return `#/sources/featurebase/${passage.source_id}`;
-    if (passage.source === 'retour_bizdev' && passage.source_id)
-      return `#/sources/retours-bizdev/${passage.source_id}`;
-    return null;
-  }
-
-  function libelleSource(source: PassageTransverse['source']) {
-    return source === 'transcript'
-      ? 'Transcript'
-      : source === 'idee'
-        ? 'FeatureBase'
-        : 'BizDev';
-  }
 </script>
 
 <section class="transverse" aria-labelledby="titre-transverse">
@@ -81,14 +59,17 @@
           <summary>{groupe.nom_generique} ({groupe.occurrences})</summary>
           <ul>
             {#each groupe.passages as passage (passage.source + ':' + passage.source_id)}
-              {@const sourceLien = lien(passage)}
+              {@const sourceLien = lienPassage(passage)}
               <li>
                 <span class="source">{libelleSource(passage.source)}</span>
                 {#if sourceLien}
-                  <a href={sourceLien}>{passage.verbatim}</a>
-                {:else}
-                  <span>{passage.verbatim}</span>
+                  <a href={sourceLien}>
+                    {passage.source === 'transcript_produit'
+                      ? 'Consulter le transcript produit'
+                      : 'Consulter la source'}
+                  </a>
                 {/if}
+                <blockquote>{passage.verbatim}</blockquote>
               </li>
             {/each}
           </ul>
@@ -137,6 +118,11 @@
     color: var(--text-mention-grey);
     font-size: 0.875rem;
     font-weight: 700;
+  }
+  blockquote {
+    border-left: 0.25rem solid var(--border-default-grey);
+    margin: 0;
+    padding-left: 1rem;
   }
   .date-calcul {
     color: var(--text-mention-grey);
