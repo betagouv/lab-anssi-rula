@@ -15,6 +15,7 @@ from api.transcripts_pdf import reprendre_jobs, surveille_jobs
 from api.erreurs import detail_erreur_validation
 from adaptateurs.exceptions import ErreurAlbert
 from configuration import charge_configuration
+from journalisation import installe_filtre_suivi_preparation
 
 _config = charge_configuration()
 REPERTOIRE_FRONTEND = Path(__file__).resolve().parents[1] / "ui" / "dist"
@@ -25,6 +26,7 @@ limiter = Limiter(
 )
 
 app = FastAPI(title="RULA", version="0.1.0")
+installe_filtre_suivi_preparation()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 

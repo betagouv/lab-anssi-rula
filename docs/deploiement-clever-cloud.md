@@ -53,3 +53,7 @@ Après le premier déploiement, vérifier l'authentification HTTP, la page
 d'accueil, `GET /api/sante`, le journal Clever Cloud et l'enregistrement des
 migrations. Relancer le workflow pour vérifier qu'aucune migration n'est
 rejouée.
+
+Le backend omet ses lignes d'accès pour les réponses réussies du suivi de
+préparation PDF. Les journaux d'accès du proxy Clever Cloud restent gérés par
+la plateforme et ne sont pas filtrés par l'application.
