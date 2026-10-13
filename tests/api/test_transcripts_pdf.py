@@ -21,6 +21,7 @@ from api.transcripts_pdf import (
     surveille_jobs,
     routeur,
 )
+from adaptateurs.exceptions import DelaiAlbertDepasse
 from infra.memoire.depot_transcripts_pdf import DepotTranscriptsPdfMemoire
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.test_transcripts_pdf import _pdf
@@ -239,7 +240,7 @@ def test_lit_modifie_supprime_et_analyse_une_source() -> None:
     assert depot.fonctionnalites == []
 
 
-def test_preparation_pdf_et_erreurs_de_traitement() -> None:
+def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
     client, _, app = _client('{"valide": true, "problemes": []}')
     albert = AdaptateurAlbertDeTest().avec_reponse(
         '{"remplacements": [], "locuteurs": []}'
@@ -288,6 +289,7 @@ def test_preparation_pdf_et_erreurs_de_traitement() -> None:
     assert statut_trop_long.json()["erreur"] == "Le fichier dépasse 10 Mo."
     assert statut_trop_long.json()["progression"]["phase"] == "echec"
     albert.avec_erreur(ValueError("Albert indisponible"))
+    caplog.set_level(logging.ERROR, logger="api.transcripts_pdf")
     echec = client.post(
         "/api/transcripts-pdf/preparation",
         data={"type_source": "bizdev"},
@@ -306,6 +308,43 @@ def test_preparation_pdf_et_erreurs_de_traitement() -> None:
     assert resultat_echec.json()["progression"]["phase"] == "echec"
     assert resultat_echec.json()["progression"]["groupes_termines"] == 0
     assert resultat_echec.json()["progression"]["groupes_en_cours"] == []
+    assert "Échec préparation transcript PDF" in caplog.text
+    assert "exception_type=ValueError" in caplog.text
+    assert "phase=anonymisation" in caplog.text
+    assert "jeton_hash=" in caplog.text
+    assert "Albert indisponible" not in caplog.text
+    assert jeton_echec not in caplog.text
+    delai_albert = DelaiAlbertDepasse("contenu prive")
+    delai_albert.diagnostic.update(
+        groupe=7,
+        delai_tentative_s=180,
+        duree_tentative_s=180.001,
+        duree_totale_s=180.001,
+        tentatives=1,
+    )
+    albert.avec_erreur(delai_albert)
+    delai = client.post(
+        "/api/transcripts-pdf/preparation",
+        data={"type_source": "bizdev"},
+        files={"fichier": ("reunion.pdf", fichier, "application/pdf")},
+    )
+    jeton_delai = delai.json()["jeton"]
+    resultat_delai = client.get(f"/api/transcripts-pdf/preparation/{jeton_delai}")
+    for _ in range(100):
+        if resultat_delai.json()["statut"] != "en_cours":
+            break
+        time.sleep(0.01)
+        resultat_delai = client.get(f"/api/transcripts-pdf/preparation/{jeton_delai}")
+    assert resultat_delai.json()["erreur"] == (
+        "L'API Albert n'a pas répondu dans le délai imparti."
+    )
+    assert "exception_type=DelaiAlbertDepasse" in caplog.text
+    assert "code=delai_albert_depasse" in caplog.text
+    assert "message=\"L'API Albert n'a pas répondu dans le délai imparti.\"" in caplog.text
+    assert "groupe=1" in caplog.text
+    assert "delai_tentative_s=180" in caplog.text
+    assert "duree_tentative_s=180.001" in caplog.text
+    assert "contenu prive" not in caplog.text
 
 
 def test_progression_preparation_reste_liee_au_jeton() -> None:

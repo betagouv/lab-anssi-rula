@@ -267,10 +267,12 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
             "contenu_caracteres": 0,
             "finish_reason": None,
             "request_id": None,
+            "tentatives": 0,
+            "retry_cause_type": None,
         }
         self.metriques_dernier_flux = metriques
 
-        async def consommer() -> str:
+        async def consommer(debut_tentative: float) -> str:
             contenu: list[str] = []
             termine = False
             async with httpx.AsyncClient(
@@ -307,7 +309,9 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                 ) as reponse:
                     metriques["statut_http"] = reponse.status_code
                     metriques["request_id"] = reponse.headers.get("x-request-id")
-                    metriques["delai_entetes_s"] = round(time.monotonic() - debut, 3)
+                    metriques["delai_entetes_s"] = round(
+                        time.monotonic() - debut_tentative, 3
+                    )
                     reponse.raise_for_status()
                     async for ligne in reponse.aiter_lines():
                         if not ligne.startswith("data:"):
@@ -326,7 +330,7 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                             ) + len(fragment)
                             if metriques["premier_contenu_s"] is None:
                                 metriques["premier_contenu_s"] = round(
-                                    time.monotonic() - debut, 3
+                                    time.monotonic() - debut_tentative, 3
                                 )
                             contenu.append(fragment)
                         if fin:
@@ -339,19 +343,85 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                 raise ReponseAlbertInvalide
             return "".join(contenu)
 
+        tentatives = 0
+        cause_retry = None
         try:
-            return asyncio.run(
-                asyncio.wait_for(consommer(), self._config.delai_transcripts)
-            )
-        except TimeoutError as erreur:
-            raise DelaiAlbertDepasse() from erreur
-        except httpx.HTTPError as erreur:
-            if (
-                isinstance(erreur, httpx.HTTPStatusError)
-                and erreur.response is not None
-            ):
-                metriques["statut_http"] = erreur.response.status_code
-            raise _traduit_erreur(erreur) from erreur
+            while True:
+                debut_tentative = time.monotonic()
+                metriques.update(
+                    statut_http=None,
+                    delai_entetes_s=None,
+                    premier_contenu_s=None,
+                    evenements=0,
+                    completion_tokens=None,
+                    raisonnement_caracteres=0,
+                    contenu_caracteres=0,
+                    finish_reason=None,
+                    request_id=None,
+                    duree_tentative_s=None,
+                )
+                tentatives += 1
+                metriques.update(
+                    tentatives=tentatives,
+                    retry_cause_type=cause_retry,
+                    delai_tentative_s=self._config.delai_preparation_transcripts,
+                )
+                try:
+                    return asyncio.run(
+                        asyncio.wait_for(
+                            consommer(debut_tentative),
+                            self._config.delai_preparation_transcripts,
+                        )
+                    )
+                except TimeoutError as erreur:
+                    delai = DelaiAlbertDepasse()
+                    delai.diagnostic.update(
+                        groupe=None,
+                        delai_tentative_s=self._config.delai_preparation_transcripts,
+                        duree_tentative_s=round(
+                            time.monotonic() - debut_tentative, 3
+                        ),
+                        duree_totale_s=round(time.monotonic() - debut, 3),
+                        tentatives=tentatives,
+                        retry_cause_type=cause_retry,
+                    )
+                    raise delai from erreur
+                except httpx.HTTPError as erreur:
+                    if (
+                        isinstance(erreur, httpx.HTTPStatusError)
+                        and erreur.response is not None
+                    ):
+                        metriques["statut_http"] = erreur.response.status_code
+                    if tentatives == 1 and isinstance(
+                        erreur,
+                        (
+                            httpx.RemoteProtocolError,
+                            httpx.ReadError,
+                            httpx.ConnectError,
+                        ),
+                    ):
+                        cause_retry = type(erreur).__name__
+                        continue
+                    erreur_traduite = _traduit_erreur(erreur)
+                    if isinstance(erreur_traduite, DelaiAlbertDepasse):
+                        erreur_traduite.diagnostic.update(
+                            groupe=None,
+                            delai_tentative_s=self._config.delai_preparation_transcripts,
+                            duree_tentative_s=round(
+                                time.monotonic() - debut_tentative, 3
+                            ),
+                            duree_totale_s=round(time.monotonic() - debut, 3),
+                            tentatives=tentatives,
+                            retry_cause_type=cause_retry,
+                        )
+                    raise erreur_traduite from erreur
+                finally:
+                    metriques["duree_tentative_s"] = round(
+                        time.monotonic() - debut_tentative, 3
+                    )
+                    metriques["duree_totale_s"] = round(
+                        time.monotonic() - debut, 3
+                    )
         finally:
             metriques["duree_totale_s"] = round(time.monotonic() - debut, 3)
 

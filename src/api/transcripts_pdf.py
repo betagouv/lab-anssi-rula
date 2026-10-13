@@ -1,6 +1,7 @@
 from concurrent.futures import Executor, ThreadPoolExecutor
 import asyncio
 from datetime import date, datetime, timedelta, timezone
+from hashlib import sha256
 import logging
 from pathlib import Path
 import time
@@ -11,6 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from adaptateurs.albert import AdaptateurAlbertReel
+from adaptateurs.exceptions import DelaiAlbertDepasse
 from configuration import charge_configuration
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from transcripts_pdf.analyse import ServiceAnalysePdf
@@ -25,7 +27,11 @@ from transcripts_pdf.orchestration import (
     ServiceTranscriptsPdf,
     SourcePdfInvalide,
 )
-from transcripts_pdf.service import Locuteur, ServicePreparationTranscript
+from transcripts_pdf.service import (
+    ErreurPreparationInvalide,
+    Locuteur,
+    ServicePreparationTranscript,
+)
 
 routeur = APIRouter()
 _JOURNAL = logging.getLogger(__name__)
@@ -200,12 +206,17 @@ def _executer_preparation(
     type_source: str,
     contexte: str,
 ) -> None:
+    phase_diagnostic = "en_attente"
+
     def actualiser_progression(
         phase: str,
         groupes_termines: int,
         groupes_total: int | None,
         groupes_en_cours: list[int],
     ) -> None:
+        nonlocal phase_diagnostic
+        if phase != "echec":
+            phase_diagnostic = phase
         if jeton in _PREPARATIONS:
             _PREPARATIONS[jeton]["progression"].update(
                 {
@@ -240,19 +251,61 @@ def _executer_preparation(
             )
             _PREPARATIONS[jeton].update(statut="termine", resultat=resultat)
     except ErreurPdf as erreur:
+        _journaliser_echec_preparation(jeton, erreur, phase_diagnostic)
         if jeton in _PREPARATIONS:
             _PREPARATIONS[jeton]["progression"].update(
                 phase="echec", groupes_en_cours=[]
             )
             _PREPARATIONS[jeton].update(statut="echec", erreur=str(erreur))
-    except Exception:
+    except Exception as erreur:
+        _journaliser_echec_preparation(jeton, erreur, phase_diagnostic)
         if jeton in _PREPARATIONS:
             _PREPARATIONS[jeton]["progression"].update(
                 phase="echec", groupes_en_cours=[]
             )
             _PREPARATIONS[jeton].update(
-                statut="echec", erreur="La préparation du transcript a échoué."
+                statut="echec",
+                erreur=(
+                    DelaiAlbertDepasse.detail_par_defaut
+                    if isinstance(erreur, DelaiAlbertDepasse)
+                    else "La préparation du transcript a échoué."
+                ),
             )
+
+
+def _journaliser_echec_preparation(jeton: str, erreur: Exception, phase: str) -> None:
+    champs = [
+        f"jeton_hash={sha256(jeton.encode()).hexdigest()[:16]}",
+        f"phase={phase}",
+        f"exception_type={type(erreur).__name__}",
+    ]
+    if isinstance(erreur, ErreurPreparationInvalide):
+        champs.extend(
+            f"{nom}={valeur}"
+            for nom, valeur in (
+                ("code", erreur.code),
+                ("champ", erreur.champ),
+                ("nombre_attendu", erreur.nombre_attendu),
+                ("nombre_recu", erreur.nombre_recu),
+            )
+            if valeur is not None
+        )
+    if isinstance(erreur, DelaiAlbertDepasse):
+        champs.append("code=delai_albert_depasse")
+        champs.extend(
+            f"{nom}={erreur.diagnostic[nom]}"
+            for nom in (
+                "groupe",
+                "delai_tentative_s",
+                "duree_tentative_s",
+                "duree_totale_s",
+                "tentatives",
+                "retry_cause_type",
+            )
+            if erreur.diagnostic.get(nom) is not None
+        )
+        champs.append(f'message="{DelaiAlbertDepasse.detail_par_defaut}"')
+    _JOURNAL.error("Échec préparation transcript PDF %s", " ".join(champs))
 
 
 def _nettoyer_preparations() -> None:

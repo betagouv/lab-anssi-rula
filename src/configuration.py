@@ -13,6 +13,7 @@ class Albert(NamedTuple):
     top_p_transcripts: float = 1.0
     parallelisme_anonymisation: int = 8
     effort_analyse_transcripts: str = "medium"
+    delai_preparation_transcripts: int = 180
 
 
 class Correspondance(NamedTuple):
@@ -89,6 +90,9 @@ def charge_configuration() -> Configuration:
             ),
             effort_analyse_transcripts=_valider_effort_analyse_transcripts(
                 os.environ.get("ALBERT_EFFORT_ANALYSE_TRANSCRIPTS", "medium")
+            ),
+            delai_preparation_transcripts=int(
+                os.environ.get("ALBERT_DELAI_PREPARATION_TRANSCRIPTS", "180")
             ),
         ),
         base_de_donnees=BaseDeDonnees(

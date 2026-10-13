@@ -3,6 +3,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 import logging
 from threading import Barrier, Event, Lock
 
+import httpx
 from io import BytesIO
 
 from datetime import date, datetime, timedelta
@@ -16,6 +17,7 @@ from pypdf import PdfWriter
 
 
 from adaptateurs.albert import AdaptateurAlbert
+from adaptateurs.exceptions import ErreurCommunicationAlbert
 
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 
@@ -336,17 +338,37 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
 
 
 def test_preparation_journalise_un_echec_sans_message_exception(caplog) -> None:
-    caplog.set_level(logging.DEBUG, logger="uvicorn.error")
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
     service = ServicePreparationTranscript(
         AdaptateurAlbertDeTest().avec_erreur(RuntimeError("texte privé")), "prompt"
     )
 
-    with pytest.raises(RuntimeError, match="texte privé"):
+    with pytest.raises(RuntimeError):
         service.preparer("reunion.pdf", _pdf("Speaker_01: Texte"), "produit", "")
 
     assert "Échec d'un groupe de préparation transcript" in caplog.text
     assert "RuntimeError" in caplog.text
     assert "texte privé" not in caplog.text
+
+
+def test_preparation_journalise_le_type_de_cause_albert_sans_message(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    try:
+        raise httpx.RemoteProtocolError("charge utile privée")
+    except httpx.RemoteProtocolError as cause:
+        erreur = ErreurCommunicationAlbert()
+        erreur.__cause__ = cause
+    service = ServicePreparationTranscript(
+        AdaptateurAlbertDeTest().avec_erreur(erreur), "prompt"
+    )
+
+    with pytest.raises(ErreurCommunicationAlbert):
+        service.preparer("reunion.pdf", _pdf("Speaker_01: Texte"), "produit", "")
+
+    assert "Échec d'un groupe de préparation transcript" in caplog.text
+    assert "ErreurCommunicationAlbert" in caplog.text
+    assert "RemoteProtocolError" in caplog.text
+    assert "charge utile privée" not in caplog.text
 
 
 def test_preparation_journalise_une_erreur_de_fusion_sans_valeurs_source(caplog):
@@ -1088,14 +1110,14 @@ class AdaptateurGroupesDeTest(AdaptateurAlbert):
                         "role": "externe",
                         "justification": "Les extraits indiquent un rôle externe.",
                     }
-                for token in fragment["tokens"]:
-                    if token["contenu"] in {"Alice", "Bob"}:
+                for token_id, token in fragment["tokens"]:
+                    if token in {"Alice", "Bob"}:
                         remplacements.append(
                             {
                                 "categorie": "identite",
                                 "fragment_id": fragment["fragment_id"],
-                                "token_debut": token["token_id"],
-                                "token_fin": token["token_id"],
+                                "token_debut": token_id,
+                                "token_fin": token_id,
                             }
                         )
             return json.dumps({"remplacements": remplacements, "locuteurs": locuteurs})
