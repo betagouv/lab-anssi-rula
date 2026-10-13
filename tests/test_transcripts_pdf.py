@@ -327,12 +327,16 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
     )
 
     assert preparation.nom_source == "reunion-_zbq-okak-bsa_-du-2026-04-07-a-10_34.pdf"
-    assert "'phase': 'groupe'" in caplog.text
+    assert "Préparation transcript terminée" in caplog.text
+    assert "Groupe de préparation transcript terminé" not in caplog.text
+    assert "Alice" not in caplog.text
+    assert "reunion-" not in caplog.text
+    assert [record.levelname for record in caplog.records] == ["INFO"]
     assert albert.efforts_recus and set(albert.efforts_recus) == {"high"}
 
 
 def test_preparation_journalise_un_echec_sans_message_exception(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    caplog.set_level(logging.DEBUG, logger="uvicorn.error")
     service = ServicePreparationTranscript(
         AdaptateurAlbertDeTest().avec_erreur(RuntimeError("texte privé")), "prompt"
     )
@@ -340,7 +344,7 @@ def test_preparation_journalise_un_echec_sans_message_exception(caplog) -> None:
     with pytest.raises(RuntimeError, match="texte privé"):
         service.preparer("reunion.pdf", _pdf("Speaker_01: Texte"), "produit", "")
 
-    assert "Diagnostic préparation transcript" in caplog.text
+    assert "Échec d'un groupe de préparation transcript" in caplog.text
     assert "RuntimeError" in caplog.text
     assert "texte privé" not in caplog.text
 

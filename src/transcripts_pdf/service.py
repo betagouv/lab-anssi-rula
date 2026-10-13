@@ -2,6 +2,7 @@ from concurrent.futures import CancelledError, Executor, as_completed
 import json
 import logging
 import re
+from time import perf_counter
 from threading import Event, Lock
 from typing import Callable, NamedTuple, TypedDict, cast
 from uuid import uuid4
@@ -153,7 +154,10 @@ def _journaliser_groupe(
             if isinstance(metriques, dict) and cle in metriques
         }
     )
-    _JOURNAL.info("Diagnostic préparation transcript : %s", diagnostic)
+    if erreur:
+        _JOURNAL.error("Échec d'un groupe de préparation transcript : %s", diagnostic)
+    else:
+        _JOURNAL.debug("Groupe de préparation transcript terminé : %s", diagnostic)
 
 
 class Remplacement(TypedDict):
@@ -233,6 +237,7 @@ class ServicePreparationTranscript:
         contexte: str,
         progression: Callable[[str, int, int | None, list[int]], None] | None = None,
     ) -> PreparationTranscript:
+        debut = perf_counter()
         if type_source not in {"produit", "bizdev"}:
             raise ValueError("Type de source invalide.")
         if progression:
@@ -483,7 +488,7 @@ class ServicePreparationTranscript:
                 role = "indetermine"
                 justification = "Les extraits ne permettent pas de déterminer le rôle."
             locuteurs.append(Locuteur(identifiant, role, justification))
-        return PreparationTranscript(
+        preparation = PreparationTranscript(
             type_source,
             _nom_source(
                 nom_fichier,
@@ -496,6 +501,13 @@ class ServicePreparationTranscript:
             locuteurs,
             remplacements_visibles,
         )
+        _JOURNAL.info(
+            "Préparation transcript terminée : type_source=%s groupes=%s durée_s=%.3f",
+            type_source,
+            len(groupes),
+            perf_counter() - debut,
+        )
+        return preparation
 
 
 def _lire_preparation(reponse: str) -> PreparationLue:
