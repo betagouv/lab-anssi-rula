@@ -8,6 +8,7 @@ from typing import Callable, NamedTuple, TypedDict, cast
 from uuid import uuid4
 
 from adaptateurs.albert import AdaptateurAlbert
+from adaptateurs.exceptions import DelaiAlbertDepasse
 from transcripts_pdf.extraction import (
     appliquer_remplacements_positions,
     anonymiser_locuteurs,
@@ -130,6 +131,9 @@ def _journaliser_groupe(
         "caracteres_serialises": caracteres_serialises,
         "locuteurs": locuteurs,
         "exception": type(erreur).__name__ if erreur else None,
+        "exception_cause_type": (
+            type(erreur.__cause__).__name__ if erreur and erreur.__cause__ else None
+        ),
         "code_validation": getattr(erreur, "code", None),
         "champ": getattr(erreur, "champ", None),
         "nombre_attendu": getattr(erreur, "nombre_attendu", None),
@@ -150,6 +154,10 @@ def _journaliser_groupe(
                 "raisonnement_caracteres",
                 "contenu_caracteres",
                 "request_id",
+                "tentatives",
+                "retry_cause_type",
+                "delai_tentative_s",
+                "duree_tentative_s",
             )
             if isinstance(metriques, dict) and cle in metriques
         }
@@ -286,6 +294,7 @@ class ServicePreparationTranscript:
             contenu_message = f"TYPE: {type_source}\nFRAGMENTS:\n" + json.dumps(
                 [_serialiser_fragment(fragment) for fragment in fragments_groupe],
                 ensure_ascii=False,
+                separators=(",", ":"),
             )
             caracteres_serialises = len(contenu_message)
             albert: AdaptateurAlbert | None = None
@@ -326,6 +335,8 @@ class ServicePreparationTranscript:
             except Exception as erreur:
                 annulation.set()
                 if albert is not None:
+                    if isinstance(erreur, DelaiAlbertDepasse):
+                        erreur.diagnostic["groupe"] = numero
                     _journaliser_groupe(
                         albert,
                         numero,
@@ -668,7 +679,7 @@ def _serialiser_fragment(fragment: Fragment) -> dict[str, object]:
         "speaker_id": fragment.speaker_id,
         "contenu": fragment.contenu,
         "tokens": [
-            {"token_id": index, "contenu": token}
+            [index, token]
             for index, (token, _, _) in enumerate(_tokeniser(fragment.contenu))
         ],
     }

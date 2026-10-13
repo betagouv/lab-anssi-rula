@@ -15,7 +15,7 @@ class ErreurCommunicationAlbert(ErreurAlbert):
 
 
 class DelaiAlbertDepasse(ErreurCommunicationAlbert):
-    detail_par_defaut = "L'API Albert n'a pas répondu dans le délai prévu. Réessayez dans quelques instants."
+    detail_par_defaut = "L'API Albert n'a pas répondu dans le délai imparti."
 
 
 class ErreurHTTPAlbert(ErreurCommunicationAlbert):

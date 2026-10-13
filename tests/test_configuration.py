@@ -21,11 +21,13 @@ def test_valeurs_par_defaut():
     assert config.rula.max_requetes_par_minute == 100
     assert config.albert.modele == "openweight-medium"
     assert config.albert.modele_embeddings == "BAAI/bge-m3"
+    assert config.albert.delai_transcripts == 180
     assert config.albert.max_completion_tokens_transcripts == 16384
     assert config.albert.temperature_transcripts == 1.0
     assert config.albert.top_p_transcripts == 1.0
     assert config.albert.parallelisme_anonymisation == 8
     assert config.albert.effort_analyse_transcripts == "medium"
+    assert config.albert.delai_preparation_transcripts == 180
     assert config.base_de_donnees.port == 5432
     assert config.base_de_donnees.nom == "rula"
     assert config.correspondance.seuil == 0.35
@@ -106,6 +108,27 @@ def test_configuration_charge_parallelisme_depuis_lenvironnement():
         text=True,
     )
     assert resultat.stdout.strip() == "3"
+
+
+def test_configuration_charge_delai_preparation_depuis_lenvironnement():
+    code = (
+        "from configuration import charge_configuration; "
+        "config = charge_configuration().albert; "
+        "print(config.delai_preparation_transcripts, config.delai_transcripts)"
+    )
+    resultat = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
+        env={
+            **os.environ,
+            "ALBERT_DELAI_PREPARATION_TRANSCRIPTS": "420",
+            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        },
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    assert resultat.stdout.strip() == "420 180"
 
 
 def test_configuration_effort_analyse_accepte_uniquement_les_valeurs_connues():

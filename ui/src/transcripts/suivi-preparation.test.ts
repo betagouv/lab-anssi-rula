@@ -4,23 +4,21 @@ import { ErreurSuiviPreparation, lirePreparation } from './suivi-preparation';
 class ClientPreparationDeTest {
   appels: string[] = [];
   signal: AbortSignal | null = null;
+  reponse: unknown = {
+    statut: 'termine',
+    progression: {
+      phase: 'termine',
+      groupes_termines: 1,
+      groupes_total: 1,
+      groupes_en_cours: [],
+      duree_secondes: 3,
+    },
+  };
 
   async get(url: string, signal: AbortSignal, statut = 200): Promise<Response> {
     this.appels.push(url);
     this.signal = signal;
-    return new Response(
-      JSON.stringify({
-        statut: 'termine',
-        progression: {
-          phase: 'termine',
-          groupes_termines: 1,
-          groupes_total: 1,
-          groupes_en_cours: [],
-          duree_secondes: 3,
-        },
-      }),
-      { status: statut }
-    );
+    return new Response(JSON.stringify(this.reponse), { status: statut });
   }
 }
 
@@ -53,6 +51,25 @@ describe('suivi d’une préparation', () => {
     expect(resultat.statut).toBe('termine');
     expect(client.appels).toEqual(['/api/transcripts-pdf/preparation/jeton-test']);
     expect(client.signal?.aborted).toBe(false);
+  });
+
+  it('propage le message de timeout retourné par le suivi', async () => {
+    const client = new ClientPreparationDeTest();
+    const message = "L'API Albert n'a pas répondu dans le délai imparti.";
+    client.reponse = {
+      statut: 'echec',
+      progression: {
+        phase: 'echec',
+        groupes_termines: 0,
+        groupes_total: 1,
+        groupes_en_cours: [],
+        duree_secondes: 180,
+      },
+      erreur: message,
+    };
+    const resultat = await lirePreparation('jeton-test', client.get.bind(client));
+
+    expect(resultat).toMatchObject({ statut: 'echec', erreur: message });
   });
 
   it('borne le GET et la lecture JSON à dix secondes', async () => {
