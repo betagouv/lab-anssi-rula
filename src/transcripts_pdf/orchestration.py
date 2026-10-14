@@ -51,6 +51,7 @@ class ServiceTranscriptsPdf:
             raise SourcePdfInvalide("Le type de source est invalide.")
         correspondance = re.fullmatch(
             r"(?:reunion-_[a-z]{3}-[a-z]{4}-[a-z]{3}_-du-\d{4}-\d{2}-\d{2}-a-\d{2}_\d{2}\.pdf|"
+            r"reunion--[a-z]{3}-[a-z]{4}-[a-z]{3}--du-\d{4}-\d{2}-\d{2}-a-\d{2}-\d{2}\.pdf|"
             r"transcript-(?P<type_source>produit|bizdev)-(?:sans-date|\d{4}-\d{2}-\d{2})-[0-9a-f]{8}\.pdf)",
             nom_source,
             re.IGNORECASE,
