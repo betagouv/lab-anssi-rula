@@ -3,6 +3,19 @@ import { describe, expect, it } from 'vitest';
 import RemplacementsTranscript from './RemplacementsTranscript.svelte';
 
 describe('rendu des remplacements transcript', () => {
+  it('avertit seulement quand des plages contradictoires ont été fusionnées', () => {
+    const aucun = render(RemplacementsTranscript, {
+      props: { remplacements: [], conflitsCategoriesFusionnes: 0 },
+    });
+    expect(aucun.body).not.toContain('zone de chevauchement');
+
+    const fusion = render(RemplacementsTranscript, {
+      props: { remplacements: [], conflitsCategoriesFusionnes: 2 },
+    });
+    expect(fusion.body).toContain('2 zones de chevauchement ont été fusionnées');
+    expect(fusion.body).toContain('relisez le brouillon avant de le confirmer');
+  });
+
   it('affiche deux occurrences de même champ et valeur dans des catégories distinctes', () => {
     const { body } = render(RemplacementsTranscript, {
       props: {

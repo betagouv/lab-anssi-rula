@@ -329,10 +329,16 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
     )
 
     assert preparation.nom_source == "reunion-_zbq-okak-bsa_-du-2026-04-07-a-10_34.pdf"
-    assert "Préparation transcript terminée" in caplog.text
+    ligne_resume = next(
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith("Préparation transcript terminée")
+    )
+    assert float(ligne_resume.split("durée_s=")[1].split()[0]) > 0
     assert "Groupe de préparation transcript terminé" not in caplog.text
     assert "Alice" not in caplog.text
     assert "reunion-" not in caplog.text
+    assert "conflits_categories_fusionnes" not in caplog.text
     assert [record.levelname for record in caplog.records] == ["INFO"]
     assert albert.efforts_recus and set(albert.efforts_recus) == {"high"}
 
@@ -371,7 +377,9 @@ def test_preparation_journalise_le_type_de_cause_albert_sans_message(caplog) -> 
     assert "charge utile privée" not in caplog.text
 
 
-def test_preparation_journalise_une_erreur_de_fusion_sans_valeurs_source(caplog):
+def test_preparation_fusionne_les_categories_contradictoires_sans_valeurs_source(
+    caplog,
+):
     caplog.set_level(logging.INFO, logger="uvicorn.error")
     reponses = _reponses_preparation(
         "Speaker_01: " + "x" * 1940 + " Alice " + "y" * 250,
@@ -384,16 +392,16 @@ def test_preparation_journalise_une_erreur_de_fusion_sans_valeurs_source(caplog)
         AdaptateurAlbertDeTest().avec_reponses(reponses), "prompt"
     )
 
-    with pytest.raises(ValueError, match="plusieurs catégories"):
-        service.preparer(
-            "reunion.pdf",
-            _pdf("Speaker_01: " + "x" * 1940 + " Alice " + "y" * 250),
-            "produit",
-            "",
-        )
+    preparation = service.preparer(
+        "reunion.pdf",
+        _pdf("Speaker_01: " + "x" * 1940 + " Alice " + "y" * 250),
+        "produit",
+        "",
+    )
 
-    assert "'phase': 'fusion_finale'" in caplog.text
-    assert "'code_validation': 'categories_incompatibles'" in caplog.text
+    assert preparation.conflits_categories_fusionnes == 1
+    assert "[DONNEE_SENSIBLE_01]" in preparation.contenu
+    assert "conflits_categories_fusionnes=1" in caplog.text
     assert "Alice" not in caplog.text
 
 
@@ -745,27 +753,6 @@ def test_decoupage_consolide_un_role_incoherent_en_indetermine() -> None:
         (
             [
                 {
-                    "valeur": "Alice",
-                    "categorie": "identite",
-                    "champ": "transcript",
-                    "debut": 0,
-                    "fin": 5,
-                },
-                {
-                    "valeur": "Alice",
-                    "categorie": "organisation",
-                    "champ": "transcript",
-                    "debut": 0,
-                    "fin": 5,
-                },
-            ],
-            "Alice",
-            "",
-            "invalide",
-        ),
-        (
-            [
-                {
                     "valeur": "Alice Dupont",
                     "categorie": "identite",
                     "champ": "transcript",
@@ -800,7 +787,7 @@ def test_decoupage_consolide_un_role_incoherent_en_indetermine() -> None:
         ),
     ],
 )
-def test_positions_python_repeated_duplicate_conflict_overlap_and_absence(
+def test_positions_python_deduplication_overlap_and_absence(
     remplacements: list[dict[str, object]],
     texte: str,
     contexte: str,
@@ -814,7 +801,9 @@ def test_positions_python_repeated_duplicate_conflict_overlap_and_absence(
             _positions_valides(cast(Any, remplacements), texte, contexte)
 
     else:
-        positions = _positions_valides(cast(Any, remplacements), texte, contexte)
+        positions, conflits = _positions_valides(
+            cast(Any, remplacements), texte, contexte
+        )
 
         from transcripts_pdf.extraction import appliquer_remplacements_positions
 
@@ -824,36 +813,134 @@ def test_positions_python_repeated_duplicate_conflict_overlap_and_absence(
         )
 
         assert resultat == attendu
+        assert conflits == 0
 
 
-def test_positions_refusent_un_chevauchement_partiel_de_categories() -> None:
+@pytest.mark.parametrize(
+    "remplacements,texte",
+    [
+        (
+            [
+                {
+                    "valeur": "Alice",
+                    "categorie": "identite",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 5,
+                },
+                {
+                    "valeur": "Alice",
+                    "categorie": "organisation",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 5,
+                },
+            ],
+            "Alice",
+        ),
+        (
+            [
+                {
+                    "valeur": "Alice",
+                    "categorie": "identite",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 5,
+                },
+                {
+                    "valeur": "ce B",
+                    "categorie": "organisation",
+                    "champ": "transcript",
+                    "debut": 3,
+                    "fin": 7,
+                },
+            ],
+            "Alice B",
+        ),
+        (
+            [
+                {
+                    "valeur": "abc",
+                    "categorie": "identite",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 3,
+                },
+                {
+                    "valeur": "cde",
+                    "categorie": "organisation",
+                    "champ": "transcript",
+                    "debut": 2,
+                    "fin": 5,
+                },
+                {
+                    "valeur": "efgh",
+                    "categorie": "secret",
+                    "champ": "transcript",
+                    "debut": 4,
+                    "fin": 8,
+                },
+            ],
+            "abcdefgh",
+        ),
+    ],
+)
+def test_positions_fusionnent_les_conflits_sur_l_union_source(
+    remplacements: list[dict[str, object]], texte: str
+) -> None:
 
     from transcripts_pdf.service import _positions_valides
+    from transcripts_pdf.extraction import appliquer_remplacements_positions
 
-    with pytest.raises(ValueError, match="incompatibles"):
-        _positions_valides(
-            cast(
-                Any,
-                [
-                    {
-                        "valeur": "Alice",
-                        "categorie": "identite",
-                        "champ": "transcript",
-                        "debut": 0,
-                        "fin": 5,
-                    },
-                    {
-                        "valeur": "lice B",
-                        "categorie": "organisation",
-                        "champ": "transcript",
-                        "debut": 1,
-                        "fin": 7,
-                    },
-                ],
-            ),
-            "Alice B",
-            "",
-        )
+    positions, conflits = _positions_valides(cast(Any, remplacements), texte, "")
+    assert conflits == 1
+    assert len(positions) == 1
+    remplacement, debut, fin = positions[0]
+    assert remplacement["categorie"] == "donnee_sensible"
+    assert remplacement["valeur"] == texte
+    assert (debut, fin) == (0, len(texte))
+    assert (
+        appliquer_remplacements_positions(texte, [(debut, fin, "[DONNEE_SENSIBLE_01]")])
+        == "[DONNEE_SENSIBLE_01]"
+    )
+
+
+def test_positions_ne_fusionnent_pas_les_champs_distincts() -> None:
+    from transcripts_pdf.service import _positions_valides
+
+    positions, conflits = _positions_valides(
+        cast(
+            Any,
+            [
+                {
+                    "valeur": "Alice",
+                    "categorie": "identite",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 5,
+                },
+                {
+                    "valeur": "Alice",
+                    "categorie": "organisation",
+                    "champ": "contexte",
+                    "debut": 0,
+                    "fin": 5,
+                },
+            ],
+        ),
+        "Alice",
+        "Alice",
+    )
+
+    assert conflits == 0
+    assert {position[0]["categorie"] for position in positions} == {
+        "identite",
+        "organisation",
+    }
+    assert {position[0]["champ"] for position in positions} == {
+        "transcript",
+        "contexte",
+    }
 
     with pytest.raises(ValueError, match="se chevauchent"):
         _positions_valides(
@@ -879,6 +966,52 @@ def test_positions_refusent_un_chevauchement_partiel_de_categories() -> None:
             "Alice B",
             "",
         )
+
+
+def test_positions_compte_chaque_composante_contradictoire() -> None:
+    from transcripts_pdf.service import _positions_valides
+
+    positions, conflits = _positions_valides(
+        cast(
+            Any,
+            [
+                {
+                    "valeur": "Alice",
+                    "categorie": "identite",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 5,
+                },
+                {
+                    "valeur": "Alice",
+                    "categorie": "organisation",
+                    "champ": "transcript",
+                    "debut": 0,
+                    "fin": 5,
+                },
+                {
+                    "valeur": "Bob",
+                    "categorie": "secret",
+                    "champ": "transcript",
+                    "debut": 6,
+                    "fin": 9,
+                },
+                {
+                    "valeur": "Bob",
+                    "categorie": "technologie_ou_produit",
+                    "champ": "transcript",
+                    "debut": 6,
+                    "fin": 9,
+                },
+            ],
+        ),
+        "Alice Bob",
+        "",
+    )
+
+    assert conflits == 2
+    assert [position[0]["valeur"] for position in positions] == ["Alice", "Bob"]
+    assert all(position[0]["categorie"] == "donnee_sensible" for position in positions)
 
 
 def test_positions_rejettent_une_valeur_vide() -> None:

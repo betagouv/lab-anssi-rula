@@ -6,9 +6,24 @@
     champ: string;
   };
 
-  let { remplacements }: { remplacements: Remplacement[] } = $props();
+  let {
+    remplacements,
+    conflitsCategoriesFusionnes = 0,
+  }: { remplacements: Remplacement[]; conflitsCategoriesFusionnes?: number } =
+    $props();
 </script>
 
+{#if conflitsCategoriesFusionnes > 0}
+  <div class="fr-alert fr-alert--warning" role="status">
+    <p>
+      {conflitsCategoriesFusionnes === 1
+        ? 'Une zone de chevauchement a été fusionnée'
+        : `${conflitsCategoriesFusionnes} zones de chevauchement ont été fusionnées`} en
+      catégorie « donnée sensible ». Des mots voisins peuvent être anonymisés en plus :
+      relisez le brouillon avant de le confirmer.
+    </p>
+  </div>
+{/if}
 {#if remplacements.length}
   <h2>Remplacements proposés</h2>
   <table>

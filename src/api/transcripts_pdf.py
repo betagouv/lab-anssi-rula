@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from adaptateurs.albert import AdaptateurAlbertReel
-from adaptateurs.exceptions import DelaiAlbertDepasse
+from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
 from configuration import charge_configuration
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from transcripts_pdf.analyse import ServiceAnalysePdf
@@ -43,6 +43,11 @@ _EXECUTEUR_GROUPES_PREPARATION = ThreadPoolExecutor(
 _PREPARATIONS: dict[str, dict] = {}
 _TTL_PREPARATION = timedelta(minutes=30)
 _PROMPT = Path(__file__).parent.parent / "prompts"
+_ERREUR_PREPARATION_INVALIDE = (
+    "Une réponse d’anonymisation incomplète ou incohérente a empêché de produire "
+    "un brouillon fiable. Réessayez l’import ; si le problème persiste, "
+    "contactez le support."
+)
 
 
 class LocuteurBody(BaseModel):
@@ -241,6 +246,7 @@ def _executer_preparation(
             "remplacements": [
                 remplacement._asdict() for remplacement in preparation.remplacements
             ],
+            "conflits_categories_fusionnes": preparation.conflits_categories_fusionnes,
         }
         if jeton in _PREPARATIONS:
             actualiser_progression(
@@ -268,6 +274,10 @@ def _executer_preparation(
                 erreur=(
                     DelaiAlbertDepasse.detail_par_defaut
                     if isinstance(erreur, DelaiAlbertDepasse)
+                    else _ERREUR_PREPARATION_INVALIDE
+                    if isinstance(
+                        erreur, (ErreurPreparationInvalide, ReponseAlbertInvalide)
+                    )
                     else "La préparation du transcript a échoué."
                 ),
             )

@@ -25,6 +25,7 @@ export type ResultatPreparation =
       contexte: string;
       locuteurs: LocuteurPreparation[];
       remplacements: RemplacementPreparation[];
+      conflits_categories_fusionnes: number;
     };
 
 export class ErreurSuiviPreparation extends Error {
