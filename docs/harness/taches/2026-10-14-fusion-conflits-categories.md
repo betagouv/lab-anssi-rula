@@ -18,6 +18,7 @@ Permettre la préparation d’un transcript lorsque des plages source chevauchan
 - [x] Le compteur de composantes fusionnées est exact, transmis seulement dans le résultat temporaire, et journalisé uniquement s’il est positif.
 - [x] L’interface avertit en cas de fusion et donne une explication fixe lors d’une erreur de validation ou d’une réponse Albert invalide.
 - [x] Le rejeu du PDF BizDev termine les 36 groupes et la finalisation via la route réelle sans confirmation ni persistance.
+- [x] Le délai individuel des appels Albert de préparation est configurable via `ALBERT_DELAI_PREPARATION_TRANSCRIPTS` dans `.env`, avec une valeur par défaut de 180 s transmise au backend par Compose.
 - [x] Les contrôles backend et frontend équivalents au harness complet passent sous Windows.
 
 ## Plan
@@ -34,6 +35,8 @@ Permettre la préparation d’un transcript lorsque des plages source chevauchan
 - `uv run ruff format --check` sur les quatre fichiers Python modifiés et `git diff --check` — réussis.
 - Rejeu réel par POST/GET sur la route d’import : 36/36 groupes terminés, finalisation réussie, 2 composantes fusionnées, 101 remplacements, 64 527 caractères de brouillon, 206,3 s; aucune confirmation et aucune persistance.
 - Rejeu local ultérieur depuis le checkout principal `a1d1783`, avec `ALBERT_PARALLELISME_ANONYMISATION=16` : 7 groupes ont dépassé leur délai individuel de 180 s. Ce checkout était en retard sur `origin/main` (`ca9c236`) et ne testait donc pas la branche de la PR; le code de cette PR renvoie le message de timeout explicite, couvert par le test API.
+- Le délai était bien lu depuis `ALBERT_DELAI_PREPARATION_TRANSCRIPTS` avec défaut 180 s, mais Compose ne transmettait pas cette variable; le backend utilisait donc toujours le défaut. Le relais Compose est ajouté et la valeur résolue est vérifiée à 240 s sans recréer de conteneur.
+- Après ce changement : `uv run ruff check src/ tests/`, `uv run mypy`, `uv run pytest` (321 passés, 2 ignorés), `pnpm lint:check`, `pnpm format:check`, `pnpm svelte:check` et `pnpm test` (82 passés) réussis; `git diff --check` réussi.
 - Durée de succès vérifiée positive dans le test après correction de l’écrasement local de l’horodatage de départ observé lors du rejeu réel.
 - Une invocation initiale de `bash scripts/harness.sh complet` a lancé le frontend sous WSL et échoué sur le binaire Rollup Linux absent. Aucun résultat de cette invocation n'est retenu; tous les contrôles équivalents ont ensuite été relancés directement dans PowerShell sous Windows et réussis.
 - Le formatage global `uv run ruff format --check src/ tests/` signale huit fichiers préexistants hors périmètre; ils sont laissés inchangés.
@@ -47,7 +50,7 @@ Permettre la préparation d’un transcript lorsque des plages source chevauchan
 
 ## Handoff
 
-- État du code : correction complète dans `fix/fusion-categories-incompatibles`, commit `adbe76b`, PR brouillon [#32](https://github.com/betagouv/lab-anssi-rula/pull/32), depuis `ca9c236`.
+- État du code : correction complète dans `fix/fusion-categories-incompatibles`, PR brouillon [#32](https://github.com/betagouv/lab-anssi-rula/pull/32), depuis `ca9c236`.
 - Prochaine action : attendre les contrôles CI puis la revue humaine avant toute décision de fusion.
 - Risques ou limites : la catégorie prudente peut élargir la zone anonymisée; les sorties Albert varient, et un rejeu a échoué une première fois sur une réponse tronquée avant de réussir intégralement.
 
