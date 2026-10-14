@@ -21,10 +21,10 @@ from api.transcripts_pdf import (
     surveille_jobs,
     routeur,
 )
-from adaptateurs.exceptions import DelaiAlbertDepasse
+from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
 from infra.memoire.depot_transcripts_pdf import DepotTranscriptsPdfMemoire
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
-from tests.test_transcripts_pdf import _pdf
+from tests.test_transcripts_pdf import _pdf, _reponses_preparation
 from transcripts_pdf.analyse import ServiceAnalysePdf
 from transcripts_pdf.depot import SourceTranscriptPdf
 from transcripts_pdf.orchestration import ServiceTranscriptsPdf
@@ -267,6 +267,7 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
     assert resultat.json()["progression"]["groupes_termines"] == 1
     assert resultat.json()["progression"]["groupes_total"] == 1
     assert resultat.json()["remplacements"] == []
+    assert resultat.json()["conflits_categories_fusionnes"] == 0
     trop_long = client.post(
         "/api/transcripts-pdf/preparation",
         data={"type_source": "bizdev"},
@@ -340,11 +341,111 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
     )
     assert "exception_type=DelaiAlbertDepasse" in caplog.text
     assert "code=delai_albert_depasse" in caplog.text
-    assert "message=\"L'API Albert n'a pas répondu dans le délai imparti.\"" in caplog.text
+    assert (
+        "message=\"L'API Albert n'a pas répondu dans le délai imparti.\"" in caplog.text
+    )
     assert "groupe=1" in caplog.text
     assert "delai_tentative_s=180" in caplog.text
     assert "duree_tentative_s=180.001" in caplog.text
     assert "contenu prive" not in caplog.text
+
+
+def test_preparation_api_expose_une_fusion_temporaire_sans_persister() -> None:
+    client, depot, app = _client('{"valide": true, "problemes": []}')
+    texte = "Speaker_01: Alice"
+    service = ServicePreparationTranscript(
+        AdaptateurAlbertDeTest().avec_reponses(
+            _reponses_preparation(
+                texte,
+                detections=[
+                    ("transcript", "Alice", "identite"),
+                    ("transcript", "Alice", "organisation"),
+                ],
+            )
+        ),
+        "prompt",
+    )
+    app.dependency_overrides[fabrique_service_preparation_pdf] = lambda: service
+
+    soumission = client.post(
+        "/api/transcripts-pdf/preparation",
+        data={"type_source": "bizdev"},
+        files={"fichier": ("reunion.pdf", _pdf(texte), "application/pdf")},
+    )
+    jeton = soumission.json()["jeton"]
+    resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
+    for _ in range(100):
+        if resultat.json()["statut"] != "en_cours":
+            break
+        time.sleep(0.01)
+        resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
+
+    assert resultat.json()["statut"] == "termine"
+    assert resultat.json()["conflits_categories_fusionnes"] == 1
+    assert resultat.json()["contenu"] == "SPEAKER_01: [DONNEE_SENSIBLE_01]"
+    assert depot.sources == []
+
+
+def test_preparation_api_explique_une_erreur_de_validation_sans_detail_prive() -> None:
+    client, _, app = _client('{"valide": true, "problemes": []}')
+    app.dependency_overrides[fabrique_service_preparation_pdf] = lambda: (
+        ServicePreparationTranscript(
+            AdaptateurAlbertDeTest().avec_reponse("pas-json"), "prompt"
+        )
+    )
+
+    soumission = client.post(
+        "/api/transcripts-pdf/preparation",
+        data={"type_source": "bizdev"},
+        files={
+            "fichier": ("reunion.pdf", _pdf("Speaker_01: Alice"), "application/pdf")
+        },
+    )
+    jeton = soumission.json()["jeton"]
+    resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
+    for _ in range(100):
+        if resultat.json()["statut"] != "en_cours":
+            break
+        time.sleep(0.01)
+        resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
+
+    assert resultat.json()["statut"] == "echec"
+    assert resultat.json()["erreur"] == (
+        "Une réponse d’anonymisation incomplète ou incohérente a empêché de "
+        "produire un brouillon fiable. "
+        "Réessayez l’import ; si le problème persiste, contactez le support."
+    )
+
+
+def test_preparation_api_explique_une_reponse_albert_invalide() -> None:
+    client, _, app = _client('{"valide": true, "problemes": []}')
+    app.dependency_overrides[fabrique_service_preparation_pdf] = lambda: (
+        ServicePreparationTranscript(
+            AdaptateurAlbertDeTest().avec_erreur(ReponseAlbertInvalide()), "prompt"
+        )
+    )
+
+    soumission = client.post(
+        "/api/transcripts-pdf/preparation",
+        data={"type_source": "bizdev"},
+        files={
+            "fichier": ("reunion.pdf", _pdf("Speaker_01: Alice"), "application/pdf")
+        },
+    )
+    jeton = soumission.json()["jeton"]
+    resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
+    for _ in range(100):
+        if resultat.json()["statut"] != "en_cours":
+            break
+        time.sleep(0.01)
+        resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
+
+    assert resultat.json()["statut"] == "echec"
+    assert resultat.json()["erreur"] == (
+        "Une réponse d’anonymisation incomplète ou incohérente a empêché de "
+        "produire un brouillon fiable. "
+        "Réessayez l’import ; si le problème persiste, contactez le support."
+    )
 
 
 def test_progression_preparation_reste_liee_au_jeton() -> None:

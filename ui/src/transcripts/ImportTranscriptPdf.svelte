@@ -50,6 +50,7 @@
       champ: string;
     }[]
   >([]);
+  let conflitsCategoriesFusionnes = $state(0);
   let problemes = $state<{ categorie: string; element: string; raison: string }[]>(
     []
   );
@@ -192,6 +193,7 @@
 
   async function consulter(id: number) {
     enCours = true;
+    conflitsCategoriesFusionnes = 0;
     progression = null;
     analyseEnCours = false;
     analyseErreur = '';
@@ -244,6 +246,7 @@
     progression = null;
     arreterHorloge();
     erreur = '';
+    conflitsCategoriesFusionnes = 0;
     let jeton: string | null = null;
     try {
       const donnees = new FormData();
@@ -311,6 +314,7 @@
           dateEntretien = resultat.date_entretien ?? '';
           locuteurs = resultat.locuteurs;
           remplacements = resultat.remplacements;
+          conflitsCategoriesFusionnes = resultat.conflits_categories_fusionnes;
           jetonPreparation = null;
           arreterHorloge();
           return;
@@ -615,7 +619,7 @@
       <label class="fr-label" for="transcript">Transcript anonymisé</label>
       <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
       ></textarea>
-      <RemplacementsTranscript {remplacements} />
+      <RemplacementsTranscript {remplacements} {conflitsCategoriesFusionnes} />
       <div class="fr-input-group">
         <label class="fr-label" for="contexte-edite">Contexte anonymisé</label>
         <textarea class="fr-input" id="contexte-edite" bind:value={contexte} rows="4"

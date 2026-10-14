@@ -218,6 +218,7 @@ class PreparationTranscript(NamedTuple):
     contexte: str
     locuteurs: list[Locuteur]
     remplacements: list[RemplacementVisible]
+    conflits_categories_fusionnes: int
 
 
 class ServicePreparationTranscript:
@@ -245,7 +246,7 @@ class ServicePreparationTranscript:
         contexte: str,
         progression: Callable[[str, int, int | None, list[int]], None] | None = None,
     ) -> PreparationTranscript:
-        debut = perf_counter()
+        debut_preparation = perf_counter()
         if type_source not in {"produit", "bizdev"}:
             raise ValueError("Type de source invalide.")
         if progression:
@@ -427,7 +428,9 @@ class ServicePreparationTranscript:
             progression("finalisation", termines, len(groupes), [])
         labels = locuteurs_origine
         try:
-            remplacements = _positions_valides(remplacements_resolus, texte, contexte)
+            remplacements, conflits_categories_fusionnes = _positions_valides(
+                remplacements_resolus, texte, contexte
+            )
         except Exception as erreur:
             _journaliser_groupe(
                 dernier_albert,
@@ -511,12 +514,19 @@ class ServicePreparationTranscript:
             contexte_anonyme,
             locuteurs,
             remplacements_visibles,
+            conflits_categories_fusionnes,
+        )
+        metrique_conflits = (
+            f" conflits_categories_fusionnes={conflits_categories_fusionnes}"
+            if conflits_categories_fusionnes
+            else ""
         )
         _JOURNAL.info(
-            "Préparation transcript terminée : type_source=%s groupes=%s durée_s=%.3f",
+            "Préparation transcript terminée : type_source=%s groupes=%s durée_s=%.3f%s",
             type_source,
             len(groupes),
-            perf_counter() - debut,
+            perf_counter() - debut_preparation,
+            metrique_conflits,
         )
         return preparation
 
@@ -722,11 +732,12 @@ def _resoudre_remplacements(
 
 def _positions_valides(
     remplacements: list[RemplacementResolu], texte: str, contexte: str
-) -> list[tuple[RemplacementResolu, int, int]]:
+) -> tuple[list[tuple[RemplacementResolu, int, int]], int]:
     champs = {"transcript": texte, "contexte": contexte}
-    positions: list[tuple[RemplacementResolu, int, int]] = []
+    positions_par_champ: dict[str, list[tuple[RemplacementResolu, int, int]]] = {
+        champ: [] for champ in champs
+    }
     valeurs: set[tuple[str, int, int, str]] = set()
-    categories: dict[tuple[str, int, int], str] = {}
     for remplacement in remplacements:
         champ = remplacement["champ"]
         valeur = remplacement["valeur"]
@@ -742,24 +753,53 @@ def _positions_valides(
         ):
             raise ErreurPreparationInvalide("remplacement_invalide")
         cle = (champ, debut, fin)
-        if cle in categories and categories[cle] != remplacement["categorie"]:
-            raise ErreurPreparationInvalide(
-                "categories_incompatibles",
-                "Une valeur a plusieurs catégories d’anonymisation.",
-            )
-        categories[cle] = remplacement["categorie"]
         deduplication = (*cle, remplacement["categorie"])
         if deduplication in valeurs:
             continue
         valeurs.add(deduplication)
-        positions.append((remplacement, debut, fin))
-    triees = sorted(
-        positions,
+        positions_par_champ[champ].append((remplacement, debut, fin))
+    triees: list[tuple[RemplacementResolu, int, int]] = []
+    conflits_categories_fusionnes = 0
+    for champ, positions_champ in positions_par_champ.items():
+        composantes: list[list[tuple[RemplacementResolu, int, int]]] = []
+        fin_composante = 0
+        for position in sorted(
+            positions_champ,
+            key=lambda element: (element[1], -(element[2] - element[1])),
+        ):
+            if composantes and position[1] < fin_composante:
+                composantes[-1].append(position)
+                fin_composante = max(fin_composante, position[2])
+            else:
+                composantes.append([position])
+                fin_composante = position[2]
+        for composante in composantes:
+            categories = {position[0]["categorie"] for position in composante}
+            if len(categories) == 1:
+                triees.extend(composante)
+                continue
+            debut = min(position[1] for position in composante)
+            fin = max(position[2] for position in composante)
+            triees.append(
+                (
+                    {
+                        "valeur": champs[champ][debut:fin],
+                        "categorie": "donnee_sensible",
+                        "champ": champ,
+                        "debut": debut,
+                        "fin": fin,
+                    },
+                    debut,
+                    fin,
+                )
+            )
+            conflits_categories_fusionnes += 1
+    triees.sort(
         key=lambda element: (
             element[0]["champ"],
             element[1],
             -(element[2] - element[1]),
-        ),
+        )
     )
     resultat: list[tuple[RemplacementResolu, int, int]] = []
     for position in triees:
@@ -792,7 +832,7 @@ def _positions_valides(
                 "chevauchement", "Les valeurs d’anonymisation se chevauchent."
             )
         resultat.append(position)
-    return resultat
+    return resultat, conflits_categories_fusionnes
 
 
 def _nom_source(nom_fichier: str, type_source: str, date_source: str) -> str:
