@@ -33,6 +33,7 @@ Permettre la préparation d’un transcript lorsque des plages source chevauchan
 - Windows PowerShell dans `ui/` : `pnpm test` (82 tests), `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm build` et `pnpm svelte:check` — réussis.
 - `uv run ruff format --check` sur les quatre fichiers Python modifiés et `git diff --check` — réussis.
 - Rejeu réel par POST/GET sur la route d’import : 36/36 groupes terminés, finalisation réussie, 2 composantes fusionnées, 101 remplacements, 64 527 caractères de brouillon, 206,3 s; aucune confirmation et aucune persistance.
+- Rejeu local ultérieur depuis le checkout principal `a1d1783`, avec `ALBERT_PARALLELISME_ANONYMISATION=16` : 7 groupes ont dépassé leur délai individuel de 180 s. Ce checkout était en retard sur `origin/main` (`ca9c236`) et ne testait donc pas la branche de la PR; le code de cette PR renvoie le message de timeout explicite, couvert par le test API.
 - Durée de succès vérifiée positive dans le test après correction de l’écrasement local de l’horodatage de départ observé lors du rejeu réel.
 - Une invocation initiale de `bash scripts/harness.sh complet` a lancé le frontend sous WSL et échoué sur le binaire Rollup Linux absent. Aucun résultat de cette invocation n'est retenu; tous les contrôles équivalents ont ensuite été relancés directement dans PowerShell sous Windows et réussis.
 - Le formatage global `uv run ruff format --check src/ tests/` signale huit fichiers préexistants hors périmètre; ils sont laissés inchangés.
