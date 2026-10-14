@@ -605,16 +605,50 @@
         </div>
       {/if}
     {:else}
-      <label for="date">Date de l’entretien</label>
-      <input id="date" type="date" bind:value={dateEntretien} required />
+      <div class="fr-input-group" class:fr-input-group--error={!dateEntretien}>
+        <label class="fr-label" for="date">Date de l’entretien</label>
+        <input
+          class="fr-input"
+          id="date"
+          type="date"
+          bind:value={dateEntretien}
+          aria-invalid={!dateEntretien}
+          aria-describedby={!dateEntretien ? 'date-messages' : undefined}
+          required
+        />
+        {#if !dateEntretien}
+          <div class="fr-messages-group" id="date-messages" aria-live="polite">
+            <p class="fr-message fr-message--error">
+              La date de l’entretien est obligatoire. Renseignez-la pour activer
+              “Valider et enregistrer”.
+            </p>
+          </div>
+        {/if}
+      </div>
       {#if typeSource === 'produit'}
-        <label for="projet">Projet de recherche</label>
-        <select id="projet" bind:value={selectionProjet} required>
-          <option value={0}>Choisir un projet</option>
-          {#each projets as projet (projet.id)}<option value={projet.id}
-              >{projet.nom}</option
-            >{/each}
-        </select>
+        <div class="fr-select-group" class:fr-select-group--error={!selectionProjet}>
+          <label class="fr-label" for="projet">Projet de recherche</label>
+          <select
+            class="fr-select"
+            id="projet"
+            bind:value={selectionProjet}
+            aria-invalid={!selectionProjet}
+            aria-describedby={!selectionProjet ? 'projet-messages' : undefined}
+            required
+          >
+            <option value={0}>Choisir un projet</option>
+            {#each projets as projet (projet.id)}
+              <option value={projet.id}>{projet.nom}</option>
+            {/each}
+          </select>
+          {#if !selectionProjet}
+            <div class="fr-messages-group" id="projet-messages" aria-live="polite">
+              <p class="fr-message fr-message--error">
+                Choisissez un projet pour activer “Valider et enregistrer”.
+              </p>
+            </div>
+          {/if}
+        </div>
       {/if}
       <label class="fr-label" for="transcript">Transcript anonymisé</label>
       <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
