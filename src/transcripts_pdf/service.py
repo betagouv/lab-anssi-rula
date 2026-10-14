@@ -837,7 +837,7 @@ def _positions_valides(
 
 def _nom_source(nom_fichier: str, type_source: str, date_source: str) -> str:
     nom_canonique = re.fullmatch(
-        r"reunion-_[a-z]{3}-[a-z]{4}-[a-z]{3}_-du-\d{4}-\d{2}-\d{2}-a-\d{2}_\d{2}\.pdf",
+        r"reunion-(?:_[a-z]{3}-[a-z]{4}-[a-z]{3}_|-[a-z]{3}-[a-z]{4}-[a-z]{3}-)-du-\d{4}-\d{2}-\d{2}-a-\d{2}[_-]\d{2}\.pdf",
         nom_fichier,
         re.IGNORECASE,
     )
