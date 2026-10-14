@@ -108,6 +108,17 @@ def test_confirme_et_liste_une_source_anonymisee() -> None:
     assert depot.sources[0].projet_id is None
 
 
+def test_confirme_un_nom_de_reunion_avec_doubles_tirets() -> None:
+    client, depot, _ = _client(None)
+    body = _payload()
+    body["nom_source"] = "reunion--zxe-akot-ibw--du-2026-09-30-a-10-09.pdf"
+
+    reponse = client.post("/api/transcripts-pdf", json=body)
+
+    assert reponse.status_code == 201
+    assert depot.sources[0].nom_source == body["nom_source"]
+
+
 def test_refuse_un_nom_source_invalide() -> None:
     client, _, _ = _client('{"valide": true, "problemes": []}')
     body = _payload()
