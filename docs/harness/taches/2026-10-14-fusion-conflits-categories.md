@@ -34,7 +34,7 @@ Permettre la préparation d’un transcript lorsque des plages source chevauchan
 - `uv run ruff format --check` sur les quatre fichiers Python modifiés et `git diff --check` — réussis.
 - Rejeu réel par POST/GET sur la route d’import : 36/36 groupes terminés, finalisation réussie, 2 composantes fusionnées, 101 remplacements, 64 527 caractères de brouillon, 206,3 s; aucune confirmation et aucune persistance.
 - Durée de succès vérifiée positive dans le test après correction de l’écrasement local de l’horodatage de départ observé lors du rejeu réel.
-- `bash scripts/harness.sh complet` a lancé le frontend sous WSL et échoué sur le binaire Rollup Linux absent. Après réinstallation des dépendances dans les deux environnements, tous les contrôles équivalents ont été relancés nativement sous Windows et réussis.
+- Une invocation initiale de `bash scripts/harness.sh complet` a lancé le frontend sous WSL et échoué sur le binaire Rollup Linux absent. Aucun résultat de cette invocation n'est retenu; tous les contrôles équivalents ont ensuite été relancés directement dans PowerShell sous Windows et réussis.
 - Le formatage global `uv run ruff format --check src/ tests/` signale huit fichiers préexistants hors périmètre; ils sont laissés inchangés.
 - `bash scripts/harness.sh audit` : non requis.
 
@@ -46,8 +46,8 @@ Permettre la préparation d’un transcript lorsque des plages source chevauchan
 
 ## Handoff
 
-- État du code : correction complète dans `fix/fusion-categories-incompatibles`, depuis `ca9c236`.
-- Prochaine action : créer la PR brouillon et vérifier ses contrôles CI.
+- État du code : correction complète dans `fix/fusion-categories-incompatibles`, commit `adbe76b`, PR brouillon [#32](https://github.com/betagouv/lab-anssi-rula/pull/32), depuis `ca9c236`.
+- Prochaine action : attendre les contrôles CI puis la revue humaine avant toute décision de fusion.
 - Risques ou limites : la catégorie prudente peut élargir la zone anonymisée; les sorties Albert varient, et un rejeu a échoué une première fois sur une réponse tronquée avant de réussir intégralement.
 
 ## Revue indépendante
