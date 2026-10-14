@@ -343,6 +343,19 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
     assert albert.efforts_recus and set(albert.efforts_recus) == {"high"}
 
 
+def test_preparation_detecte_date_et_nom_du_fichier_reunion_a_tirets() -> None:
+    nom_fichier = "reunion--zxe-akot-ibw--du-2026-09-30-a-10-09.pdf"
+    texte = "Locutrr_01: Texte utile."
+    albert = AdaptateurAlbertDeTest().avec_reponses(_reponses_preparation(texte))
+
+    preparation = ServicePreparationTranscript(albert, "prompt").preparer(
+        nom_fichier, _pdf(texte), "bizdev", ""
+    )
+
+    assert preparation.date_entretien == "2026-09-30"
+    assert preparation.nom_source == nom_fichier
+
+
 def test_preparation_journalise_un_echec_sans_message_exception(caplog) -> None:
     caplog.set_level(logging.INFO, logger="uvicorn.error")
     service = ServicePreparationTranscript(

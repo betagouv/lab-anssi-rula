@@ -41,7 +41,7 @@ def extraire_pdf(nom_fichier: str, contenu: bytes) -> tuple[str, date | None]:
     if len(texte) > CARACTERES_MAXIMAUX:
         raise ErreurPdf("Le texte du PDF dépasse 100 000 caractères.")
     date_match = re.search(
-        r"-du-(\d{4}-\d{2}-\d{2})-a-\d{2}_\d{2}", Path(nom_fichier).stem
+        r"-du-(\d{4}-\d{2}-\d{2})-a-\d{2}[_-]\d{2}", Path(nom_fichier).stem
     )
     try:
         date_source = date.fromisoformat(date_match[1]) if date_match else None
