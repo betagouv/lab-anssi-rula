@@ -43,7 +43,7 @@ Le rejeu complet avec parallélisme effectif 7 échoue à 8/36 après 246 s par 
 
 Les tests d'intégration historiques confirmaient le partage du délai total avant son remplacement par un délai indépendant par tentative. Les tests actuels vérifient la reprise unique après coupure, la remise à zéro des données partielles, l'absence de reprise après une erreur HTTP ou une réponse invalide, ainsi que les délais indépendants par tentative et entre appels. Le flux SSE actif est également interrompu à l'échéance.
 
-Sous l'ancienne configuration à 360 s partagés par tentative logique, un rejeu complet a terminé les 36/36 groupes, la fusion et la finalisation en 385,1 s; un groupe a pris 219,055 s. Ce résultat historique n'est pas une preuve sous le délai de 180 s désormais appliqué indépendamment à chaque tentative. Aucune préparation réelle n'a été relancée après cet ajustement. Aucune confirmation humaine ni écriture en base n'a eu lieu lors du diagnostic; aucun texte brut, réponse Albert ni donnée d'identité n'a été imprimé ou persisté.
+Sous l'ancienne configuration à 360 s partagés par tentative logique, un rejeu complet a terminé les 36/36 groupes, la fusion et la finalisation en 385,1 s; un groupe a pris 219,055 s. Ce résultat historique ne prouvait pas la réussite sous le délai désormais appliqué indépendamment à chaque tentative. Le 2026-10-14, le POST multipart réel de la route d'import a accepté le PDF avec HTTP 202, puis la préparation avec Albert réel a terminé les 36/36 groupes, la fusion et la finalisation en 198,3 s avec la configuration de 180 s par tentative. Le résultat en mémoire comptait 5 locuteurs, 124 remplacements et 64 822 caractères préparés. Aucune confirmation ni écriture en base n'a eu lieu; le processus de test a été arrêté après vérification et aucun texte brut, réponse Albert ou donnée d'identité n'a été imprimé ou persisté.
 
 ## Décisions
 
@@ -51,13 +51,13 @@ Sous l'ancienne configuration à 360 s partagés par tentative logique, un rejeu
 
 ## Handoff
 
-- État du code : sérialisation compacte, journalisation terminale sûre, délai indépendant de 180 s par tentative, message public explicite et reprise réseau strictement bornée en place. Chaque étape du profil complet a une sortie réussie sur le diff final; la session shell globale n'a pas rendu son code de sortie.
-- Prochaine action : amender et pousser la PR 31 existante, puis vérifier ses contrôles CI.
+- État du code : sérialisation compacte, journalisation terminale sûre, délai indépendant de 180 s par tentative, message public explicite et reprise réseau strictement bornée en place. Les contrôles CI sont verts et le rejeu réel du PDF termine les 36 groupes sous le contrat actuel.
+- Prochaine action : fusionner la PR 31 après la PR 30, puis déployer DEMO par l'action GitHub dédiée.
 - Risques ou limites : le rejeu complet antérieur utilisait l'ancien délai à 360 s et ne prouve pas la réussite avec 180 s par tentative. Un gros document peut désormais échouer et remonter le message public dédié.
 
 ## Revue indépendante
 
 - Diff examiné : changement final de la préparation PDF, y compris délai indépendant par tentative, diagnostics terminal/par groupe et message public.
 - Critères vérifiés : compactage, reprises réseau bornées, timeout par tentative, interruption d'un SSE actif, propagation du message exact et métadonnées sans contenu privé; profil backend/frontend vérifié par sorties individuelles réussies.
-- Remarques : aucun rejeu réel Albert/PDF après l'ajustement n'est revendiqué.
+- Remarques : le rejeu réel Albert/PDF a été effectué après la revue et confirme le parcours complet sans modification du code.
 - Verdict : accepté par Sol pour mise à jour de la PR; aucune fusion ni aucun déploiement autorisé.
