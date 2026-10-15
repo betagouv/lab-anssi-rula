@@ -15,26 +15,37 @@ def _reference(tour_id: int, debut: int, fin: int) -> dict[str, dict[str, int]]:
     return {"reference": {"tour_id": tour_id, "token_debut": debut, "token_fin": fin}}
 
 
-def test_analyse_produit_verifie_les_verbatims_et_tours() -> None:
-    reponse: dict[str, object] = {
-        "resume": "Le participant décrit un besoin d’export.",
-        "themes": ["Export"],
-        "highlights": [
-            {
-                "type": "besoin",
-                "description": "Exporter les données.",
-                "sentiment": "neutre",
-                "gravite": None,
-                **_reference(1, 0, 2),
-            }
-        ],
-        "fonctionnalites": [
-            {
-                "action": "Exporter les données",
-                **_reference(1, 0, 2),
-            }
-        ],
+def _produit(**valeurs: object) -> dict[str, object]:
+    return {
+        "contexte": {
+            "produit": "Portail",
+            "profil_utilisateur": "Agent",
+            "objectif": "Comprendre l’export",
+        },
+        "ouverture": "L’agent veut exporter les données.",
+        "points_cles": ["L’export est demandé."],
+        "profil": [],
+        "sujets": [],
+        "pistes": [],
+        "prochaines_etapes": [],
+        "fonctionnalites": [],
+        **valeurs,
     }
+
+
+def test_analyse_produit_verifie_les_verbatims_et_tours() -> None:
+    reponse = _produit(
+        sujets=[
+            {
+                "titre": "Export",
+                "constat": "L’agent veut exporter.",
+                "enseignements": [
+                    {"description": "La personne demande l’export.", "nature": "fait", **_reference(1, 0, 2)}
+                ],
+            }
+        ],
+        fonctionnalites=[{"action": "Exporter les données", **_reference(1, 0, 2)}],
+    )
     albert = AdaptateurAlbertDeTest().avec_reponse(json.dumps(reponse))
     service = ServiceAnalysePdf(
         albert,
@@ -43,10 +54,16 @@ def test_analyse_produit_verifie_les_verbatims_et_tours() -> None:
     )
 
     resultat = service.analyser(
-        "produit", "SPEAKER_01: Je veux exporter.", "", [], "pdf-v1"
+        "produit", "SPEAKER_01: Je veux exporter.", "", [], "produit-v1"
     )
 
     assert resultat.fonctionnalites[0]["verbatim"] == "Je veux exporter."
+    assert (
+        cast(list[dict[str, Any]], resultat.contenu["sujets"])[0]["enseignements"][0][
+            "verbatim"
+        ]
+        == "Je veux exporter."
+    )
     tours = json.loads(albert.messages_recus[0][1]["content"].split("TOURS:\n", 1)[1])
     assert tours == [
         {
@@ -67,21 +84,74 @@ def test_analyse_produit_verifie_les_verbatims_et_tours() -> None:
     assert albert.efforts_recus == ["medium"]
 
 
-def test_analyse_refuse_un_verbatim_absent_du_tour_reference() -> None:
-    reponse = {
-        "resume": "Résumé.",
-        "themes": [],
-        "highlights": [
+def test_pistes_analytiques_ne_deviennent_pas_des_fonctionnalites() -> None:
+    reponse = _produit(
+        sujets=[
             {
-                "type": "besoin",
-                "description": "Besoin.",
-                "sentiment": "neutre",
-                "gravite": None,
-                **_reference(1, 2, 2),
+                "titre": "Recherche",
+                "constat": "L’agent hésite.",
+                "enseignements": [
+                    {"description": "La personne décrit trois écrans successifs.", "nature": "fait", **_reference(1, 0, 4)},
+                    {
+                        "description": "La navigation peut contribuer à l’hésitation.",
+                        "nature": "hypothese",
+                        **_reference(1, 0, 4),
+                    },
+                    {
+                        "description": "Une recherche unifiée mérite une étude.",
+                        "nature": "interpretation",
+                        **_reference(1, 0, 4),
+                    },
+                ],
             }
         ],
-        "fonctionnalites": [],
-    }
+        pistes=[
+            {
+                "action": "Étudier une recherche unifiée",
+                "besoin": "Trouver plus vite",
+                "origine": "proposition_analyste",
+                "effort_estime": "Non estimé",
+                **_reference(1, 0, 2),
+            }
+        ],
+        fonctionnalites=[
+            {"action": "Mesurer automatiquement", **_reference(1, 0, 4)}
+        ],
+    )
+    service = ServiceAnalysePdf(
+        AdaptateurAlbertDeTest().avec_reponse(json.dumps(reponse)),
+        {"produit": "prompt", "bizdev": "prompt"},
+    )
+
+    resultat = service.analyser(
+        "produit", "SPEAKER_01: Je change trois fois d’écran.", "", [], "produit-v1"
+    )
+
+    assert resultat.fonctionnalites[0]["action"] == "Mesurer automatiquement"
+    assert [
+        e["nature"]
+        for e in cast(list[dict[str, Any]], resultat.contenu["sujets"])[0][
+            "enseignements"
+        ]
+    ] == ["fait", "hypothese", "interpretation"]
+    assert (
+        cast(list[dict[str, Any]], resultat.contenu["pistes"])[0]["effort_estime"]
+        == "Non estimé"
+    )
+
+
+def test_analyse_refuse_un_verbatim_absent_du_tour_reference() -> None:
+    reponse = _produit(
+        sujets=[
+            {
+                "titre": "Sujet",
+                "constat": "Constat.",
+                "enseignements": [
+                    {"description": "Le passage n’est pas disponible.", "nature": "fait", **_reference(1, 2, 2)}
+                ],
+            }
+        ]
+    )
     service = ServiceAnalysePdf(
         AdaptateurAlbertDeTest().avec_reponse(json.dumps(reponse)),
         {"produit": "prompt", "bizdev": "prompt"},
@@ -139,9 +209,7 @@ def test_analyse_bizdev_reconstruit_chaque_citation_depuis_les_tokens() -> None:
         "resume": "Résumé.",
         "themes": [],
         **{cle: [reference.copy()] for cle in categories},
-        "fonctionnalites": [
-            {"action": "Confirmer", **_reference(1, 0, 4)}
-        ],
+        "fonctionnalites": [{"action": "Confirmer", **_reference(1, 0, 4)}],
     }
     service = ServiceAnalysePdf(
         AdaptateurAlbertDeTest().avec_reponse(json.dumps(reponse)),
@@ -190,11 +258,8 @@ def test_analyse_bizdev_reconstruit_chaque_citation_depuis_les_tokens() -> None:
 def test_analyse_refuse_les_positions_de_reference_invalides(
     tour_id: int, token_debut: int, token_fin: int
 ) -> None:
-    reponse = {
-        "resume": "Résumé.",
-        "themes": [],
-        "highlights": [],
-        "fonctionnalites": [
+    reponse = _produit(
+        fonctionnalites=[
             {
                 "action": "Exporter",
                 "reference": {
@@ -203,8 +268,8 @@ def test_analyse_refuse_les_positions_de_reference_invalides(
                     "token_fin": token_fin,
                 },
             }
-        ],
-    }
+        ]
+    )
     service = ServiceAnalysePdf(
         AdaptateurAlbertDeTest().avec_reponse(json.dumps(reponse)),
         {"produit": "prompt", "bizdev": "prompt"},
@@ -215,12 +280,7 @@ def test_analyse_refuse_les_positions_de_reference_invalides(
 
 
 def test_analyse_refuse_une_fin_qui_depasse_token_max_du_tour() -> None:
-    reponse = {
-        "resume": "Résumé.",
-        "themes": [],
-        "highlights": [],
-        "fonctionnalites": [{"action": "Exporter", **_reference(1, 0, 72)}],
-    }
+    reponse = _produit(fonctionnalites=[{"action": "Exporter", **_reference(1, 0, 72)}])
     albert = AdaptateurAlbertDeTest().avec_reponse(json.dumps(reponse))
     service = ServiceAnalysePdf(albert, {"produit": "prompt", "bizdev": "prompt"})
 
@@ -252,12 +312,12 @@ def test_analyse_refuse_un_transcript_sans_tour_citable() -> None:
     [
         "pas-json",
         "{}",
-        '{"resume":3,"themes":[],"highlights":[],"fonctionnalites":[]}',
-        '{"resume":"x","themes":"x","highlights":[],"fonctionnalites":[]}',
-        '{"resume":"x","themes":[],"highlights":"x","fonctionnalites":[]}',
-        '{"resume":"x","themes":[],"highlights":[],"fonctionnalites":[{"action":3}]}',
-        '{"resume":"x","themes":[],"highlights":[],"fonctionnalites":[{"action":"exporter","reference":{"tour_id":"1","token_debut":0,"token_fin":0}}]}',
-        '{"resume":"x","themes":[],"highlights":[{}],"fonctionnalites":[]}',
+        '{"contexte":{},"ouverture":"x","profil":[],"sujets":[],"pistes":[],"prochaines_etapes":[],"fonctionnalites":[]}',
+        '{"contexte":{"produit":3,"profil_utilisateur":"x","objectif":"x"},"ouverture":"x","profil":[],"sujets":[],"pistes":[],"prochaines_etapes":[],"fonctionnalites":[]}',
+        '{"contexte":{"produit":"x","profil_utilisateur":"x","objectif":"x"},"ouverture":"x","points_cles":[],"profil":[],"sujets":[{"titre":"x","constat":"x","enseignements":[{"description":"x","nature":"recommandation","reference":{"tour_id":1,"token_debut":0,"token_fin":0}}]}],"pistes":[],"prochaines_etapes":[],"fonctionnalites":[]}',
+        '{"contexte":{"produit":"x","profil_utilisateur":"x","objectif":"x"},"ouverture":"x","points_cles":[],"profil":[],"sujets":[{"titre":"x","constat":"x","enseignements":[{"description":"x","nature":[],"reference":{"tour_id":1,"token_debut":0,"token_fin":0}}]}],"pistes":[],"prochaines_etapes":[],"fonctionnalites":[]}',
+        '{"contexte":{"produit":"x","profil_utilisateur":"x","objectif":"x"},"ouverture":"x","profil":[],"sujets":[],"pistes":[{"action":"x","besoin":"x","origine":"x","effort_estime":"x"}],"prochaines_etapes":[],"fonctionnalites":[]}',
+        '{"contexte":{"produit":"x","profil_utilisateur":"x","objectif":"x"},"ouverture":"x","points_cles":[],"profil":[],"sujets":[],"pistes":[],"prochaines_etapes":[],"fonctionnalites":[{"action":"exporter","reference":{"tour_id":"1","token_debut":0,"token_fin":0}}]}',
     ],
 )
 def test_analyse_refuse_un_schema_invalide(reponse: str) -> None:
