@@ -145,7 +145,7 @@ class ServiceTranscriptsPdf:
                 source.contenu,
                 source.contexte,
                 source.locuteurs,
-                "pdf-v1",
+                "produit-v1" if source.type_source == "produit" else "pdf-v1",
             )
         except ErreurAnalysePdf as erreur:
             mesures = erreur.mesures
@@ -196,7 +196,7 @@ class ServiceTranscriptsPdf:
                 analyse.contenu,
                 analyse.fonctionnalites,
                 analyse.schema_version,
-                f"{source.type_source}-v6",
+                "produit-v7" if source.type_source == "produit" else "bizdev-v6",
             )
             if not finalise:
                 _JOURNAL.error(

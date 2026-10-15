@@ -30,6 +30,20 @@ _ANALYSE = {
     "suites_evoquees": [],
     "fonctionnalites": [],
 }
+_ANALYSE_PRODUIT = {
+    "contexte": {
+        "produit": "Portail",
+        "profil_utilisateur": "Agent",
+        "objectif": "Tester la recherche",
+    },
+    "ouverture": "L’agent cherche un dossier.",
+    "points_cles": [],
+    "profil": [],
+    "sujets": [],
+    "pistes": [],
+    "prochaines_etapes": [],
+    "fonctionnalites": [],
+}
 
 
 def _service(
@@ -53,6 +67,20 @@ def _confirmer(service: ServiceTranscriptsPdf, contenu: str = "SPEAKER_01: Besoi
     return service.confirmer(
         "bizdev", _NOM, 1, None, date(2026, 4, 7), contenu, "", _LOCUTEUR
     )
+
+
+def test_analyse_produit_versionne_schema_et_prompt_independamment_de_bizdev() -> None:
+    service = _service(json.dumps(_ANALYSE_PRODUIT))
+    source = service.confirmer(
+        "produit", _NOM, 1, 2, date(2026, 4, 7), "SPEAKER_01: Chercher.", "", _LOCUTEUR
+    )
+    job = service.demarrer_analyse(source.id).job
+
+    service.executer_job(job.id)
+
+    analyse = service.obtenir_analyse(source.id)
+    assert analyse.schema_version == "produit-v1"
+    assert analyse.prompt_version == "produit-v7"
 
 
 def test_confirme_analyse_et_retrouve_un_transcript_bizdev() -> None:
@@ -134,7 +162,9 @@ def test_refuse_source_de_type_date_contenu_locuteur_ou_nom_invalide() -> None:
         )
 
 
-def test_exception_inattendue_de_l_analyse_echoue_le_job_sans_persistance(caplog) -> None:
+def test_exception_inattendue_de_l_analyse_echoue_le_job_sans_persistance(
+    caplog,
+) -> None:
     class AnalyseurEnEchecDeTest:
         def analyser(
             self,
@@ -159,7 +189,10 @@ def test_exception_inattendue_de_l_analyse_echoue_le_job_sans_persistance(caplog
     job_termine = depot.obtenir_job(source.id)
     assert job_termine is not None
     assert job_termine.statut == "echec"
-    assert "phase=analyse code=exception_inattendue exception_type=RuntimeError" in caplog.text
+    assert (
+        "phase=analyse code=exception_inattendue exception_type=RuntimeError"
+        in caplog.text
+    )
     assert "IDENTITE_MASQUEE" not in caplog.text
     assert depot.analyses == []
     assert depot.fonctionnalites == []

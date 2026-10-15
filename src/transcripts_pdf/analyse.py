@@ -6,19 +6,6 @@ from typing import Any, NamedTuple, cast
 
 from adaptateurs.albert import AdaptateurAlbert
 
-_TYPES = (
-    "pain_point",
-    "confusion_erreur_usage",
-    "comportement_contournement",
-    "besoin",
-    "demande_solution",
-    "motivation_contexte",
-    "ce_qui_marche",
-    "autre",
-)
-_SENTIMENTS = ("positif", "neutre", "negatif")
-_GRAVITES = ("bloquant", "genant", "mineur")
-
 
 def _objet_champs(champs: dict[str, object]) -> dict[str, object]:
     return {
@@ -33,33 +20,52 @@ def _liste_texte() -> dict[str, object]:
     return {"type": "array", "items": {"type": "string"}}
 
 
-_REFERENCE = {
+_REFERENCE: dict[str, object] = {
     "reference": {"$ref": "#/$defs/reference"},
 }
 _FONCTIONNALITE = _objet_champs({"action": {"type": "string"}, **_REFERENCE})
 _FAIT = _objet_champs({"description": {"type": "string"}, **_REFERENCE})
+_ENSEIGNEMENT = _objet_champs(
+    {
+        "description": {"type": "string"},
+        "nature": {"type": "string", "enum": ["fait", "hypothese", "interpretation"]},
+        **_REFERENCE,
+    }
+)
+_SUJET = _objet_champs(
+    {
+        "titre": {"type": "string"},
+        "constat": {"type": "string"},
+        "enseignements": {"type": "array", "items": _ENSEIGNEMENT},
+    }
+)
+_PISTE = _objet_champs(
+    {
+        "action": {"type": "string"},
+        "besoin": {"type": "string"},
+        "origine": {"type": "string", "enum": ["demande_utilisateur", "proposition_analyste"]},
+        "effort_estime": {"type": "string"},
+        **_REFERENCE,
+    }
+)
+_ETAPE = _objet_champs(
+    {"action": {"type": "string"}, "verification": {"type": "string"}, **_REFERENCE}
+)
 _PRODUIT = _objet_champs(
     {
-        "resume": {"type": "string"},
-        "themes": _liste_texte(),
-        "highlights": {
-            "type": "array",
-            "items": _objet_champs(
-                {
-                    "type": {"type": "string", "enum": list(_TYPES)},
-                    "description": {"type": "string"},
-                    "sentiment": {
-                        "type": "string",
-                        "enum": list(_SENTIMENTS),
-                    },
-                    "gravite": {
-                        "type": ["string", "null"],
-                        "enum": [*_GRAVITES, None],
-                    },
-                    **_REFERENCE,
-                }
-            ),
-        },
+        "contexte": _objet_champs(
+            {
+                "produit": {"type": "string"},
+                "profil_utilisateur": {"type": "string"},
+                "objectif": {"type": "string"},
+            }
+        ),
+        "ouverture": {"type": "string"},
+        "points_cles": _liste_texte(),
+        "profil": {"type": "array", "items": _FAIT},
+        "sujets": {"type": "array", "items": _SUJET},
+        "pistes": {"type": "array", "items": _PISTE},
+        "prochaines_etapes": {"type": "array", "items": _ETAPE},
         "fonctionnalites": {"type": "array", "items": _FONCTIONNALITE},
     }
 )
@@ -150,9 +156,7 @@ class ServiceAnalysePdf:
             )
             diagnostic_completion = getattr(reponse, "diagnostic", {})
             mesures_completion = self._configuration_diagnostic | (
-                diagnostic_completion
-                if isinstance(diagnostic_completion, dict)
-                else {}
+                diagnostic_completion if isinstance(diagnostic_completion, dict) else {}
             )
         except Exception as erreur:
             diagnostic_albert = getattr(erreur, "diagnostic", {})
@@ -185,21 +189,7 @@ class ServiceAnalysePdf:
             ) from None
         fonctionnalites = valeur["fonctionnalites"]
         tours = _tours(contenu)
-        references = list(valeur.get("highlights", [])) + fonctionnalites
-        references.extend(
-            item
-            for cle in (
-                "enjeux",
-                "besoins_globaux",
-                "freins",
-                "motivations",
-                "opportunites",
-                "propositions",
-                "signaux_positifs",
-                "suites_evoquees",
-            )
-            for item in valeur.get(cle, [])
-        )
+        references = _references(valeur, type_source)
         try:
             for index, reference in enumerate(references, 1):
                 reference_privee = reference.pop("reference")
@@ -265,7 +255,16 @@ def _lire_json(reponse: str, type_source: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         raise ErreurValidationAnalyse("json_invalide") from None
     champs = (
-        {"resume", "themes", "highlights", "fonctionnalites"}
+        {
+            "contexte",
+            "ouverture",
+            "points_cles",
+            "profil",
+            "sujets",
+            "pistes",
+            "prochaines_etapes",
+            "fonctionnalites",
+        }
         if type_source == "produit"
         else {
             "resume",
@@ -287,14 +286,24 @@ def _lire_json(reponse: str, type_source: str) -> dict[str, Any]:
 
 
 def _valider_structure(valeur: dict[str, Any], type_source: str) -> None:
-    if (
+    if type_source == "produit":
+        if (
+            not isinstance(valeur["contexte"], dict)
+            or set(valeur["contexte"]) != {"produit", "profil_utilisateur", "objectif"}
+            or any(not isinstance(item, str) for item in valeur["contexte"].values())
+            or not isinstance(valeur["ouverture"], str)
+            or not isinstance(valeur["points_cles"], list)
+            or any(not isinstance(item, str) for item in valeur["points_cles"])
+        ):
+            raise ErreurValidationAnalyse("contexte_produit_invalide")
+    elif (
         not isinstance(valeur["resume"], str)
         or not isinstance(valeur["themes"], list)
         or any(not isinstance(item, str) for item in valeur["themes"])
     ):
         raise ErreurValidationAnalyse("types_racine_invalides")
     listes = (
-        ("fonctionnalites", "highlights")
+        ("profil", "sujets", "pistes", "prochaines_etapes", "fonctionnalites")
         if type_source == "produit"
         else (
             "fonctionnalites",
@@ -321,26 +330,48 @@ def _valider_structure(valeur: dict[str, Any], type_source: str) -> None:
                 "fonctionnalite_invalide", "Fonctionnalité extraite invalide."
             )
     if type_source == "produit":
-        for item in valeur["highlights"]:
+        for cle in ("profil",):
+            if any(not _fait_valide(item) for item in valeur[cle]):
+                raise ErreurValidationAnalyse("fait_produit_invalide")
+        for sujet in valeur["sujets"]:
             if (
-                not isinstance(item, dict)
-                or set(item)
-                != {
-                    "type",
-                    "description",
-                    "sentiment",
-                    "gravite",
-                    "reference",
-                }
-                or item["type"] not in _TYPES
-                or not isinstance(item["description"], str)
-                or item["sentiment"] not in _SENTIMENTS
-                or item["gravite"] not in (*_GRAVITES, None)
-                or not _reference_privee_valide(item["reference"])
-            ):
-                raise ErreurValidationAnalyse(
-                    "highlight_produit_invalide", "Extrait produit invalide."
+                not isinstance(sujet, dict)
+                or set(sujet) != {"titre", "constat", "enseignements"}
+                or any(not isinstance(sujet[cle], str) for cle in ("titre", "constat"))
+                or not isinstance(sujet["enseignements"], list)
+                or any(
+                    not isinstance(e, dict)
+                    or set(e) != {"description", "nature", "reference"}
+                    or not isinstance(e["description"], str)
+                    or not isinstance(e["nature"], str)
+                    or e["nature"] not in {"fait", "hypothese", "interpretation"}
+                    or not _reference_privee_valide(e["reference"])
+                    for e in sujet["enseignements"]
                 )
+            ):
+                raise ErreurValidationAnalyse("sujet_produit_invalide")
+        for piste in valeur["pistes"]:
+            if (
+                not isinstance(piste, dict)
+                or set(piste)
+                != {"action", "besoin", "origine", "effort_estime", "reference"}
+                or any(
+                    not isinstance(piste[cle], str)
+                    for cle in ("action", "besoin", "effort_estime")
+                )
+                or not isinstance(piste["origine"], str)
+                or piste["origine"] not in {"demande_utilisateur", "proposition_analyste"}
+                or not _reference_privee_valide(piste["reference"])
+            ):
+                raise ErreurValidationAnalyse("piste_produit_invalide")
+        if any(
+            not isinstance(item, dict)
+            or set(item) != {"action", "verification", "reference"}
+            or any(not isinstance(item[cle], str) for cle in ("action", "verification"))
+            or not _reference_privee_valide(item["reference"])
+            for item in valeur["prochaines_etapes"]
+        ):
+            raise ErreurValidationAnalyse("etape_produit_invalide")
     else:
         for cle in listes[1:]:
             if any(
@@ -430,6 +461,47 @@ def _reference_privee_valide(reference: object) -> bool:
     }
 
 
+def _fait_valide(item: object) -> bool:
+    return (
+        isinstance(item, dict)
+        and set(item) == {"description", "reference"}
+        and isinstance(item["description"], str)
+        and _reference_privee_valide(item["reference"])
+    )
+
+
+def _references(valeur: dict[str, Any], type_source: str) -> list[dict[str, Any]]:
+    if type_source == "produit":
+        return [
+            *[
+                item
+                for cle in ("profil", "pistes", "fonctionnalites", "prochaines_etapes")
+                for item in valeur[cle]
+            ],
+            *[
+                enseignement
+                for sujet in valeur["sujets"]
+                for enseignement in sujet["enseignements"]
+            ],
+        ]
+    return [
+        valeur["fonctionnalites"][i] for i in range(len(valeur["fonctionnalites"]))
+    ] + [
+        item
+        for cle in (
+            "enjeux",
+            "besoins_globaux",
+            "freins",
+            "motivations",
+            "opportunites",
+            "propositions",
+            "signaux_positifs",
+            "suites_evoquees",
+        )
+        for item in valeur[cle]
+    ]
+
+
 def _tours_details(contenu: str) -> list[dict[str, object]]:
     labels = list(re.finditer(r"(?m)^\s*(SPEAKER_\d{2}):\s*", contenu))
     tours = []
@@ -446,8 +518,7 @@ def _tours_details(contenu: str) -> list[dict[str, object]]:
                 "speaker_id": match[1],
                 "token_max": len(tokens) - 1,
                 "tokens": [
-                    [token_id, token.group()]
-                    for token_id, token in enumerate(tokens)
+                    [token_id, token.group()] for token_id, token in enumerate(tokens)
                 ],
             }
         )
