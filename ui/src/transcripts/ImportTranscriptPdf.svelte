@@ -22,6 +22,7 @@
   import { supprimerTranscriptPdf } from '../api/transcripts_pdf';
   import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
   import { decouperLocuteurs } from './modele-locuteurs';
+  import TranscriptPseudonymise from './TranscriptPseudonymise.svelte';
 
   let {
     produitId,
@@ -923,7 +924,7 @@
         tabindex={ongletActif === 'transcript' ? 0 : -1}
         onclick={() => selectionnerOnglet('transcript')}
         onkeydown={(event) => naviguerOnglets(event, 'transcript')}
-        >Transcript brut</button
+        >Transcript pseudonymisé</button
       >
     </div>
     {#if notificationAnalyse}
@@ -953,8 +954,7 @@
       aria-labelledby="onglet-transcript"
       hidden={ongletActif !== 'transcript'}
     >
-      <h3>Transcript pseudonymisé</h3>
-      <pre class="transcript">{contenuAvecLocuteurs}</pre>
+      <TranscriptPseudonymise contenu={contenuAvecLocuteurs} />
       {#if contexte}<h3>Contexte</h3>
         <p>{contexte}</p>{/if}
       <ul>
@@ -1036,15 +1036,6 @@
   }
   [role='tabpanel'] {
     margin-top: 1.5rem;
-  }
-  .transcript {
-    background: var(--background-alt-grey);
-    border-left: 0.25rem solid var(--border-default-grey);
-    max-height: 60vh;
-    overflow-y: auto;
-    overflow-wrap: anywhere;
-    padding: 1.5rem;
-    white-space: pre-wrap;
   }
   fieldset {
     margin-top: 1.5rem;
