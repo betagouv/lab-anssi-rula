@@ -18,6 +18,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - [x] Les masques actifs et inactifs restent visibles et cliquables; une occurrence regroupe toutes les mentions identiques exactes dans le transcript et le contexte.
 - [x] Le détail du masque sélectionné expose son original en lecture seule, sa catégorie modifiable, son compteur, sa révélation et sa bascule; les catégories et pseudonymes restent cohérents après modification.
 - [x] Une sélection de texte propose une catégorie puis attend une action explicite pour créer un masque global exact; un chevauchement partiel incompatible est refusé atomiquement.
+- [x] L’ajout depuis la sélection reste dans le panneau latéral, hors du transcript, et reste disponible lorsque le clic extérieur efface la sélection native.
 - [x] Annuler et rétablir couvrent ajouts, activations et catégories sans perdre les modifications suivantes.
 - [x] Navigation clavier, focus, Échap et commandes tactiles permettent de révéler et parcourir sans dépendre du survol.
 - [x] Le POST/PUT de confirmation transmet uniquement le texte projeté et les locuteurs; validation existante, correction des rôles et confirmation sont préservées.
@@ -57,6 +58,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Validation finale après ajout de ces cas : `uv run ruff check .`, `uv run ruff format --check` (trois fichiers backend), `uv run mypy` et `uv run pytest` passent; 334 tests backend passent et deux sont ignorés. `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm test` (93 tests) et `pnpm build` passent sous Windows. `bash scripts/harness.sh complet` passe les contrôles backend puis échoue au `svelte-check` WSL parce que `@rollup/rollup-linux-x64-gnu` est absent du `node_modules` Windows partagé; le contrôle natif Windows équivalent passe.
 - Reprise F5 : TestClient valide le cookie, l’isolation, l’expiration glissante, la suppression, le `no-store`, le refus d’un corps contenant le transcript, et la restauration des modifications complètes; le modèle frontend valide la réhydratation de l’historique. La vérification intégrée du F5 dans un navigateur réel reste à faire.
 - Origine de l’upload en développement : Vite ne réécrit plus l’en-tête `Host`; après redémarrage du seul conteneur frontend, une requête `DELETE` de contrôle avec `Origin: http://localhost:5173` a atteint la validation de préparation et renvoyé le `404` attendu sur un identifiant fictif, sans `403 Origine invalide`.
+- Correctif de sélection : l’action d’ajout est rendue dans le panneau latéral et la capture ignore une sélection native repliée; `Échap` ou Annuler la ferme. `pnpm test`, `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` passent (93 tests, zéro diagnostic Svelte).
 - CI GitHub du code `610a158` : Backend Python, Frontend Svelte, CodeQL, Analyze (actions, JavaScript/TypeScript, Python) et GitGuardian passent.
 
 ## Décisions

@@ -49,6 +49,7 @@
   let texteSelectionne = $state('');
   let categorieSelection = $state<CategorieRelecture>('donnee_sensible');
   let refusSelection = $state(false);
+  let minuteurSelection: ReturnType<typeof setTimeout> | null = null;
   let segmentLocuteurEnEdition = $state<string | null>(null);
   let nomLocuteurSaisi = $state('');
   let champNomLocuteur = $state<HTMLInputElement | undefined>();
@@ -140,9 +141,16 @@
     const valeur = texteSelectionne;
     if (!valeur) return;
     refusSelection = !modele.ajouterValeur(valeur, categorieSelection);
-    if (!refusSelection) valeurSelectionnee = modele.selection;
+    if (refusSelection) return;
+    valeurSelectionnee = modele.selection;
+    fermerAjoutSelection();
+    window.getSelection()?.removeAllRanges();
+    rafraichir();
+  }
+
+  function fermerAjoutSelection() {
     texteSelectionne = '';
-    if (!refusSelection) rafraichir();
+    refusSelection = false;
   }
 
   function parcourir(sens: -1 | 1) {
@@ -206,38 +214,45 @@
 
   function selectionnerTexte() {
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      texteSelectionne = '';
-      return;
-    }
+    if (!selection || selection.isCollapsed) return;
     if (
       !conteneur.contains(selection.anchorNode) ||
       !conteneur.contains(selection.focusNode)
-    ) {
-      texteSelectionne = '';
+    )
       return;
-    }
     const plage = selection.getRangeAt(0);
     if (
       [...conteneur.querySelectorAll('[data-locuteur]')].some((element) =>
         plage.intersectsNode(element)
       )
     ) {
-      texteSelectionne = '';
-      refusSelection = false;
+      fermerAjoutSelection();
       return;
     }
     const debut = selection.anchorNode?.parentElement?.closest('[data-champ]');
     const fin = selection.focusNode?.parentElement?.closest('[data-champ]');
     if (debut && debut === fin) {
-      texteSelectionne = selection.toString();
+      const valeur = selection.toString();
+      if (!valeur.trim()) return;
+      texteSelectionne = valeur;
       refusSelection = false;
+    } else {
+      fermerAjoutSelection();
     }
+  }
+
+  function programmerSelection() {
+    if (minuteurSelection !== null) clearTimeout(minuteurSelection);
+    minuteurSelection = setTimeout(() => {
+      minuteurSelection = null;
+      selectionnerTexte();
+    }, 120);
   }
 
   function touche(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       valeurRevelee = null;
+      fermerAjoutSelection();
       revision += 1;
     }
   }
@@ -247,17 +262,19 @@
     onprojection(modele.projeter('transcript'), modele.projeter('contexte'));
     onetat(modele.lireEtat());
     const echapper = (event: KeyboardEvent) => {
-      if (conteneur.contains(document.activeElement)) touche(event);
+      if (conteneur.contains(document.activeElement) || texteSelectionne)
+        touche(event);
     };
     document.addEventListener('mouseup', selectionnerTexte);
     document.addEventListener('keyup', selectionnerTexte);
-    document.addEventListener('selectionchange', selectionnerTexte);
+    document.addEventListener('selectionchange', programmerSelection);
     document.addEventListener('keydown', echapper);
     return () => {
       document.removeEventListener('mouseup', selectionnerTexte);
       document.removeEventListener('keyup', selectionnerTexte);
-      document.removeEventListener('selectionchange', selectionnerTexte);
+      document.removeEventListener('selectionchange', programmerSelection);
       document.removeEventListener('keydown', echapper);
+      if (minuteurSelection !== null) clearTimeout(minuteurSelection);
     };
   });
 </script>
@@ -270,7 +287,8 @@
   <div class="document">
     <p>
       Survolez ou placez le focus sur un masque pour révéler temporairement son
-      original. Cliquez pour basculer toutes ses occurrences.
+      original. Cliquez pour basculer toutes ses occurrences. Sélectionnez du texte
+      pour afficher l’ajout de masque dans le panneau latéral.
     </p>
     <ul class="legende" aria-label="Légende des catégories">
       {#each categoriesRelecture as categorie (categorie.id)}
@@ -295,25 +313,6 @@
         onclick={() => parcourir(1)}>Occurrence suivante</button
       >
     </div>
-    {#if texteSelectionne}
-      <div class="selection" aria-label="Créer un masque depuis la sélection">
-        <p>Sélection : {texteSelectionne}</p>
-        <label
-          >Catégorie<select class="fr-select" bind:value={categorieSelection}
-            >{#each categoriesRelecture as categorie (categorie.id)}<option
-                value={categorie.id}>{categorie.label}</option
-              >{/each}</select
-          ></label
-        >
-        <button type="button" class="fr-btn" onclick={ajouterSelection}
-          >Masquer toutes les occurrences</button
-        >
-      </div>
-    {/if}
-    {#if refusSelection}<p class="erreur" role="alert">
-        Cette sélection ne peut pas être ajoutée sans chevaucher un masque existant.
-        Aucune modification n’a été appliquée.
-      </p>{/if}
     <div
       class="zone-defilante"
       bind:this={zoneDefilante}
@@ -405,6 +404,34 @@
   </div>
   <aside class="panneau" aria-label="Détail du masque sélectionné">
     <h2>Masque sélectionné</h2>
+    {#if texteSelectionne}
+      <div
+        class="selection"
+        role="group"
+        aria-label="Créer un masque depuis la sélection"
+      >
+        <p><strong>Texte sélectionné :</strong> {texteSelectionne}</p>
+        <label
+          >Catégorie<select class="fr-select" bind:value={categorieSelection}
+            >{#each categoriesRelecture as categorie (categorie.id)}<option
+                value={categorie.id}>{categorie.label}</option
+              >{/each}</select
+          ></label
+        >
+        <button type="button" class="fr-btn" onclick={ajouterSelection}
+          >Masquer toutes les occurrences</button
+        >
+        <button
+          type="button"
+          class="fr-btn fr-btn--secondary"
+          onclick={fermerAjoutSelection}>Annuler</button
+        >
+        {#if refusSelection}<p class="erreur" role="alert">
+            Cette sélection chevauche un masque existant. Sélectionnez ce masque pour
+            le modifier.
+          </p>{/if}
+      </div>
+    {/if}
     <p>
       {masques.length
         ? `${indexSelection + 1} sur ${masques.length}`
@@ -630,6 +657,10 @@
   .selection {
     padding: 0.75rem;
     background: var(--background-alt-grey);
+  }
+  .selection {
+    border: 1px solid var(--border-default-grey);
+    margin-block: 1rem;
   }
   .selection label,
   .panneau label {
