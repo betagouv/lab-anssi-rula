@@ -21,6 +21,7 @@
   import PanneauAnalyseTranscript from './PanneauAnalyseTranscript.svelte';
   import { supprimerTranscriptPdf } from '../api/transcripts_pdf';
   import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
+  import { decouperLocuteurs } from './modele-locuteurs';
 
   let {
     produitId,
@@ -45,8 +46,16 @@
       identifiant: string;
       role: 'interne' | 'externe' | 'indetermine';
       justification: string;
+      nom_affiche?: string;
     }[]
   >([]);
+  const contenuAvecLocuteurs = $derived(
+    decouperLocuteurs(contenu, locuteurs)
+      .map((segment) =>
+        segment.type === 'locuteur' ? segment.texte + ':' : segment.texte
+      )
+      .join('')
+  );
   let remplacements = $state<
     {
       valeur_originale: string;
@@ -688,6 +697,9 @@
             contenu = texte;
             contexte = contexteProjete;
           }}
+          onlocuteurs={(nouveauxLocuteurs) => {
+            locuteurs = nouveauxLocuteurs;
+          }}
         />
         {#if conflitsCategoriesFusionnes}
           <div class="fr-alert fr-alert--warning" role="status">
@@ -724,7 +736,8 @@
         </p>
         {#each locuteurs as locuteur, index (locuteur.identifiant)}
           <label for={`role-${index}`}
-            >Participant {index + 1} · {locuteur.identifiant}</label
+            >Participant {index + 1} · {locuteur.nom_affiche ||
+              locuteur.identifiant}</label
           >
           <select id={`role-${index}`} bind:value={locuteur.role}>
             <option value="interne">Interne · {index + 1}</option><option
@@ -812,12 +825,13 @@
       hidden={ongletActif !== 'transcript'}
     >
       <h3>Transcript pseudonymisé</h3>
-      <pre class="transcript">{contenu}</pre>
+      <pre class="transcript">{contenuAvecLocuteurs}</pre>
       {#if contexte}<h3>Contexte</h3>
         <p>{contexte}</p>{/if}
       <ul>
         {#each locuteurs as locuteur (locuteur.identifiant)}<li>
-            {locuteur.identifiant} — {locuteur.role} : {locuteur.justification}
+            {locuteur.nom_affiche || locuteur.identifiant} — {locuteur.role} :
+            {locuteur.justification}
           </li>{/each}
       </ul>
       <button

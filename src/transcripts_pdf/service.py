@@ -111,6 +111,7 @@ class Locuteur(NamedTuple):
     identifiant: str
     role: str
     justification: str
+    nom_affiche: str = ""
 
 
 def _journaliser_groupe(

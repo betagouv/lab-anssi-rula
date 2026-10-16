@@ -1,11 +1,18 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     categoriesRelecture,
     ModeleRelecture,
     type CategorieRelecture,
     type OccurrenceSource,
   } from './modele-relecture';
+  import {
+    decouperLocuteurs,
+    type LocuteurRelecture,
+    type SegmentLocuteur,
+  } from './modele-locuteurs';
+
+  type Morceau = SegmentLocuteur | { type: 'masque'; original: string };
 
   let {
     contenuOriginal,
@@ -13,15 +20,14 @@
     occurrences,
     locuteurs,
     onprojection,
+    onlocuteurs,
   }: {
     contenuOriginal: string;
     contexteOriginal: string;
     occurrences: OccurrenceSource[];
-    locuteurs: {
-      identifiant: string;
-      role: 'interne' | 'externe' | 'indetermine';
-    }[];
+    locuteurs: LocuteurRelecture[];
     onprojection: (contenu: string, contexte: string) => void;
+    onlocuteurs: (locuteurs: LocuteurRelecture[]) => void;
   } = $props();
   const modele = $derived(
     new ModeleRelecture(contenuOriginal, contexteOriginal, occurrences)
@@ -33,6 +39,10 @@
   let texteSelectionne = $state('');
   let categorieSelection = $state<CategorieRelecture>('donnee_sensible');
   let refusSelection = $state(false);
+  let segmentLocuteurEnEdition = $state<string | null>(null);
+  let nomLocuteurSaisi = $state('');
+  let champNomLocuteur = $state<HTMLInputElement | undefined>();
+  let zoneDefilante: HTMLElement;
   const masques = $derived.by(() => {
     void revision;
     return modele.lireMasques();
@@ -62,47 +72,25 @@
         .filter((o) => o.champ === champ)
         .sort((a, b) => a.debut - b.debut);
       let debut = 0;
-      const morceaux = plages.flatMap((plage) => {
+      const morceaux: Morceau[] = [];
+      for (const plage of plages) {
         const masque = modele
           .lireMasques()
           .find((m) => m.valeur_originale === plage.valeur_originale)!;
-        const texte = source.slice(debut, plage.debut);
+        morceaux.push(...morceauxTexte(source.slice(debut, plage.debut), champ));
+        morceaux.push({ type: 'masque', original: masque.valeur_originale });
         debut = plage.fin;
-        return [
-          ...(texte
-            ? [{ type: 'texte' as const, texte: texteVisible(texte, champ) }]
-            : []),
-          {
-            type: 'masque' as const,
-            texte: masque.actif ? masque.valeur_anonyme : masque.valeur_originale,
-            original: masque.valeur_originale,
-          },
-        ];
-      });
-      morceaux.push({
-        type: 'texte' as const,
-        texte: texteVisible(source.slice(debut), champ),
-      });
+      }
+      morceaux.push(...morceauxTexte(source.slice(debut), champ));
       return { champ, morceaux };
     });
   }
 
-  function texteVisible(texte: string, champ: 'transcript' | 'contexte') {
+  function morceauxTexte(texte: string, champ: 'transcript' | 'contexte') {
+    if (!texte) return [];
     return champ === 'transcript'
-      ? texte.replace(/SPEAKER_\d{2}:/g, (identifiant) => {
-          const index = locuteurs.findIndex(
-            (locuteur) => locuteur.identifiant === identifiant.slice(0, -1)
-          );
-          if (index < 0) return identifiant;
-          const role =
-            locuteurs[index].role === 'interne'
-              ? 'Interne'
-              : locuteurs[index].role === 'externe'
-                ? 'Externe'
-                : 'Indéterminé';
-          return `${role} · ${index + 1}:`;
-        })
-      : texte;
+      ? decouperLocuteurs(texte, locuteurs)
+      : [{ type: 'texte' as const, texte }];
   }
 
   function rafraichir() {
@@ -156,9 +144,46 @@
         .valeur_originale;
     valeurRevelee = null;
     revision += 1;
-    document
-      .querySelector(`[data-masque="${CSS.escape(valeurSelectionnee ?? '')}"]`)
-      ?.scrollIntoView({ block: 'center' });
+    const cible = zoneDefilante.querySelector<HTMLButtonElement>(
+      '[data-masque="' + CSS.escape(valeurSelectionnee ?? '') + '"]'
+    );
+    if (!cible) return;
+    cible.focus({ preventScroll: true });
+    const zone = zoneDefilante.getBoundingClientRect();
+    const occurrence = cible.getBoundingClientRect();
+    zoneDefilante.scrollBy({
+      top: occurrence.top - zone.top - (zone.height - occurrence.height) / 2,
+      behavior: 'smooth',
+    });
+  }
+
+  async function modifierLocuteur(identifiant: string, segment: string) {
+    const locuteur = locuteurs.find(
+      (element) => element.identifiant === identifiant
+    );
+    if (!locuteur) return;
+    segmentLocuteurEnEdition = segment;
+    nomLocuteurSaisi = locuteur.nom_affiche ?? '';
+    await tick();
+    champNomLocuteur?.focus();
+    champNomLocuteur?.select();
+  }
+
+  function enregistrerNomLocuteur(identifiant: string) {
+    const nom = nomLocuteurSaisi.trim();
+    const locuteur = locuteurs.find(
+      (element) => element.identifiant === identifiant
+    );
+    segmentLocuteurEnEdition = null;
+    if (!locuteur || (locuteur.nom_affiche ?? '') === nom) return;
+    onlocuteurs(
+      locuteurs.map((element) =>
+        element.identifiant === identifiant
+          ? { ...element, nom_affiche: nom }
+          : element
+      )
+    );
+    revision += 1;
   }
 
   function reveiller(valeur: string) {
@@ -173,13 +198,27 @@
 
   function selectionnerTexte() {
     const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) {
+      texteSelectionne = '';
+      return;
+    }
     if (
-      !selection ||
-      selection.isCollapsed ||
       !conteneur.contains(selection.anchorNode) ||
       !conteneur.contains(selection.focusNode)
-    )
+    ) {
+      texteSelectionne = '';
       return;
+    }
+    const plage = selection.getRangeAt(0);
+    if (
+      [...conteneur.querySelectorAll('[data-locuteur]')].some((element) =>
+        plage.intersectsNode(element)
+      )
+    ) {
+      texteSelectionne = '';
+      refusSelection = false;
+      return;
+    }
     const debut = selection.anchorNode?.parentElement?.closest('[data-champ]');
     const fin = selection.focusNode?.parentElement?.closest('[data-champ]');
     if (debut && debut === fin) {
@@ -228,7 +267,7 @@
         <li><span class={`pastille ${categorie.id}`}></span>{categorie.label}</li>
       {/each}
     </ul>
-    <div class="actions" aria-label="Historique et navigation">
+    <div class="actions actions-principales" aria-label="Historique et navigation">
       <button type="button" class="fr-btn fr-btn--secondary" onclick={annuler}
         >Annuler</button
       >
@@ -265,45 +304,94 @@
         Cette sélection ne peut pas être ajoutée sans chevaucher un masque existant.
         Aucune modification n’a été appliquée.
       </p>{/if}
-    {#each segments as section (section.champ)}
-      <article
-        class="source"
-        aria-label={section.champ === 'transcript' ? 'Transcript' : 'Contexte'}
-        data-champ={section.champ}
-      >
-        <h3>{section.champ === 'transcript' ? 'Transcript' : 'Contexte'}</h3>
-        <p class="texte">
-          {#each section.morceaux as morceau, index (`${section.champ}-${index}`)}
-            {#if morceau.type === 'texte'}{morceau.texte}{:else}{@const masque =
-                masques.find((m) => m.valeur_originale === morceau.original)!}<button
-                type="button"
-                class="marqueur"
-                class:identite={masque.categorie === 'identite'}
-                class:technologie={masque.categorie === 'technologie_ou_produit'}
-                class:organisation={masque.categorie === 'organisation'}
-                class:secret={masque.categorie === 'secret'}
-                class:coordonnees={masque.categorie === 'coordonnees'}
-                class:donnee_sensible={masque.categorie === 'donnee_sensible'}
-                class:inactif={!masque.actif}
-                class:selectionne={valeurSelectionnee === morceau.original}
-                data-masque={morceau.original}
-                aria-label={masque.actif
-                  ? `Occurrence masquée ${masque.valeur_anonyme}`
-                  : `Masque désactivé ${morceau.original}`}
-                onclick={() => basculer(morceau.original)}
-                onmouseenter={() => reveiller(morceau.original)}
-                onmouseleave={masquerRevelation}
-                onfocus={() => reveiller(morceau.original)}
-                onblur={masquerRevelation}
-                >{morceau.original}{#if valeurRevelee === morceau.original}<span
-                    class="original"
-                    role="status">{morceau.original}</span
-                  >{/if}</button
-              >{/if}
-          {/each}
-        </p>
-      </article>
-    {/each}
+    <div
+      class="zone-defilante"
+      bind:this={zoneDefilante}
+      role="region"
+      aria-label="Transcript et contexte, zone défilante"
+    >
+      {#each segments as section (section.champ)}
+        <article
+          class="source"
+          aria-label={section.champ === 'transcript' ? 'Transcript' : 'Contexte'}
+          data-champ={section.champ}
+        >
+          <h3>{section.champ === 'transcript' ? 'Transcript' : 'Contexte'}</h3>
+          <p class="texte">
+            {#each section.morceaux as morceau, index (index)}
+              {#if morceau.type === 'texte'}
+                {morceau.texte}
+              {:else if morceau.type === 'locuteur'}
+                {#if segmentLocuteurEnEdition === `${section.champ}-${index}`}
+                  <input
+                    class="fr-input nom-locuteur"
+                    aria-label={'Nom affiché pour ' + morceau.texte}
+                    placeholder={morceau.texte}
+                    bind:value={nomLocuteurSaisi}
+                    bind:this={champNomLocuteur}
+                    onblur={() => enregistrerNomLocuteur(morceau.identifiant)}
+                    onkeydown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                      if (event.key === 'Escape') {
+                        nomLocuteurSaisi =
+                          locuteurs.find(
+                            (element) => element.identifiant === morceau.identifiant
+                          )?.nom_affiche ?? '';
+                        segmentLocuteurEnEdition = null;
+                      }
+                    }}
+                  />
+                {:else}
+                  <button
+                    type="button"
+                    class="locuteur"
+                    data-locuteur={morceau.identifiant}
+                    aria-label={'Modifier le nom affiché de ' + morceau.texte}
+                    onclick={() =>
+                      modifierLocuteur(
+                        morceau.identifiant,
+                        `${section.champ}-${index}`
+                      )}>{morceau.texte}:</button
+                  >
+                {/if}
+              {:else}
+                {@const masque = masques.find(
+                  (m) => m.valeur_originale === morceau.original
+                )!}
+                <button
+                  type="button"
+                  class="marqueur"
+                  class:identite={masque.categorie === 'identite'}
+                  class:technologie={masque.categorie === 'technologie_ou_produit'}
+                  class:organisation={masque.categorie === 'organisation'}
+                  class:secret={masque.categorie === 'secret'}
+                  class:coordonnees={masque.categorie === 'coordonnees'}
+                  class:donnee_sensible={masque.categorie === 'donnee_sensible'}
+                  class:inactif={!masque.actif}
+                  class:selectionne={valeurSelectionnee === morceau.original}
+                  data-masque={morceau.original}
+                  aria-label={masque.actif
+                    ? `Occurrence masquée ${masque.valeur_anonyme}`
+                    : `Masque désactivé ${morceau.original}`}
+                  onclick={() => basculer(morceau.original)}
+                  onmouseenter={() => reveiller(morceau.original)}
+                  onmouseleave={masquerRevelation}
+                  onfocus={() => reveiller(morceau.original)}
+                  onblur={masquerRevelation}
+                  >{morceau.original}{#if valeurRevelee === morceau.original}<span
+                      class="original"
+                      role="status">{morceau.original}</span
+                    >{/if}</button
+                >
+              {/if}
+            {/each}
+          </p>
+        </article>
+      {/each}
+    </div>
   </div>
   <aside class="panneau" aria-label="Détail du masque sélectionné">
     <h2>Masque sélectionné</h2>
@@ -413,11 +501,44 @@
     padding: 1rem;
     margin-block: 1rem;
   }
+  .zone-defilante {
+    max-height: min(70vh, 54rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+  }
   .texte {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     line-height: 1.7;
     user-select: text;
+  }
+  .locuteur {
+    border: 1px solid var(--border-default-grey);
+    border-inline-start: 0.25rem solid var(--border-action-high-blue-france);
+    border-radius: 0.2rem;
+    padding: 0 0.25rem;
+    color: var(--text-title-blue-france);
+    background: var(--background-contrast-info);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+  }
+  .locuteur:hover {
+    text-decoration: underline;
+  }
+  .locuteur:focus-visible {
+    outline: 2px solid var(--border-active-blue-france);
+    outline-offset: 2px;
+  }
+  .nom-locuteur {
+    display: inline-block;
+    width: min(16rem, 70vw);
+    margin-inline-end: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    vertical-align: baseline;
   }
   .marqueur {
     position: relative;
@@ -511,9 +632,19 @@
     gap: 0.4rem;
     margin-block: 0.5rem;
   }
+  .actions-principales {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    padding-block: 0.5rem;
+    background: var(--background-default-grey);
+  }
   @media (max-width: 48rem) {
     .relecture {
       grid-template-columns: 1fr;
+    }
+    .zone-defilante {
+      max-height: 60vh;
     }
     .panneau {
       position: static;
