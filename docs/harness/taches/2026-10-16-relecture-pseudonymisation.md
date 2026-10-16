@@ -68,9 +68,9 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : correctif de reprise F5 et de proxy local prêt à commiter sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Le harness backend passe; ses contrôles frontend WSL échouent sur la dépendance Rollup Linux manquante, alors que tous les contrôles frontend Windows passent.
-- Prochaine action : terminer la validation navigateur F5 synthétique, puis revue humaine de la PR; aucune fusion automatique.
-- Risques ou limites : l’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
+- État du code : commit `6a59577` poussé sur `feature/relecture-pseudonymisation`; PR #34 mise à jour, ouverte en brouillon et non fusionnée. Le harness backend passe; ses contrôles frontend WSL échouent sur la dépendance Rollup Linux manquante, alors que tous les contrôles frontend Windows passent.
+- Prochaine action : revue humaine de la PR; aucune fusion automatique.
+- Risques ou limites : la reprise après F5 est couverte par les tests API et modèle, mais son parcours complet n’a pas été rejoué dans un navigateur. L’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
 
 ## Revue indépendante
 
