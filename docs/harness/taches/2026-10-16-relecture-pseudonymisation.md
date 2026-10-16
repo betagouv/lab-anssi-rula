@@ -18,7 +18,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - [x] Les masques actifs et inactifs restent visibles et cliquables; une occurrence regroupe toutes les mentions identiques exactes dans le transcript et le contexte.
 - [x] Le détail du masque sélectionné expose son original en lecture seule, sa catégorie modifiable, son compteur, sa révélation et sa bascule; les catégories et pseudonymes restent cohérents après modification.
 - [x] Une sélection de texte propose une catégorie puis attend une action explicite pour créer un masque global exact; un chevauchement partiel incompatible est refusé atomiquement.
-- [x] L’ajout depuis la sélection reste dans le panneau latéral, hors du transcript, et reste disponible lorsque le clic extérieur efface la sélection native.
+- [x] L’ajout depuis la sélection apparaît dans une popup fixe ancrée au-dessus du texte, hors du flux du transcript, et reste disponible lorsque le clic extérieur efface la sélection native.
 - [x] Annuler et rétablir couvrent ajouts, activations et catégories sans perdre les modifications suivantes.
 - [x] Navigation clavier, focus, Échap et commandes tactiles permettent de révéler et parcourir sans dépendre du survol.
 - [x] Le POST/PUT de confirmation transmet uniquement le texte projeté et les locuteurs; validation existante, correction des rôles et confirmation sont préservées.
@@ -58,8 +58,9 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Validation finale après ajout de ces cas : `uv run ruff check .`, `uv run ruff format --check` (trois fichiers backend), `uv run mypy` et `uv run pytest` passent; 334 tests backend passent et deux sont ignorés. `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm test` (93 tests) et `pnpm build` passent sous Windows. `bash scripts/harness.sh complet` passe les contrôles backend puis échoue au `svelte-check` WSL parce que `@rollup/rollup-linux-x64-gnu` est absent du `node_modules` Windows partagé; le contrôle natif Windows équivalent passe.
 - Reprise F5 : TestClient valide le cookie, l’isolation, l’expiration glissante, la suppression, le `no-store`, le refus d’un corps contenant le transcript, et la restauration des modifications complètes; le modèle frontend valide la réhydratation de l’historique. La vérification intégrée du F5 dans un navigateur réel reste à faire.
 - Origine de l’upload en développement : Vite ne réécrit plus l’en-tête `Host`; après redémarrage du seul conteneur frontend, une requête `DELETE` de contrôle avec `Origin: http://localhost:5173` a atteint la validation de préparation et renvoyé le `404` attendu sur un identifiant fictif, sans `403 Origine invalide`.
-- Correctif de sélection : l’action d’ajout est rendue dans le panneau latéral et la capture ignore une sélection native repliée; `Échap` ou Annuler la ferme. `pnpm test`, `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` passent (93 tests, zéro diagnostic Svelte).
-- Parcours de sélection synthétique dans le navigateur : à 1280×720, la zone transcript reste à `x=16, y=172, 924×325,25` avant et après sélection; cliquer sur « Occurrence suivante » conserve le panneau d’ajout. À 390×844, le panneau reste après le document et l’ajout depuis ce panneau masque le texte sélectionné. Les données de test ont été retirées et le viewport réinitialisé.
+- Correctif de sélection : la capture ignore une sélection native repliée; `Échap` ou Annuler ferme la popup sans décalage du transcript. `pnpm test`, `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` passent (93 tests, zéro diagnostic Svelte).
+- Parcours de sélection synthétique initial, avant le placement en popup : à 1280×720, la zone transcript reste à `x=16, y=172, 924×325,25` avant et après sélection; cliquer sur « Occurrence suivante » conserve l’action d’ajout. À 390×844, l’ajout masque bien le texte sélectionné. Les données de test ont été retirées et le viewport réinitialisé.
+- Variante C de l’ajout par sélection : navigateur synthétique à 1280×900, popup ancrée au-dessus de la phrase sélectionnée (`x=211,6`, `y=136`, `576×174,4`); à 390×844, popup au-dessus du texte (`x=8`, `y=344,4`, `374×280,3`) et zone transcript identique avant/après (`x=0`, `y=408,8`, `375×506,4`). Le choix de catégorie conserve la popup et ne déplace pas le document; le clic extérieur la conserve, Échap la ferme, et l’action crée bien le masque avec la catégorie choisie. Les fichiers du scénario synthétique ont été supprimés et le viewport réinitialisé.
 - CI GitHub du code `610a158` : Backend Python, Frontend Svelte, CodeQL, Analyze (actions, JavaScript/TypeScript, Python) et GitGuardian passent.
 
 ## Décisions
@@ -71,7 +72,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : correctif de sélection `6d299b8` poussé sur `feature/relecture-pseudonymisation`; PR #34 mise à jour, ouverte en brouillon et non fusionnée. Le harness backend passe; ses contrôles frontend WSL échouent sur la dépendance Rollup Linux manquante, alors que tous les contrôles frontend Windows passent.
+- État du code : correctif de sélection et variante C de popup sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Les contrôles frontend Windows passent; le harness complet passe le backend et bute sur Rollup Linux manquant dans le `node_modules` Windows partagé sous WSL.
 - Prochaine action : revue humaine de la PR; aucune fusion automatique.
 - Risques ou limites : la reprise après F5 est couverte par les tests API et modèle, mais son parcours complet n’a pas été rejoué dans un navigateur. L’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
 
