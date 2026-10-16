@@ -131,7 +131,9 @@ def _reponses_preparation(
             debut = fragment.contenu.find(valeur)
             while debut >= 0:
                 fin = debut + len(valeur)
-                if any(token[1] == debut and token[2] == fin for token in tokens):
+                if any(token[1] == debut for token in tokens) and any(
+                    token[2] == fin for token in tokens
+                ):
                     candidats.append((debut, fin))
                 debut = fragment.contenu.find(valeur, debut + 1)
             debut, fin = candidats[0]
@@ -386,7 +388,7 @@ def test_preparation_etend_les_occurrences_exactes_sans_masquer_entete_speaker()
     ]
 
 
-def test_preparation_refuse_atomiquement_une_expansion_qui_chevauche() -> None:
+def test_preparation_fusionne_les_expansions_qui_se_chevauchent() -> None:
     texte = "Locutrr_01: AB A"
     albert = AdaptateurAlbertDeTest().avec_reponses(
         _reponses_preparation(
@@ -398,10 +400,78 @@ def test_preparation_refuse_atomiquement_une_expansion_qui_chevauche() -> None:
         )
     )
 
-    with pytest.raises(ErreurPreparationInvalide):
-        ServicePreparationTranscript(albert, "prompt").preparer(
-            "reunion.pdf", _pdf(texte), "bizdev", ""
+    preparation = ServicePreparationTranscript(albert, "prompt").preparer(
+        "reunion.pdf", _pdf(texte), "bizdev", ""
+    )
+
+    assert preparation.contenu == "SPEAKER_01: [DONNEE_SENSIBLE_01] [IDENTITE_01]"
+    assert [
+        (o.valeur_originale, o.categorie, o.valeur_anonyme)
+        for o in preparation.occurrences
+    ] == [
+        ("AB", "donnee_sensible", "[DONNEE_SENSIBLE_01]"),
+        ("A", "identite", "[IDENTITE_01]"),
+    ]
+    assert preparation.conflits_categories_fusionnes == 1
+
+
+def test_preparation_fusionne_transitivement_et_partage_les_noms_etendus() -> None:
+    texte = "Locutrr_01: Pierre; Pierre Leroy; Leroy Dupont; Pierre Leroy Dupont"
+    contexte = "Pierre Leroy Dupont et Pierre"
+    albert = AdaptateurAlbertDeTest().avec_reponses(
+        _reponses_preparation(
+            texte,
+            contexte,
+            detections=[
+                ("transcript", "Pierre", "identite"),
+                ("transcript", "Pierre Leroy", "identite"),
+                ("transcript", "Leroy Dupont", "organisation"),
+            ],
         )
+    )
+
+    preparation = ServicePreparationTranscript(albert, "prompt").preparer(
+        "reunion.pdf", _pdf(texte), "bizdev", contexte
+    )
+
+    assert preparation.contenu == (
+        "SPEAKER_01: [IDENTITE_01]; [IDENTITE_02]; "
+        "[ORGANISATION_01]; [DONNEE_SENSIBLE_01]"
+    )
+    assert preparation.contexte == "[DONNEE_SENSIBLE_01] et [IDENTITE_01]"
+    assert "Leroy" not in preparation.contenu + preparation.contexte
+    assert "Dupont" not in preparation.contenu + preparation.contexte
+    assert [
+        (o.valeur_originale, o.champ, o.valeur_anonyme) for o in preparation.occurrences
+    ] == [
+        ("Pierre", "transcript", "[IDENTITE_01]"),
+        ("Pierre Leroy", "transcript", "[IDENTITE_02]"),
+        ("Leroy Dupont", "transcript", "[ORGANISATION_01]"),
+        ("Pierre Leroy Dupont", "transcript", "[DONNEE_SENSIBLE_01]"),
+        ("Pierre Leroy Dupont", "contexte", "[DONNEE_SENSIBLE_01]"),
+        ("Pierre", "contexte", "[IDENTITE_01]"),
+    ]
+    assert preparation.conflits_categories_fusionnes == 2
+
+
+def test_preparation_fusionne_les_mentions_exactes_chevauchantes() -> None:
+    texte = "Locutrr_01: A A; A A A"
+    albert = AdaptateurAlbertDeTest().avec_reponses(
+        _reponses_preparation(
+            texte,
+            detections=[("transcript", "A A", "identite")],
+        )
+    )
+
+    preparation = ServicePreparationTranscript(albert, "prompt").preparer(
+        "reunion.pdf", _pdf(texte), "bizdev", ""
+    )
+
+    assert preparation.contenu == "SPEAKER_01: [IDENTITE_01]; [IDENTITE_02]"
+    assert [occurrence.valeur_originale for occurrence in preparation.occurrences] == [
+        "A A",
+        "A A A",
+    ]
 
 
 def test_preparation_fusionne_les_categories_conflictuelles_sans_divulgation() -> None:

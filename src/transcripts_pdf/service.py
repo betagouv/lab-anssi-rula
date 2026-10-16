@@ -477,68 +477,108 @@ class ServicePreparationTranscript:
         positions_texte: list[tuple[int, int, str]] = []
         positions_contexte: list[tuple[int, int, str]] = []
         remplacements_visibles: list[RemplacementVisible] = []
-        visibles: set[tuple[str, str, str]] = set()
-        positions_vues: set[tuple[str, int, int, str]] = set()
+        positions_vues: set[tuple[str, int, int]] = set()
         sources = {"transcript": texte, "contexte": contexte}
         locuteurs_proteges = [
             repere.span()
             for repere in re.finditer(r"(?m)^SPEAKER_[0-9]{2}:[ \t]*", texte)
         ]
-        for remplacement, debut, fin in remplacements:
+        positions_source: dict[str, list[tuple[int, int, str]]] = {
+            champ: [] for champ in sources
+        }
+        for remplacement, _, _ in remplacements:
             valeur = remplacement["valeur"]
             categorie = categories_finales[valeur]
-            cle = (categorie, valeur)
-            if cle not in anonymises:
-                compteurs[categorie] = compteurs.get(categorie, 0) + 1
-                anonymises[cle] = f"[{categorie.upper()}_{compteurs[categorie]:02d}]"
-            anonyme = anonymises[cle]
-            for champ in ("transcript", "contexte"):
-                for repere in re.finditer(re.escape(valeur), sources[champ]):
+            for champ in sources:
+                for debut, fin in _positions_exactes(sources[champ], valeur):
                     if champ == "transcript" and any(
-                        repere.start() < fin and debut < repere.end()
-                        for debut, fin in locuteurs_proteges
+                        debut < fin_protegee and debut_protege < fin
+                        for debut_protege, fin_protegee in locuteurs_proteges
                     ):
                         continue
-                    position = (champ, repere.start(), repere.end(), valeur)
-                    if position in positions_vues:
-                        continue
-                    positions_vues.add(position)
-                    positions = (
-                        positions_texte if champ == "transcript" else positions_contexte
-                    )
-                    positions.append((repere.start(), repere.end(), anonyme))
-                    occurrences.append(
-                        OccurrencePseudonymisation(
-                            str(len(occurrences) + 1),
-                            valeur,
-                            repere.start(),
-                            repere.end(),
-                            champ,
-                            categorie,
-                            anonyme,
-                        )
-                    )
-            visible = (valeur, categorie, remplacement["champ"])
-            if visible not in visibles:
-                visibles.add(visible)
-                remplacements_visibles.append(
-                    RemplacementVisible(
-                        valeur,
-                        anonyme,
-                        categorie,
-                        remplacement["champ"],
+                    position = (champ, debut, fin)
+                    if position not in positions_vues:
+                        positions_vues.add(position)
+                        positions_source[champ].append((debut, fin, categorie))
+        positions_fusionnees: dict[str, list[tuple[int, int, str]]] = {
+            champ: [] for champ in sources
+        }
+        conflits_expansion = 0
+        for champ, candidates in positions_source.items():
+            composantes: list[list[tuple[int, int, str]]] = []
+            fin_composante = 0
+            for candidate in sorted(candidates, key=lambda position: position[0]):
+                if composantes and candidate[0] < fin_composante:
+                    composantes[-1].append(candidate)
+                    fin_composante = max(fin_composante, candidate[1])
+                else:
+                    composantes.append([candidate])
+                    fin_composante = candidate[1]
+            for composante in composantes:
+                categories = {candidate[2] for candidate in composante}
+                debut = min(candidate[0] for candidate in composante)
+                fin = max(candidate[1] for candidate in composante)
+                positions_fusionnees[champ].append(
+                    (
+                        debut,
+                        fin,
+                        next(iter(categories))
+                        if len(categories) == 1
+                        else "donnee_sensible",
                     )
                 )
-        for champ, positions in (
-            ("transcript", positions_texte),
-            ("contexte", positions_contexte),
-        ):
-            positions.sort()
-            if any(
-                position[0] < precedent[1]
-                for precedent, position in zip(positions, positions[1:])
-            ):
-                raise ErreurPreparationInvalide("chevauchement_expansion")
+                conflits_expansion += len(categories) > 1
+        categories_par_valeur_finale: dict[str, set[str]] = {}
+        for champ, positions in positions_fusionnees.items():
+            for debut, fin, categorie in positions:
+                categories_par_valeur_finale.setdefault(
+                    sources[champ][debut:fin], set()
+                ).add(categorie)
+        categories_finales_union = {
+            valeur: next(iter(categories))
+            if len(categories) == 1
+            else "donnee_sensible"
+            for valeur, categories in categories_par_valeur_finale.items()
+        }
+        conflits_union = sum(
+            len(categories) > 1 for categories in categories_par_valeur_finale.values()
+        )
+        visibles: set[tuple[str, str, str]] = set()
+        for champ, positions in positions_fusionnees.items():
+            for debut, fin, _ in positions:
+                valeur = sources[champ][debut:fin]
+                categorie = categories_finales_union[valeur]
+                cle = (categorie, valeur)
+                if cle not in anonymises:
+                    compteurs[categorie] = compteurs.get(categorie, 0) + 1
+                    anonymises[cle] = (
+                        f"[{categorie.upper()}_{compteurs[categorie]:02d}]"
+                    )
+                anonyme = anonymises[cle]
+                positions_anonymisees = (
+                    positions_texte if champ == "transcript" else positions_contexte
+                )
+                positions_anonymisees.append((debut, fin, anonyme))
+                occurrences.append(
+                    OccurrencePseudonymisation(
+                        str(len(occurrences) + 1),
+                        valeur,
+                        debut,
+                        fin,
+                        champ,
+                        categorie,
+                        anonyme,
+                    )
+                )
+                visible = (valeur, categorie, champ)
+                if visible not in visibles:
+                    visibles.add(visible)
+                    remplacements_visibles.append(
+                        RemplacementVisible(valeur, anonyme, categorie, champ)
+                    )
+        conflits_categories_fusionnes += (
+            conflits_identite + conflits_expansion + conflits_union
+        )
         contenu = appliquer_remplacements_positions(texte, positions_texte)
         contexte_anonyme = appliquer_remplacements_positions(
             contexte, positions_contexte
@@ -583,7 +623,7 @@ class ServicePreparationTranscript:
             locuteurs,
             remplacements_visibles,
             occurrences,
-            conflits_categories_fusionnes + conflits_identite,
+            conflits_categories_fusionnes,
         )
         metrique_conflits = (
             f" conflits_categories_fusionnes={conflits_categories_fusionnes}"
@@ -748,6 +788,15 @@ def _tokeniser(texte: str) -> list[tuple[str, int, int]]:
         (match.group(), match.start(), match.end())
         for match in re.finditer(r"\w+|[^\w\s]", texte)
     ]
+
+
+def _positions_exactes(texte: str, valeur: str) -> list[tuple[int, int]]:
+    positions: list[tuple[int, int]] = []
+    debut = texte.find(valeur)
+    while debut >= 0:
+        positions.append((debut, debut + len(valeur)))
+        debut = texte.find(valeur, debut + 1)
+    return positions
 
 
 def _serialiser_fragment(fragment: Fragment) -> dict[str, object]:
