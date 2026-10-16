@@ -1,4 +1,5 @@
 import type { ProgressionPreparation } from './progression';
+import type { OccurrenceSource } from './modele-relecture';
 
 type LocuteurPreparation = {
   identifiant: string;
@@ -23,7 +24,10 @@ export type ResultatPreparation =
       date_entretien: string | null;
       contenu: string;
       contexte: string;
+      contenu_original: string;
+      contexte_original: string;
       locuteurs: LocuteurPreparation[];
+      occurrences: OccurrenceSource[];
       remplacements: RemplacementPreparation[];
       conflits_categories_fusionnes: number;
     };

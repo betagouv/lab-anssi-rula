@@ -126,9 +126,15 @@ def _reponses_preparation(
             )
             if fragment is None:
                 continue
-            debut = fragment.contenu.index(valeur)
-            fin = debut + len(valeur)
             tokens = _tokeniser(fragment.contenu)
+            candidats = []
+            debut = fragment.contenu.find(valeur)
+            while debut >= 0:
+                fin = debut + len(valeur)
+                if any(token[1] == debut and token[2] == fin for token in tokens):
+                    candidats.append((debut, fin))
+                debut = fragment.contenu.find(valeur, debut + 1)
+            debut, fin = candidats[0]
             token_debut = next(
                 token_id for token_id, token in enumerate(tokens) if token[1] == debut
             )
@@ -318,8 +324,20 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
     )
 
     assert preparation.contenu == "SPEAKER_01: [IDENTITE_01] veut exporter."
-
     assert preparation.contexte == "Contexte [IDENTITE_01]"
+    assert preparation.contenu_original == "SPEAKER_01: Alice veut exporter."
+    assert preparation.contexte_original == "Contexte Alice"
+    assert [
+        (occurrence.valeur_originale, occurrence.champ)
+        for occurrence in preparation.occurrences
+    ] == [
+        ("Alice", "transcript"),
+        ("Alice", "contexte"),
+    ]
+    assert {remplacement.champ for remplacement in preparation.remplacements} == {
+        "transcript",
+        "contexte",
+    }
 
     assert preparation.locuteurs[0].identifiant == "SPEAKER_01"
 
@@ -341,6 +359,75 @@ def test_preparation_anonymise_locuteurs_et_applique_remplacements_en_python(
     assert "conflits_categories_fusionnes" not in caplog.text
     assert [record.levelname for record in caplog.records] == ["INFO"]
     assert albert.efforts_recus and set(albert.efforts_recus) == {"high"}
+
+
+def test_preparation_etend_les_occurrences_exactes_sans_masquer_entete_speaker() -> (
+    None
+):
+    texte = "Locutrr_01: SPEAKER appears twice: SPEAKER."
+    albert = AdaptateurAlbertDeTest().avec_reponses(
+        _reponses_preparation(
+            texte,
+            detections=[("transcript", "SPEAKER", "identite")],
+        )
+    )
+
+    preparation = ServicePreparationTranscript(albert, "prompt").preparer(
+        "reunion.pdf", _pdf(texte), "bizdev", ""
+    )
+
+    assert preparation.contenu_original == "SPEAKER_01: SPEAKER appears twice: SPEAKER."
+    assert (
+        preparation.contenu == "SPEAKER_01: [IDENTITE_01] appears twice: [IDENTITE_01]."
+    )
+    assert [o.debut for o in preparation.occurrences] == [
+        preparation.contenu_original.index("SPEAKER", 12),
+        preparation.contenu_original.rindex("SPEAKER"),
+    ]
+
+
+def test_preparation_refuse_atomiquement_une_expansion_qui_chevauche() -> None:
+    texte = "Locutrr_01: AB A"
+    albert = AdaptateurAlbertDeTest().avec_reponses(
+        _reponses_preparation(
+            texte,
+            detections=[
+                ("transcript", "A", "identite"),
+                ("transcript", "AB", "organisation"),
+            ],
+        )
+    )
+
+    with pytest.raises(ErreurPreparationInvalide):
+        ServicePreparationTranscript(albert, "prompt").preparer(
+            "reunion.pdf", _pdf(texte), "bizdev", ""
+        )
+
+
+def test_preparation_fusionne_les_categories_conflictuelles_sans_divulgation() -> None:
+    texte = "Locutrr_01: Alice participe."
+    contexte = "Alice anime."
+    albert = AdaptateurAlbertDeTest().avec_reponses(
+        _reponses_preparation(
+            texte,
+            contexte,
+            detections=[
+                ("transcript", "Alice", "identite"),
+                ("contexte", "Alice", "secret"),
+            ],
+        )
+    )
+
+    preparation = ServicePreparationTranscript(albert, "prompt").preparer(
+        "reunion.pdf", _pdf(texte), "bizdev", contexte
+    )
+
+    assert preparation.conflits_categories_fusionnes == 1
+    assert preparation.contenu == "SPEAKER_01: [DONNEE_SENSIBLE_01] participe."
+    assert preparation.contexte == "[DONNEE_SENSIBLE_01] anime."
+    assert {occurrence.categorie for occurrence in preparation.occurrences} == {
+        "donnee_sensible"
+    }
 
 
 def test_preparation_detecte_date_et_nom_du_fichier_reunion_a_tirets() -> None:

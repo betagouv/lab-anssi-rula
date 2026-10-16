@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, cast
 
 from api.transcripts_pdf import (
+    _occurrence_dict,
     _executer_job,
     fabrique_depot_transcripts_pdf,
     fabrique_executeur,
@@ -28,7 +29,11 @@ from tests.test_transcripts_pdf import _pdf, _reponses_preparation
 from transcripts_pdf.analyse import ServiceAnalysePdf
 from transcripts_pdf.depot import SourceTranscriptPdf
 from transcripts_pdf.orchestration import ServiceTranscriptsPdf
-from transcripts_pdf.service import Locuteur, ServicePreparationTranscript
+from transcripts_pdf.service import (
+    Locuteur,
+    OccurrencePseudonymisation,
+    ServicePreparationTranscript,
+)
 
 
 class ExecuteurDeTest(Executor):
@@ -251,6 +256,17 @@ def test_lit_modifie_supprime_et_analyse_une_source() -> None:
     assert depot.fonctionnalites == []
 
 
+def test_occurrence_api_convertit_les_offsets_python_en_utf16() -> None:
+    occurrence = OccurrencePseudonymisation(
+        "1", "Alice", 2, 7, "transcript", "identite", "[IDENTITE_01]"
+    )
+
+    resultat = _occurrence_dict(occurrence, "😀 Alice", "")
+
+    assert resultat["debut"] == 3
+    assert resultat["fin"] == 8
+
+
 def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
     client, _, app = _client('{"valide": true, "problemes": []}')
     albert = AdaptateurAlbertDeTest().avec_reponse(
@@ -278,6 +294,10 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
     assert resultat.json()["progression"]["groupes_termines"] == 1
     assert resultat.json()["progression"]["groupes_total"] == 1
     assert resultat.json()["remplacements"] == []
+    assert resultat.json()["contenu_original"] == "Bonjour"
+    assert resultat.json()["contexte_original"] == ""
+    assert resultat.headers["cache-control"] == "no-store"
+    assert resultat.json()["occurrences"] == []
     assert resultat.json()["conflits_categories_fusionnes"] == 0
     trop_long = client.post(
         "/api/transcripts-pdf/preparation",

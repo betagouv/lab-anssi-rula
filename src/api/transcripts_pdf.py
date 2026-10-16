@@ -8,7 +8,7 @@ import time
 from typing import Callable, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 
 from adaptateurs.albert import AdaptateurAlbertReel
@@ -29,6 +29,7 @@ from transcripts_pdf.orchestration import (
 )
 from transcripts_pdf.service import (
     ErreurPreparationInvalide,
+    OccurrencePseudonymisation,
     Locuteur,
     ServicePreparationTranscript,
 )
@@ -171,7 +172,8 @@ async def preparer(
 
 
 @routeur.get("/transcripts-pdf/preparation/{jeton}")
-def obtenir_preparation(jeton: str) -> dict:
+def obtenir_preparation(jeton: str, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
     _nettoyer_preparations()
     preparation = _PREPARATIONS.get(jeton)
     if preparation is None:
@@ -242,11 +244,21 @@ def _executer_preparation(
             "date_entretien": preparation.date_entretien,
             "contenu": preparation.contenu,
             "contexte": preparation.contexte,
+            "contenu_original": preparation.contenu_original,
+            "contexte_original": preparation.contexte_original,
             "locuteurs": [locuteur._asdict() for locuteur in preparation.locuteurs],
             "remplacements": [
                 remplacement._asdict() for remplacement in preparation.remplacements
             ],
             "conflits_categories_fusionnes": preparation.conflits_categories_fusionnes,
+            "occurrences": [
+                _occurrence_dict(
+                    occurrence,
+                    preparation.contenu_original,
+                    preparation.contexte_original,
+                )
+                for occurrence in preparation.occurrences
+            ],
         }
         if jeton in _PREPARATIONS:
             actualiser_progression(
@@ -281,6 +293,18 @@ def _executer_preparation(
                     else "La préparation du transcript a échoué."
                 ),
             )
+
+
+def _occurrence_dict(
+    occurrence: OccurrencePseudonymisation,
+    contenu_original: str,
+    contexte_original: str,
+) -> dict[str, object]:
+    resultat: dict[str, object] = occurrence._asdict()
+    source = contenu_original if occurrence.champ == "transcript" else contexte_original
+    resultat["debut"] = len(source[: occurrence.debut].encode("utf-16-le")) // 2
+    resultat["fin"] = len(source[: occurrence.fin].encode("utf-16-le")) // 2
+    return resultat
 
 
 def _journaliser_echec_preparation(jeton: str, erreur: Exception, phase: str) -> None:

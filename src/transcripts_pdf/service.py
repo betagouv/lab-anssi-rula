@@ -205,6 +205,16 @@ class RemplacementVisible(NamedTuple):
     champ: str
 
 
+class OccurrencePseudonymisation(NamedTuple):
+    identifiant: str
+    valeur_originale: str
+    debut: int
+    fin: int
+    champ: str
+    categorie: str
+    valeur_anonyme: str
+
+
 class PreparationLue(TypedDict):
     remplacements: list[Remplacement]
     locuteurs: list[LocuteurPrepare]
@@ -216,8 +226,11 @@ class PreparationTranscript(NamedTuple):
     date_entretien: str | None
     contenu: str
     contexte: str
+    contenu_original: str
+    contexte_original: str
     locuteurs: list[Locuteur]
     remplacements: list[RemplacementVisible]
+    occurrences: list[OccurrencePseudonymisation]
     conflits_categories_fusionnes: int
 
 
@@ -251,9 +264,11 @@ class ServicePreparationTranscript:
             raise ValueError("Type de source invalide.")
         if progression:
             progression("extraction", 0, None, [])
-        texte, date_source = extraire_pdf(nom_fichier, fichier)
-        locuteurs_origine = anonymiser_locuteurs(texte)[1]
-        identifiants = dict(locuteurs_origine)
+        texte_extrait, date_source = extraire_pdf(nom_fichier, fichier)
+        texte, locuteurs_origine = anonymiser_locuteurs(texte_extrait)
+        identifiants = {
+            identifiant: identifiant for _, identifiant in locuteurs_origine
+        }
         fragments = [
             fragment._replace(fragment_id=index)
             for index, fragment in enumerate(
@@ -444,42 +459,93 @@ class ServicePreparationTranscript:
             raise
         compteurs: dict[str, int] = {}
         anonymises: dict[tuple[str, str], str] = {}
+        categories_par_valeur: dict[str, set[str]] = {}
+        for remplacement, _, _ in remplacements:
+            categories_par_valeur.setdefault(remplacement["valeur"], set()).add(
+                remplacement["categorie"]
+            )
+        conflits_identite = sum(
+            len(categories) > 1 for categories in categories_par_valeur.values()
+        )
+        categories_finales = {
+            valeur: (
+                next(iter(categories)) if len(categories) == 1 else "donnee_sensible"
+            )
+            for valeur, categories in categories_par_valeur.items()
+        }
+        occurrences: list[OccurrencePseudonymisation] = []
         positions_texte: list[tuple[int, int, str]] = []
         positions_contexte: list[tuple[int, int, str]] = []
         remplacements_visibles: list[RemplacementVisible] = []
         visibles: set[tuple[str, str, str]] = set()
+        positions_vues: set[tuple[str, int, int, str]] = set()
+        sources = {"transcript": texte, "contexte": contexte}
+        locuteurs_proteges = [
+            repere.span()
+            for repere in re.finditer(r"(?m)^SPEAKER_[0-9]{2}:[ \t]*", texte)
+        ]
         for remplacement, debut, fin in remplacements:
-            categorie = remplacement["categorie"]
-            cle = (categorie, remplacement["valeur"])
+            valeur = remplacement["valeur"]
+            categorie = categories_finales[valeur]
+            cle = (categorie, valeur)
             if cle not in anonymises:
                 compteurs[categorie] = compteurs.get(categorie, 0) + 1
                 anonymises[cle] = f"[{categorie.upper()}_{compteurs[categorie]:02d}]"
             anonyme = anonymises[cle]
-            positions = (
-                positions_texte
-                if remplacement["champ"] == "transcript"
-                else positions_contexte
-            )
-            positions.append((debut, fin, anonyme))
-            visible = (remplacement["valeur"], categorie, remplacement["champ"])
+            for champ in ("transcript", "contexte"):
+                for repere in re.finditer(re.escape(valeur), sources[champ]):
+                    if champ == "transcript" and any(
+                        repere.start() < fin and debut < repere.end()
+                        for debut, fin in locuteurs_proteges
+                    ):
+                        continue
+                    position = (champ, repere.start(), repere.end(), valeur)
+                    if position in positions_vues:
+                        continue
+                    positions_vues.add(position)
+                    positions = (
+                        positions_texte if champ == "transcript" else positions_contexte
+                    )
+                    positions.append((repere.start(), repere.end(), anonyme))
+                    occurrences.append(
+                        OccurrencePseudonymisation(
+                            str(len(occurrences) + 1),
+                            valeur,
+                            repere.start(),
+                            repere.end(),
+                            champ,
+                            categorie,
+                            anonyme,
+                        )
+                    )
+            visible = (valeur, categorie, remplacement["champ"])
             if visible not in visibles:
                 visibles.add(visible)
                 remplacements_visibles.append(
                     RemplacementVisible(
-                        remplacement["valeur"],
+                        valeur,
                         anonyme,
                         categorie,
                         remplacement["champ"],
                     )
                 )
+        for champ, positions in (
+            ("transcript", positions_texte),
+            ("contexte", positions_contexte),
+        ):
+            positions.sort()
+            if any(
+                position[0] < precedent[1]
+                for precedent, position in zip(positions, positions[1:])
+            ):
+                raise ErreurPreparationInvalide("chevauchement_expansion")
         contenu = appliquer_remplacements_positions(texte, positions_texte)
-        contenu, _ = anonymiser_locuteurs(contenu)
         contexte_anonyme = appliquer_remplacements_positions(
             contexte, positions_contexte
         )
         votes: dict[str, list[LocuteurPrepare]] = {}
-        for valeur in valeurs:
-            for locuteur in valeur["locuteurs"]:
+        for preparation_lue in valeurs:
+            for locuteur in preparation_lue["locuteurs"]:
                 votes.setdefault(locuteur["speaker_id"], []).append(locuteur)
         originaux_par_id = {anonyme: original for original, anonyme in labels}
         locuteurs = []
@@ -512,9 +578,12 @@ class ServicePreparationTranscript:
             date_source.isoformat() if date_source else None,
             contenu,
             contexte_anonyme,
+            texte,
+            contexte,
             locuteurs,
             remplacements_visibles,
-            conflits_categories_fusionnes,
+            occurrences,
+            conflits_categories_fusionnes + conflits_identite,
         )
         metrique_conflits = (
             f" conflits_categories_fusionnes={conflits_categories_fusionnes}"
