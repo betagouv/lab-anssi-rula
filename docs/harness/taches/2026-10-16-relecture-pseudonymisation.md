@@ -50,6 +50,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Complément UX mobile navigateur (390×844) : panneau sous le transcript, largeur document 375 px pour viewport 390 px; révélation explicite affiche les 3 mentions et `Échap` les masque de nouveau.
 - Complément clavier et sérialisation : activation au clavier d’un speaker et d’Occurrence suivante, alias `Alice` sur les 60 mentions, `SPEAKER_04` conservé dans le contenu et les métadonnées, aucun masque sur les identifiants; glisser sur le libellé ne crée pas de sélection caviardable.
 - Validation finale après ajout de ces cas : `uv run ruff check .`, `uv run ruff format --check` (trois fichiers backend), `uv run mypy` et `uv run pytest` passent; 332 tests backend passent et deux sont ignorés. `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm test` (92 tests) et `pnpm build` passent sous Windows. `bash scripts/harness.sh complet` passe les contrôles backend puis échoue au `svelte-check` WSL parce que `@rollup/rollup-linux-x64-gnu` est absent du `node_modules` Windows partagé; le contrôle natif Windows équivalent passe.
+- CI GitHub du code `610a158` : Backend Python, Frontend Svelte, CodeQL, Analyze (actions, JavaScript/TypeScript, Python) et GitGuardian passent.
 
 ## Décisions
 
