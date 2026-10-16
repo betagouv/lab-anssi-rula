@@ -17,7 +17,7 @@
   import { notificationApresAnalyse } from './notification-analyse';
   import RemplacementsTranscript from './RemplacementsTranscript.svelte';
   import RelecturePseudonymisation from './RelecturePseudonymisation.svelte';
-  import type { OccurrenceSource } from './modele-relecture';
+  import type { EtatRelecture, OccurrenceSource } from './modele-relecture';
   import PanneauAnalyseTranscript from './PanneauAnalyseTranscript.svelte';
   import { supprimerTranscriptPdf } from '../api/transcripts_pdf';
   import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
@@ -41,6 +41,7 @@
   let contenuOriginal = $state('');
   let contexteOriginal = $state('');
   let occurrences = $state<OccurrenceSource[]>([]);
+  let etatRelecture = $state<EtatRelecture | undefined>();
   let locuteurs = $state<
     {
       identifiant: string;
@@ -85,6 +86,13 @@
   let enCours = $state(false);
   let progression = $state<ProgressionPreparation | null>(null);
   let jetonPreparation = $state<string | null>(null);
+  let etatSynchronisation = $state<'enregistre' | 'en_attente' | 'echec'>(
+    'enregistre'
+  );
+  let minuteurSauvegarde: ReturnType<typeof setTimeout> | null = null;
+  let versionEtat = 0;
+  let versionEnregistree = 0;
+  let sauvegardeActive = false;
   let controleSuivi: AbortController | null = null;
   let controleEnvoi: AbortController | null = null;
   let timerHorloge: ReturnType<typeof setInterval> | null = null;
@@ -103,6 +111,13 @@
     }[]
   >([]);
   let edition = $state(false);
+  const clePreparation = $derived(`rula-preparation-${typeSource}-${produitId}`);
+
+  function avertirAvantSortie(event: BeforeUnloadEvent) {
+    if (versionEtat === versionEnregistree) return;
+    event.preventDefault();
+    event.returnValue = '';
+  }
 
   function actualiserProgression(valeur: ProgressionPreparation) {
     progression = valeur;
@@ -159,6 +174,7 @@
 
   onMount(() => {
     monte = true;
+    window.addEventListener('beforeunload', avertirAvantSortie);
     selectionProjet = projetId ?? 0;
     if (typeSource === 'produit')
       listerProjets(produitId)
@@ -171,8 +187,15 @@
           (source: { type_source: string }) => source.type_source === typeSource
         );
       });
+    const preparationEnregistree = sessionStorage.getItem(clePreparation);
+    if (preparationEnregistree && /^[0-9a-f]{32}$/.test(preparationEnregistree)) {
+      jetonPreparation = preparationEnregistree;
+      void suivrePreparation(preparationEnregistree);
+    }
     return () => {
       monte = false;
+      window.removeEventListener('beforeunload', avertirAvantSortie);
+      if (minuteurSauvegarde !== null) clearTimeout(minuteurSauvegarde);
       controleEnvoi?.abort();
       controleSuivi?.abort();
       annulerAttente();
@@ -267,6 +290,7 @@
     contenuOriginal = '';
     contexteOriginal = '';
     occurrences = [];
+    etatRelecture = undefined;
     progression = null;
     arreterHorloge();
     erreur = '';
@@ -287,8 +311,10 @@
       const demande = await reponse.json();
       if (!monte) return;
       if (!reponse.ok) throw new Error(demande.detail ?? 'Préparation impossible.');
-      jeton = demande.jeton;
-      jetonPreparation = jeton;
+      const identifiant = String(demande.identifiant);
+      jeton = identifiant;
+      jetonPreparation = identifiant;
+      sessionStorage.setItem(clePreparation, identifiant);
       actualiserProgression(demande.progression);
     } catch (cause) {
       if (!monte) return;
@@ -327,6 +353,7 @@
         if (resultat.statut === 'echec') {
           progression = { ...resultat.progression, phase: 'echec' };
           jetonPreparation = null;
+          sessionStorage.removeItem(clePreparation);
           arreterHorloge();
           erreur = resultat.erreur;
           return;
@@ -340,9 +367,13 @@
           nomSource = resultat.nom_source;
           dateEntretien = resultat.date_entretien ?? '';
           locuteurs = resultat.locuteurs;
+          etatRelecture = resultat.etat_relecture;
+          if (resultat.projet_id !== undefined)
+            selectionProjet = resultat.projet_id ?? 0;
           remplacements = resultat.remplacements;
           conflitsCategoriesFusionnes = resultat.conflits_categories_fusionnes;
-          jetonPreparation = null;
+          etatSynchronisation = 'enregistre';
+          versionEnregistree = versionEtat;
           arreterHorloge();
           return;
         }
@@ -352,6 +383,12 @@
       if (!monte) return;
       if (cause instanceof ErreurSuiviPreparation && cause.code === 'introuvable') {
         jetonPreparation = null;
+        sessionStorage.removeItem(clePreparation);
+        contenuOriginal = '';
+        contexteOriginal = '';
+        occurrences = [];
+        etatRelecture = undefined;
+        versionEnregistree = versionEtat;
         if (progression) progression = { ...progression, phase: 'echec' };
         arreterHorloge();
         erreur =
@@ -363,6 +400,72 @@
     } finally {
       if (monte) enCours = false;
     }
+  }
+
+  function programmerSauvegarde() {
+    if (!jetonPreparation || !etatRelecture) return;
+    versionEtat += 1;
+    etatSynchronisation = 'en_attente';
+    if (minuteurSauvegarde !== null) clearTimeout(minuteurSauvegarde);
+    minuteurSauvegarde = setTimeout(() => void sauvegarderEtat(), 300);
+  }
+
+  async function sauvegarderEtat() {
+    if (!jetonPreparation || !etatRelecture || sauvegardeActive) return;
+    const identifiant = jetonPreparation;
+    const version = versionEtat;
+    sauvegardeActive = true;
+    try {
+      const reponse = await fetch(
+        `/api/transcripts-pdf/preparation/${identifiant}/relecture`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            etat_relecture: etatRelecture,
+            locuteurs: locuteurs.map(({ identifiant: id, role, nom_affiche }) => ({
+              identifiant: id,
+              role,
+              nom_affiche: nom_affiche ?? '',
+            })),
+            date_entretien: dateEntretien || null,
+            projet_id: typeSource === 'produit' ? selectionProjet || null : null,
+          }),
+        }
+      );
+      if (!reponse.ok) throw new Error('État de relecture non enregistré.');
+      if (version === versionEtat) {
+        versionEnregistree = version;
+        etatSynchronisation = 'enregistre';
+      }
+    } catch {
+      if (version === versionEtat) etatSynchronisation = 'echec';
+    } finally {
+      sauvegardeActive = false;
+      if (version !== versionEtat) void sauvegarderEtat();
+    }
+  }
+
+  async function abandonnerPreparation() {
+    const identifiant = jetonPreparation;
+    if (identifiant) {
+      await fetch(`/api/transcripts-pdf/preparation/${identifiant}`, {
+        method: 'DELETE',
+      }).catch(() => undefined);
+    }
+    sessionStorage.removeItem(clePreparation);
+    jetonPreparation = null;
+    etatRelecture = undefined;
+    contenuOriginal = '';
+    contexteOriginal = '';
+    occurrences = [];
+    contenu = '';
+    contexte = '';
+    locuteurs = [];
+    remplacements = [];
+    versionEtat += 1;
+    versionEnregistree = versionEtat;
+    etatSynchronisation = 'enregistre';
   }
 
   async function confirmer() {
@@ -399,6 +502,7 @@
         );
       }
       problemes = [];
+      await abandonnerPreparation();
       contenuOriginal = '';
       contexteOriginal = '';
       occurrences = [];
@@ -651,6 +755,7 @@
           bind:value={dateEntretien}
           aria-invalid={!dateEntretien}
           aria-describedby={!dateEntretien ? 'date-messages' : undefined}
+          onchange={programmerSauvegarde}
           required
         />
         {#if !dateEntretien}
@@ -672,6 +777,7 @@
             aria-invalid={!selectionProjet}
             aria-describedby={!selectionProjet ? 'projet-messages' : undefined}
             required
+            onchange={programmerSauvegarde}
           >
             <option value={0}>Choisir un projet</option>
             {#each projets as projet (projet.id)}
@@ -692,6 +798,7 @@
           {contenuOriginal}
           {contexteOriginal}
           {occurrences}
+          {etatRelecture}
           {locuteurs}
           onprojection={(texte, contexteProjete) => {
             contenu = texte;
@@ -699,8 +806,26 @@
           }}
           onlocuteurs={(nouveauxLocuteurs) => {
             locuteurs = nouveauxLocuteurs;
+            programmerSauvegarde();
+          }}
+          onetat={(nouvelEtat) => {
+            etatRelecture = nouvelEtat;
+            programmerSauvegarde();
           }}
         />
+        <p role="status" aria-live="polite">
+          {etatSynchronisation === 'enregistre'
+            ? 'Relecture enregistrée temporairement sur le serveur.'
+            : etatSynchronisation === 'en_attente'
+              ? 'Enregistrement des modifications…'
+              : 'La synchronisation a échoué. Gardez cette page ouverte et réessayez.'}
+        </p>
+        <button
+          class="fr-btn fr-btn--secondary"
+          type="button"
+          onclick={abandonnerPreparation}
+          >Abandonner et supprimer le brouillon</button
+        >
         {#if conflitsCategoriesFusionnes}
           <div class="fr-alert fr-alert--warning" role="status">
             <p>
@@ -739,7 +864,11 @@
             >Participant {index + 1} · {locuteur.nom_affiche ||
               locuteur.identifiant}</label
           >
-          <select id={`role-${index}`} bind:value={locuteur.role}>
+          <select
+            id={`role-${index}`}
+            bind:value={locuteur.role}
+            onchange={programmerSauvegarde}
+          >
             <option value="interne">Interne · {index + 1}</option><option
               value="externe">Externe · {index + 1}</option
             ><option value="indetermine">Indéterminé · {index + 1}</option>

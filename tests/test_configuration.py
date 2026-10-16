@@ -19,6 +19,7 @@ def test_valeurs_par_defaut():
     config = charge_configuration()
     assert config.rula.port == 3001
     assert config.rula.max_requetes_par_minute == 100
+    assert config.rula.secure_cookie
     assert config.albert.modele == "openweight-medium"
     assert config.albert.modele_embeddings == "BAAI/bge-m3"
     assert config.albert.delai_transcripts == 180
@@ -43,9 +44,20 @@ def test_configuration_des_parametres_echantillonnage_transcripts(monkeypatch):
     assert config.albert.top_p_transcripts == 0.9
 
 
+def test_configuration_charge_attribut_secure_du_cookie(monkeypatch):
+    monkeypatch.setenv("RULA_COOKIE_SECURE", "false")
+
+    assert not charge_configuration().rula.secure_cookie
+
+
 def test_configuration_constructible_avec_valeurs_custom():
     config = Configuration(
-        rula=Rula(port=4000, hote="custom", max_requetes_par_minute=50),
+        rula=Rula(
+            port=4000,
+            hote="custom",
+            max_requetes_par_minute=50,
+            secure_cookie=False,
+        ),
         albert=Albert(
             url="https://albert.example.com",
             cle_api="ma-cle",
@@ -58,6 +70,7 @@ def test_configuration_constructible_avec_valeurs_custom():
         correspondance=Correspondance(seuil=0.5),
     )
     assert config.rula.port == 4000
+    assert not config.rula.secure_cookie
     assert config.albert.cle_api == "ma-cle"
     assert config.base_de_donnees.nom == "test"
     assert config.correspondance.seuil == 0.5

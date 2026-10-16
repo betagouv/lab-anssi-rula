@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from concurrent.futures import Executor, Future
 import asyncio
+from hashlib import sha256
 import logging
 import time
 import api.transcripts_pdf as api_pdf
@@ -80,7 +81,13 @@ def _client(
     app.dependency_overrides[fabrique_service_transcripts_pdf] = lambda: service
     app.dependency_overrides[fabrique_executeur] = lambda: ExecuteurDeTest()
     app.dependency_overrides[fabrique_depot_transcripts_pdf] = lambda: depot
-    return TestClient(app), depot, app
+    return (
+        TestClient(
+            app, base_url="https://testserver", headers={"Origin": "https://testserver"}
+        ),
+        depot,
+        app,
+    )
 
 
 def _payload() -> dict[str, Any]:
@@ -318,7 +325,7 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
         files={"fichier": ("reunion.pdf", fichier, "application/pdf")},
     )
     assert reponse.status_code == 202
-    jeton = reponse.json()["jeton"]
+    jeton = reponse.json()["identifiant"]
     resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
     for _ in range(100):
         if resultat.json()["statut"] != "en_cours":
@@ -344,14 +351,14 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
     )
     assert trop_long.status_code == 202
     statut_trop_long = client.get(
-        f"/api/transcripts-pdf/preparation/{trop_long.json()['jeton']}"
+        f"/api/transcripts-pdf/preparation/{trop_long.json()['identifiant']}"
     )
     for _ in range(100):
         if statut_trop_long.json()["statut"] != "en_cours":
             break
         time.sleep(0.01)
         statut_trop_long = client.get(
-            f"/api/transcripts-pdf/preparation/{trop_long.json()['jeton']}"
+            f"/api/transcripts-pdf/preparation/{trop_long.json()['identifiant']}"
         )
     assert statut_trop_long.json()["statut"] == "echec"
     assert statut_trop_long.json()["erreur"] == "Le fichier dépasse 10 Mo."
@@ -364,7 +371,7 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
         files={"fichier": ("reunion.pdf", fichier, "application/pdf")},
     )
     assert echec.status_code == 202
-    jeton_echec = echec.json()["jeton"]
+    jeton_echec = echec.json()["identifiant"]
     resultat_echec = client.get(f"/api/transcripts-pdf/preparation/{jeton_echec}")
     for _ in range(100):
         if resultat_echec.json()["statut"] != "en_cours":
@@ -396,7 +403,7 @@ def test_preparation_pdf_et_erreurs_de_traitement(caplog) -> None:
         data={"type_source": "bizdev"},
         files={"fichier": ("reunion.pdf", fichier, "application/pdf")},
     )
-    jeton_delai = delai.json()["jeton"]
+    jeton_delai = delai.json()["identifiant"]
     resultat_delai = client.get(f"/api/transcripts-pdf/preparation/{jeton_delai}")
     for _ in range(100):
         if resultat_delai.json()["statut"] != "en_cours":
@@ -439,7 +446,7 @@ def test_preparation_api_expose_une_fusion_temporaire_sans_persister() -> None:
         data={"type_source": "bizdev"},
         files={"fichier": ("reunion.pdf", _pdf(texte), "application/pdf")},
     )
-    jeton = soumission.json()["jeton"]
+    jeton = soumission.json()["identifiant"]
     resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
     for _ in range(100):
         if resultat.json()["statut"] != "en_cours":
@@ -468,7 +475,7 @@ def test_preparation_api_explique_une_erreur_de_validation_sans_detail_prive() -
             "fichier": ("reunion.pdf", _pdf("Speaker_01: Alice"), "application/pdf")
         },
     )
-    jeton = soumission.json()["jeton"]
+    jeton = soumission.json()["identifiant"]
     resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
     for _ in range(100):
         if resultat.json()["statut"] != "en_cours":
@@ -499,7 +506,7 @@ def test_preparation_api_explique_une_reponse_albert_invalide() -> None:
             "fichier": ("reunion.pdf", _pdf("Speaker_01: Alice"), "application/pdf")
         },
     )
-    jeton = soumission.json()["jeton"]
+    jeton = soumission.json()["identifiant"]
     resultat = client.get(f"/api/transcripts-pdf/preparation/{jeton}")
     for _ in range(100):
         if resultat.json()["statut"] != "en_cours":
@@ -525,7 +532,9 @@ def test_progression_preparation_reste_liee_au_jeton() -> None:
     app.include_router(routeur, prefix="/api")
     app.dependency_overrides[fabrique_service_preparation_pdf] = lambda: service
     app.dependency_overrides[fabrique_executeur_preparation] = lambda: executeur
-    client = TestClient(app)
+    client = TestClient(
+        app, base_url="https://testserver", headers={"Origin": "https://testserver"}
+    )
 
     soumission = client.post(
         "/api/transcripts-pdf/preparation",
@@ -538,7 +547,7 @@ def test_progression_preparation_reste_liee_au_jeton() -> None:
     fonction, arguments = executeur.taches[0]
     cast(Callable[..., object], fonction)(*arguments)
     resultat = client.get(
-        f"/api/transcripts-pdf/preparation/{soumission['jeton']}"
+        f"/api/transcripts-pdf/preparation/{soumission['identifiant']}"
     ).json()
 
     assert resultat["statut"] == "termine"
@@ -675,6 +684,7 @@ def test_preparation_expire_et_limite_les_demandes() -> None:
     )
     api_pdf._PREPARATIONS["running"] = {
         "statut": "en_cours",
+        "empreinte_cookie": sha256(b"cookie-test").hexdigest(),
         "expire": futur,
         "soumis_monotonic": time.monotonic(),
         "progression": {
@@ -684,14 +694,137 @@ def test_preparation_expire_et_limite_les_demandes() -> None:
             "groupes_en_cours": [],
         },
     }
+    client.cookies.set(
+        "rula_preparation_running",
+        "cookie-test",
+        path="/api/transcripts-pdf/preparation/running",
+    )
+    expiration_initiale = api_pdf._PREPARATIONS["running"]["expire"]
     progression = client.get("/api/transcripts-pdf/preparation/running").json()
     assert progression["statut"] == "en_cours"
     assert progression["progression"]["phase"] == "en_attente"
     assert progression["progression"]["groupes_total"] is None
     assert progression["progression"]["duree_secondes"] >= 0
+    assert api_pdf._PREPARATIONS["running"]["expire"] > expiration_initiale
     api_pdf._PREPARATIONS["expired"] = {
         "statut": "termine",
-        "expire": datetime.now(timezone.utc) - timedelta(seconds=1),
+        "expire": datetime.now(timezone.utc)
+        - api_pdf._TTL_PREPARATION
+        - timedelta(seconds=1),
     }
     assert client.get("/api/transcripts-pdf/preparation/expired").status_code == 404
     api_pdf._PREPARATIONS.clear()
+
+
+def test_preparation_restaure_et_supprime_etat_sans_texte_dans_la_requete() -> None:
+    client, depot, app = _client(None)
+    texte = "Speaker_01: Alice"
+    executeur = ExecuteurDeTest()
+    app.dependency_overrides[fabrique_service_preparation_pdf] = lambda: (
+        ServicePreparationTranscript(
+            AdaptateurAlbertDeTest().avec_reponses(
+                _reponses_preparation(
+                    texte, detections=[("transcript", "Alice", "identite")]
+                )
+            ),
+            "prompt",
+        )
+    )
+    app.dependency_overrides[fabrique_executeur_preparation] = lambda: executeur
+    soumission = client.post(
+        "/api/transcripts-pdf/preparation",
+        data={"type_source": "bizdev"},
+        files={"fichier": ("reunion.pdf", _pdf(texte), "application/pdf")},
+    )
+    identifiant = soumission.json()["identifiant"]
+    assert soumission.headers["cache-control"] == "no-store"
+    cookie = soumission.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "secure" in cookie and "samesite=strict" in cookie
+    assert f"path=/api/transcripts-pdf/preparation/{identifiant}" in cookie
+    fonction, arguments = executeur.taches[0]
+    cast(Callable[..., object], fonction)(*arguments)
+    resultat = client.get(f"/api/transcripts-pdf/preparation/{identifiant}").json()
+    occurrence = resultat["occurrences"][0]
+
+    autre_client, _, _ = _client(None)
+    assert (
+        autre_client.get(f"/api/transcripts-pdf/preparation/{identifiant}").status_code
+        == 404
+    )
+
+    uuid_masque = "01234567-89ab-cdef-0123-456789abcdef"
+    uuid_plage = "11234567-89ab-cdef-0123-456789abcdef"
+    etat = {
+        "masques": [
+            {
+                "identifiant": uuid_masque,
+                "categorie": "identite",
+                "valeur_anonyme": "[IDENTITE_01]",
+                "actif": False,
+            }
+        ],
+        "plages": [
+            {
+                "identifiant": uuid_plage,
+                "masque_identifiant": uuid_masque,
+                "champ": occurrence["champ"],
+                "debut": occurrence["debut"],
+                "fin": occurrence["fin"],
+            }
+        ],
+        "selection": uuid_masque,
+        "annulations": [],
+        "retablissements": [],
+    }
+    body = {
+        "etat_relecture": etat,
+        "locuteurs": [
+            {
+                "identifiant": "SPEAKER_01",
+                "role": "interne",
+                "nom_affiche": "Ada",
+            }
+        ],
+        "date_entretien": "2026-04-07",
+        "projet_id": None,
+    }
+    assert "Alice" not in str(body) and "Speaker_01" not in str(body)
+    enregistrement = client.put(
+        f"/api/transcripts-pdf/preparation/{identifiant}/relecture", json=body
+    )
+    assert enregistrement.status_code == 200
+    assert enregistrement.headers["cache-control"] == "no-store"
+    assert (
+        client.get(f"/api/transcripts-pdf/preparation/{identifiant}").json()[
+            "etat_relecture"
+        ]
+        == etat
+    )
+    restaure = client.get(f"/api/transcripts-pdf/preparation/{identifiant}").json()
+    assert restaure["locuteurs"][0]["nom_affiche"] == "Ada"
+    assert restaure["locuteurs"][0]["role"] == "interne"
+    assert (
+        restaure["locuteurs"][0]["justification"]
+        == "Les extraits indiquent un rôle externe."
+    )
+    assert depot.sources == []
+    assert (
+        client.put(
+            f"/api/transcripts-pdf/preparation/{identifiant}/relecture",
+            json={**body, "contenu_original": texte},
+        ).status_code
+        == 422
+    )
+    sans_origine = client.put(
+        f"/api/transcripts-pdf/preparation/{identifiant}/relecture",
+        json=body,
+        headers={"Origin": "https://attacker.example"},
+    )
+    assert sans_origine.status_code == 403
+    suppression = client.delete(f"/api/transcripts-pdf/preparation/{identifiant}")
+    assert suppression.status_code == 204
+    assert suppression.headers["cache-control"] == "no-store"
+    assert identifiant not in api_pdf._PREPARATIONS
+    assert (
+        client.get(f"/api/transcripts-pdf/preparation/{identifiant}").status_code == 404
+    )

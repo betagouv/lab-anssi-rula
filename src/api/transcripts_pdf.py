@@ -2,14 +2,26 @@ from concurrent.futures import Executor, ThreadPoolExecutor
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
+import hmac
 import logging
 from pathlib import Path
+import secrets
 import time
 from typing import Callable, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
-from pydantic import BaseModel
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adaptateurs.albert import AdaptateurAlbertReel
 from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
@@ -69,6 +81,68 @@ class SourcePdfBody(BaseModel):
     locuteurs: list[LocuteurBody]
 
 
+class MasqueRelectureBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    identifiant: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    categorie: Literal[
+        "identite",
+        "coordonnees",
+        "organisation",
+        "secret",
+        "donnee_sensible",
+        "technologie_ou_produit",
+    ]
+    valeur_anonyme: str = Field(max_length=100)
+    actif: bool
+
+
+class PlageRelectureBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    identifiant: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    masque_identifiant: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    champ: Literal["transcript", "contexte"]
+    debut: int = Field(ge=0)
+    fin: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def verifier_plage(self) -> "PlageRelectureBody":
+        if self.fin <= self.debut:
+            raise ValueError("La plage de relecture est invalide.")
+        return self
+
+
+class InstantaneRelectureBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    masques: list[MasqueRelectureBody] = Field(max_length=20000)
+    plages: list[PlageRelectureBody] = Field(max_length=50000)
+
+
+class EtatRelectureBody(InstantaneRelectureBody):
+    selection: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}$")
+    annulations: list[InstantaneRelectureBody] = Field(max_length=100)
+    retablissements: list[InstantaneRelectureBody] = Field(max_length=100)
+
+
+class LocuteurRelectureBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    identifiant: str = Field(pattern=r"^SPEAKER_\d{2,}$")
+    role: Literal["interne", "externe", "indetermine"]
+    nom_affiche: str = Field(max_length=200)
+
+
+class MiseAJourPreparationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    etat_relecture: EtatRelectureBody
+    locuteurs: list[LocuteurRelectureBody] = Field(max_length=500)
+    date_entretien: date | None
+    projet_id: int | None
+
+
 def fabrique_depot_transcripts_pdf() -> DepotTranscriptsPdf:
     return DepotTranscriptsPdfPostgres(charge_configuration().base_de_donnees)
 
@@ -126,14 +200,58 @@ def fabrique_executeur_preparation() -> Executor:
     return _EXECUTEUR_PREPARATION
 
 
+def _nom_cookie(identifiant: str) -> str:
+    return f"rula_preparation_{identifiant}"
+
+
+def _verifier_origine(request: Request) -> None:
+    origine = request.headers.get("origin", "")
+    valeur = urlsplit(origine)
+    if (
+        valeur.scheme not in {"http", "https"}
+        or valeur.netloc != request.headers.get("host")
+        or valeur.path not in {"", "/"}
+        or valeur.query
+        or valeur.fragment
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Origine invalide.",
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+def _obtenir_preparation_autorisee(
+    identifiant: str, request: Request, response: Response
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    _nettoyer_preparations()
+    preparation = _PREPARATIONS.get(identifiant)
+    secret = request.cookies.get(_nom_cookie(identifiant), "")
+    if preparation is None or not hmac.compare_digest(
+        preparation["empreinte_cookie"], sha256(secret.encode()).hexdigest()
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Préparation expirée ou introuvable.",
+            headers={"Cache-Control": "no-store"},
+        )
+    preparation["expire"] = datetime.now(timezone.utc) + _TTL_PREPARATION
+    return preparation
+
+
 @routeur.post("/transcripts-pdf/preparation", status_code=202)
 async def preparer(
+    request: Request,
+    response: Response,
     type_source: Literal["produit", "bizdev"] = Form(),
     contexte: str = Form(""),
     fichier: UploadFile = File(),
     service: ServicePreparationTranscript = Depends(fabrique_service_preparation_pdf),
     executeur: Executor = Depends(fabrique_executeur_preparation),
 ) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    _verifier_origine(request)
     _nettoyer_preparations()
     if (
         sum(
@@ -144,9 +262,11 @@ async def preparer(
     ):
         raise HTTPException(status_code=429, detail="Trop de préparations en cours.")
     contenu = await fichier.read(TAILLE_MAXIMALE + 1)
-    jeton = uuid4().hex
-    _PREPARATIONS[jeton] = {
+    identifiant = uuid4().hex
+    secret = secrets.token_urlsafe(32)
+    _PREPARATIONS[identifiant] = {
         "statut": "en_cours",
+        "empreinte_cookie": sha256(secret.encode()).hexdigest(),
         "expire": datetime.now(timezone.utc) + _TTL_PREPARATION,
         "soumis_monotonic": time.monotonic(),
         "progression": {
@@ -158,29 +278,31 @@ async def preparer(
     }
     executeur.submit(
         _executer_preparation,
-        jeton,
+        identifiant,
         service,
         fichier.filename or "transcript.pdf",
         contenu,
         type_source,
         contexte,
     )
+    response.set_cookie(
+        _nom_cookie(identifiant),
+        secret,
+        httponly=True,
+        samesite="strict",
+        secure=charge_configuration().rula.secure_cookie,
+        path=f"/api/transcripts-pdf/preparation/{identifiant}",
+    )
     return {
-        "jeton": jeton,
+        "identifiant": identifiant,
         "statut": "en_cours",
-        "progression": _progression_publique(_PREPARATIONS[jeton]),
+        "progression": _progression_publique(_PREPARATIONS[identifiant]),
     }
 
 
-@routeur.get("/transcripts-pdf/preparation/{jeton}")
-def obtenir_preparation(jeton: str, response: Response) -> dict:
-    response.headers["Cache-Control"] = "no-store"
-    _nettoyer_preparations()
-    preparation = _PREPARATIONS.get(jeton)
-    if preparation is None:
-        raise HTTPException(
-            status_code=404, detail="Préparation expirée ou introuvable."
-        )
+@routeur.get("/transcripts-pdf/preparation/{identifiant}")
+def obtenir_preparation(identifiant: str, request: Request, response: Response) -> dict:
+    preparation = _obtenir_preparation_autorisee(identifiant, request, response)
     if preparation["statut"] == "echec":
         return {
             "statut": "echec",
@@ -188,15 +310,79 @@ def obtenir_preparation(jeton: str, response: Response) -> dict:
             "progression": _progression_publique(preparation),
         }
     if preparation["statut"] == "termine":
+        resultat = dict(preparation["resultat"])
+        if "etat_relecture" in preparation:
+            resultat["etat_relecture"] = preparation["etat_relecture"]
+            resultat["date_entretien"] = preparation["date_entretien"]
+            resultat["projet_id"] = preparation["projet_id"]
+            locuteurs = {
+                locuteur["identifiant"]: locuteur
+                for locuteur in preparation["locuteurs"]
+            }
+            resultat["locuteurs"] = [
+                {**locuteur, **locuteurs.get(locuteur["identifiant"], {})}
+                for locuteur in resultat["locuteurs"]
+            ]
         return {
             "statut": "termine",
             "progression": _progression_publique(preparation),
-            **preparation["resultat"],
+            **resultat,
         }
     return {
         "statut": "en_cours",
         "progression": _progression_publique(preparation),
     }
+
+
+@routeur.put("/transcripts-pdf/preparation/{identifiant}/relecture")
+def mettre_a_jour_relecture(
+    identifiant: str,
+    body: MiseAJourPreparationBody,
+    request: Request,
+    response: Response,
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    _verifier_origine(request)
+    preparation = _obtenir_preparation_autorisee(identifiant, request, response)
+    if preparation["statut"] != "termine":
+        raise HTTPException(
+            status_code=409,
+            detail="Préparation non terminée.",
+            headers={"Cache-Control": "no-store"},
+        )
+    locuteurs_initiaux = preparation["resultat"]["locuteurs"]
+    identifiants = {locuteur["identifiant"] for locuteur in locuteurs_initiaux}
+    locuteurs = [locuteur.model_dump() for locuteur in body.locuteurs]
+    if {locuteur["identifiant"] for locuteur in locuteurs} != identifiants:
+        raise HTTPException(
+            status_code=422,
+            detail="Liste de locuteurs invalide.",
+            headers={"Cache-Control": "no-store"},
+        )
+    preparation.update(
+        etat_relecture=body.etat_relecture.model_dump(),
+        locuteurs=locuteurs,
+        date_entretien=body.date_entretien,
+        projet_id=body.projet_id,
+    )
+    return {"statut": "enregistre"}
+
+
+@routeur.delete("/transcripts-pdf/preparation/{identifiant}", status_code=204)
+def abandonner_preparation(
+    identifiant: str, request: Request, response: Response
+) -> None:
+    response.headers["Cache-Control"] = "no-store"
+    _verifier_origine(request)
+    _obtenir_preparation_autorisee(identifiant, request, response)
+    del _PREPARATIONS[identifiant]
+    response.delete_cookie(
+        _nom_cookie(identifiant),
+        path=f"/api/transcripts-pdf/preparation/{identifiant}",
+        secure=charge_configuration().rula.secure_cookie,
+        httponly=True,
+        samesite="strict",
+    )
 
 
 def _progression_publique(preparation: dict) -> dict:

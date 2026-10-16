@@ -325,3 +325,4 @@ docker compose up
 | `DB_MOT_DE_PASSE` | Mot de passe PostgreSQL | — |
 | `RULA_PORT` | Port du backend | `3001` |
 | `RULA_MAX_REQUETES_PAR_MINUTE` | Limite de rate limiting | `100` |
+| `RULA_COOKIE_SECURE` | Attribut `Secure` du cookie de reprise; désactiver uniquement en HTTP local | `true` hors Compose (`false` par défaut dans Compose local) |
