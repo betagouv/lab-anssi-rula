@@ -1,6 +1,6 @@
 # Tâche : relecture interactive de la pseudonymisation
 
-Statut : livré sur la PR brouillon #34, contrôles et revue terminés
+Statut : compléments UX poussés sur la PR brouillon #34, contrôles natifs terminés
 
 ## Objectif
 
@@ -22,6 +22,8 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - [x] Navigation clavier, focus, Échap et commandes tactiles permettent de révéler et parcourir sans dépendre du survol.
 - [x] Le POST/PUT de confirmation transmet uniquement le texte projeté et les locuteurs; validation existante, correction des rôles et confirmation sont préservées.
 - [x] Les noms de rôles rendus sont `Interne · N`, `Externe · N` et `Indéterminé · N`; les identifiants techniques `SPEAKER_XX` sont conservés.
+- [x] Les commandes restent à position fixe pendant que la zone transcript défile jusqu’au masque sélectionné; au clavier aussi, seule cette zone défile.
+- [x] Les speakers ont un style distinct, sont renommables en ligne et globalement; leur identifiant technique est conservé et leur libellé ne peut pas être ajouté comme masque.
 - [x] La même relecture est utilisée pour Produit et BizDev, avec le prompt partagé mis à jour pour la classification prudente des technologies/produits et la préservation des fonctions professionnelles.
 - [x] Les tests métier et la preuve de parcours navigateur couvrent les occurrences globales, collisions, Unicode Python/JavaScript, historique, interactions desktop/mobile et textes longs.
 
@@ -44,6 +46,10 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Correctif revu et poussé : les plages globalement étendues sont fusionnées par composantes transitive indépendantes pour le transcript et le contexte. Une catégorie commune est conservée; les catégories qui se heurtent deviennent `donnee_sensible`. Les valeurs, remplacements et pseudonymes proviennent des tranches source finales; aucune nouvelle expansion n’est lancée sur ces unions.
 - Tests de correction : expansions `Pierre` / `Pierre Leroy`, chaîne transitive `Pierre Leroy Dupont`, collision inter-catégories avec suffixes entièrement couverts, occurrences qui se recouvrent, répétitions transcript/contexte et confirmation de la projection sans champs temporaires.
 - `bash scripts/harness.sh audit` : non requis.
+- Complément UX desktop navigateur (1440×900) : la barre conserve exactement sa position pendant le défilement interne (`top=196`, `scrollTop=0→2337`); le speaker `Indéterminé · 4` est visuellement distinct et chaque alias global affiche un seul champ en édition.
+- Complément UX mobile navigateur (390×844) : panneau sous le transcript, largeur document 375 px pour viewport 390 px; révélation explicite affiche les 3 mentions et `Échap` les masque de nouveau.
+- Complément clavier et sérialisation : activation au clavier d’un speaker et d’Occurrence suivante, alias `Alice` sur les 60 mentions, `SPEAKER_04` conservé dans le contenu et les métadonnées, aucun masque sur les identifiants; glisser sur le libellé ne crée pas de sélection caviardable.
+- Validation finale après ajout de ces cas : `uv run ruff check .`, `uv run ruff format --check` (trois fichiers backend), `uv run mypy` et `uv run pytest` passent; 332 tests backend passent et deux sont ignorés. `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm test` (92 tests) et `pnpm build` passent sous Windows. `bash scripts/harness.sh complet` passe les contrôles backend puis échoue au `svelte-check` WSL parce que `@rollup/rollup-linux-x64-gnu` est absent du `node_modules` Windows partagé; le contrôle natif Windows équivalent passe.
 
 ## Décisions
 
@@ -54,7 +60,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : commit `a63759ec9488fa312d339c97322d9518c15d9a13` poussé sur `feature/relecture-pseudonymisation`; checkout propre. PR #34 ouverte en brouillon, et tous ses contrôles CI sont passés.
+- État du code : commit `610a158` poussé sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Le harness complet passe le backend; son étape UI WSL reste bloquée par le `node_modules` Windows partagé, avec les contrôles UI équivalents verts sous Windows.
 - Prochaine action : revue humaine de la PR; aucune fusion automatique.
 - Risques ou limites : l’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
 
