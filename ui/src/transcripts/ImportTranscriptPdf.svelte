@@ -16,6 +16,8 @@
   import NotificationAnalyseTranscript from './NotificationAnalyseTranscript.svelte';
   import { notificationApresAnalyse } from './notification-analyse';
   import RemplacementsTranscript from './RemplacementsTranscript.svelte';
+  import RelecturePseudonymisation from './RelecturePseudonymisation.svelte';
+  import type { OccurrenceSource } from './modele-relecture';
   import PanneauAnalyseTranscript from './PanneauAnalyseTranscript.svelte';
   import { supprimerTranscriptPdf } from '../api/transcripts_pdf';
   import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
@@ -35,6 +37,9 @@
   let nomSource = $state('');
   let contenu = $state('');
   let contexte = $state('');
+  let contenuOriginal = $state('');
+  let contexteOriginal = $state('');
+  let occurrences = $state<OccurrenceSource[]>([]);
   let locuteurs = $state<
     {
       identifiant: string;
@@ -163,6 +168,9 @@
       controleSuivi?.abort();
       annulerAttente();
       arreterHorloge();
+      contenuOriginal = '';
+      contexteOriginal = '';
+      occurrences = [];
     };
   });
 
@@ -192,6 +200,10 @@
   }
 
   async function consulter(id: number) {
+    contenuOriginal = '';
+    contexteOriginal = '';
+    occurrences = [];
+    remplacements = [];
     enCours = true;
     conflitsCategoriesFusionnes = 0;
     progression = null;
@@ -243,6 +255,9 @@
   async function preparer() {
     if (!fichier || enCours || jetonPreparation) return;
     enCours = true;
+    contenuOriginal = '';
+    contexteOriginal = '';
+    occurrences = [];
     progression = null;
     arreterHorloge();
     erreur = '';
@@ -310,6 +325,9 @@
         if (resultat.statut === 'termine') {
           contenu = resultat.contenu;
           contexte = resultat.contexte;
+          contenuOriginal = resultat.contenu_original;
+          contexteOriginal = resultat.contexte_original;
+          occurrences = resultat.occurrences;
           nomSource = resultat.nom_source;
           dateEntretien = resultat.date_entretien ?? '';
           locuteurs = resultat.locuteurs;
@@ -372,6 +390,9 @@
         );
       }
       problemes = [];
+      contenuOriginal = '';
+      contexteOriginal = '';
+      occurrences = [];
       transcriptId = resultat.id;
       edition = false;
       await consulter(resultat.id);
@@ -540,7 +561,14 @@
           type="file"
           accept=".pdf,application/pdf"
           aria-describedby="pdf-aide"
-          onchange={(event) => (fichier = event.currentTarget.files?.[0] ?? null)}
+          onchange={(event) => {
+            contenuOriginal = '';
+            contexteOriginal = '';
+            occurrences = [];
+            contenu = '';
+            remplacements = [];
+            fichier = event.currentTarget.files?.[0] ?? null;
+          }}
         />
       </div>
       <div class="fr-input-group">
@@ -557,7 +585,7 @@
           jetonPreparation !== null ||
           (typeSource === 'produit' && (!projetsCharges || !selectionProjet))}
         onclick={preparer}
-        >{enCours ? 'Préparation…' : 'Préparer et anonymiser'}</button
+        >{enCours ? 'Préparation…' : 'Préparer et pseudonymiser'}</button
       >
       {#if jetonPreparation && !enCours}
         <button
@@ -650,23 +678,58 @@
           {/if}
         </div>
       {/if}
-      <label class="fr-label" for="transcript">Transcript anonymisé</label>
-      <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
-      ></textarea>
-      <RemplacementsTranscript {remplacements} {conflitsCategoriesFusionnes} />
-      <div class="fr-input-group">
-        <label class="fr-label" for="contexte-edite">Contexte anonymisé</label>
-        <textarea class="fr-input" id="contexte-edite" bind:value={contexte} rows="4"
+      {#if contenuOriginal}
+        <RelecturePseudonymisation
+          {contenuOriginal}
+          {contexteOriginal}
+          {occurrences}
+          {locuteurs}
+          onprojection={(texte, contexteProjete) => {
+            contenu = texte;
+            contexte = contexteProjete;
+          }}
+        />
+        {#if conflitsCategoriesFusionnes}
+          <div class="fr-alert fr-alert--warning" role="status">
+            <p>
+              {conflitsCategoriesFusionnes} identité(s) ou zone(s) de chevauchement ont
+              reçu une catégorie prudente. Relisez les masques avant confirmation.
+            </p>
+          </div>
+        {/if}
+      {:else}
+        <label class="fr-label" for="transcript">Transcript pseudonymisé</label>
+        <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
         ></textarea>
-      </div>
+        <RemplacementsTranscript {remplacements} {conflitsCategoriesFusionnes} />
+        <div class="fr-input-group">
+          <label class="fr-label" for="contexte-edite">Contexte pseudonymisé</label>
+          <textarea
+            class="fr-input"
+            id="contexte-edite"
+            bind:value={contexte}
+            rows="4"
+          ></textarea>
+        </div>
+      {/if}
       <fieldset>
         <legend>Rôle des locuteurs</legend>
+        <p>
+          Interne · {locuteurs.filter((locuteur) => locuteur.role === 'interne')
+            .length} / Externe · {locuteurs.filter(
+            (locuteur) => locuteur.role === 'externe'
+          ).length} / Indéterminé · {locuteurs.filter(
+            (locuteur) => locuteur.role === 'indetermine'
+          ).length}
+        </p>
         {#each locuteurs as locuteur, index (locuteur.identifiant)}
-          <label for={`role-${index}`}>{locuteur.identifiant}</label>
+          <label for={`role-${index}`}
+            >Participant {index + 1} · {locuteur.identifiant}</label
+          >
           <select id={`role-${index}`} bind:value={locuteur.role}>
-            <option value="interne">ANSSI / laboratoire</option><option
-              value="externe">Externe</option
-            ><option value="indetermine">Indéterminé</option>
+            <option value="interne">Interne · {index + 1}</option><option
+              value="externe">Externe · {index + 1}</option
+            ><option value="indetermine">Indéterminé · {index + 1}</option>
           </select>
           <label for={`justification-${index}`}>Justification</label><input
             id={`justification-${index}`}
@@ -748,7 +811,7 @@
       aria-labelledby="onglet-transcript"
       hidden={ongletActif !== 'transcript'}
     >
-      <h3>Transcript anonymisé</h3>
+      <h3>Transcript pseudonymisé</h3>
       <pre class="transcript">{contenu}</pre>
       {#if contexte}<h3>Contexte</h3>
         <p>{contexte}</p>{/if}
