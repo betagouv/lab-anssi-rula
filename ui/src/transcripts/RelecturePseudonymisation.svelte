@@ -4,6 +4,7 @@
     categoriesRelecture,
     ModeleRelecture,
     type CategorieRelecture,
+    type EtatRelecture,
     type OccurrenceSource,
   } from './modele-relecture';
   import {
@@ -12,25 +13,34 @@
     type SegmentLocuteur,
   } from './modele-locuteurs';
 
-  type Morceau = SegmentLocuteur | { type: 'masque'; original: string };
+  type Morceau = SegmentLocuteur | { type: 'masque'; identifiant: string };
 
   let {
     contenuOriginal,
     contexteOriginal,
     occurrences,
+    etatRelecture,
     locuteurs,
     onprojection,
     onlocuteurs,
+    onetat,
   }: {
     contenuOriginal: string;
     contexteOriginal: string;
     occurrences: OccurrenceSource[];
+    etatRelecture?: EtatRelecture;
     locuteurs: LocuteurRelecture[];
     onprojection: (contenu: string, contexte: string) => void;
     onlocuteurs: (locuteurs: LocuteurRelecture[]) => void;
+    onetat: (etat: EtatRelecture) => void;
   } = $props();
   const modele = $derived(
-    new ModeleRelecture(contenuOriginal, contexteOriginal, occurrences)
+    new ModeleRelecture(
+      contenuOriginal,
+      contexteOriginal,
+      occurrences,
+      etatRelecture
+    )
   );
   let valeurSelectionnee = $state<string | null>(null);
   let valeurRevelee = $state<string | null>(null);
@@ -48,16 +58,16 @@
     return modele.lireMasques();
   });
   const masqueSelectionne = $derived(
-    masques.find((m) => m.valeur_originale === valeurSelectionnee)
+    masques.find((m) => m.identifiant === valeurSelectionnee)
   );
   const indexSelection = $derived(
-    masques.findIndex((m) => m.valeur_originale === valeurSelectionnee)
+    masques.findIndex((m) => m.identifiant === valeurSelectionnee)
   );
   const compteSelection = $derived.by(() => {
     void revision;
     return modele
       .lireOccurrences()
-      .filter((o) => o.valeur_originale === valeurSelectionnee).length;
+      .filter((o) => o.masque_identifiant === valeurSelectionnee).length;
   });
   const segments = $derived.by(() => {
     void revision;
@@ -74,11 +84,8 @@
       let debut = 0;
       const morceaux: Morceau[] = [];
       for (const plage of plages) {
-        const masque = modele
-          .lireMasques()
-          .find((m) => m.valeur_originale === plage.valeur_originale)!;
         morceaux.push(...morceauxTexte(source.slice(debut, plage.debut), champ));
-        morceaux.push({ type: 'masque', original: masque.valeur_originale });
+        morceaux.push({ type: 'masque', identifiant: plage.masque_identifiant });
         debut = plage.fin;
       }
       morceaux.push(...morceauxTexte(source.slice(debut), champ));
@@ -96,19 +103,20 @@
   function rafraichir() {
     revision += 1;
     onprojection(modele.projeter('transcript'), modele.projeter('contexte'));
+    onetat(modele.lireEtat());
   }
 
   function annuler() {
     if (!modele.annuler()) return;
-    if (!modele.lireMasques().some((m) => m.valeur_originale === valeurSelectionnee))
-      valeurSelectionnee = modele.lireMasques()[0]?.valeur_originale ?? null;
+    if (!modele.lireMasques().some((m) => m.identifiant === valeurSelectionnee))
+      valeurSelectionnee = modele.lireMasques()[0]?.identifiant ?? null;
     rafraichir();
   }
 
   function retablir() {
     if (!modele.retablir()) return;
-    if (!modele.lireMasques().some((m) => m.valeur_originale === valeurSelectionnee))
-      valeurSelectionnee = modele.lireMasques()[0]?.valeur_originale ?? null;
+    if (!modele.lireMasques().some((m) => m.identifiant === valeurSelectionnee))
+      valeurSelectionnee = modele.lireMasques()[0]?.identifiant ?? null;
     rafraichir();
   }
 
@@ -140,10 +148,11 @@
   function parcourir(sens: -1 | 1) {
     if (!masques.length) return;
     valeurSelectionnee =
-      masques[(indexSelection + sens + masques.length) % masques.length]
-        .valeur_originale;
+      masques[(indexSelection + sens + masques.length) % masques.length].identifiant;
+    modele.selectionner(valeurSelectionnee);
     valeurRevelee = null;
     revision += 1;
+    onetat(modele.lireEtat());
     const cible = zoneDefilante.querySelector<HTMLButtonElement>(
       '[data-masque="' + CSS.escape(valeurSelectionnee ?? '') + '"]'
     );
@@ -176,13 +185,12 @@
     );
     segmentLocuteurEnEdition = null;
     if (!locuteur || (locuteur.nom_affiche ?? '') === nom) return;
-    onlocuteurs(
-      locuteurs.map((element) =>
-        element.identifiant === identifiant
-          ? { ...element, nom_affiche: nom }
-          : element
-      )
+    const nouveauxLocuteurs = locuteurs.map((element) =>
+      element.identifiant === identifiant
+        ? { ...element, nom_affiche: nom }
+        : element
     );
+    onlocuteurs(nouveauxLocuteurs);
     revision += 1;
   }
 
@@ -236,6 +244,8 @@
 
   onMount(() => {
     valeurSelectionnee ??= modele.selection;
+    onprojection(modele.projeter('transcript'), modele.projeter('contexte'));
+    onetat(modele.lireEtat());
     const echapper = (event: KeyboardEvent) => {
       if (conteneur.contains(document.activeElement)) touche(event);
     };
@@ -359,7 +369,7 @@
                 {/if}
               {:else}
                 {@const masque = masques.find(
-                  (m) => m.valeur_originale === morceau.original
+                  (m) => m.identifiant === morceau.identifiant
                 )!}
                 <button
                   type="button"
@@ -371,19 +381,19 @@
                   class:coordonnees={masque.categorie === 'coordonnees'}
                   class:donnee_sensible={masque.categorie === 'donnee_sensible'}
                   class:inactif={!masque.actif}
-                  class:selectionne={valeurSelectionnee === morceau.original}
-                  data-masque={morceau.original}
+                  class:selectionne={valeurSelectionnee === morceau.identifiant}
+                  data-masque={morceau.identifiant}
                   aria-label={masque.actif
                     ? `Occurrence masquée ${masque.valeur_anonyme}`
-                    : `Masque désactivé ${morceau.original}`}
-                  onclick={() => basculer(morceau.original)}
-                  onmouseenter={() => reveiller(morceau.original)}
+                    : `Masque désactivé ${masque.valeur_originale}`}
+                  onclick={() => basculer(masque.identifiant)}
+                  onmouseenter={() => reveiller(masque.valeur_originale)}
                   onmouseleave={masquerRevelation}
-                  onfocus={() => reveiller(morceau.original)}
+                  onfocus={() => reveiller(masque.valeur_originale)}
                   onblur={masquerRevelation}
-                  >{morceau.original}{#if valeurRevelee === morceau.original}<span
+                  >{masque.valeur_originale}{#if valeurRevelee === masque.valeur_originale}<span
                       class="original"
-                      role="status">{morceau.original}</span
+                      role="status">{masque.valeur_originale}</span
                     >{/if}</button
                 >
               {/if}
@@ -424,7 +434,7 @@
         <button
           type="button"
           class="fr-btn fr-btn--secondary"
-          onclick={() => basculer(masqueSelectionne.valeur_originale)}
+          onclick={() => basculer(masqueSelectionne.identifiant)}
           >{masqueSelectionne.actif ? 'Désactiver' : 'Activer'}</button
         >
       </div>

@@ -1,14 +1,14 @@
 # Tâche : relecture interactive de la pseudonymisation
 
-Statut : compléments UX poussés sur la PR brouillon #34, contrôles natifs terminés
+Statut : correctif de reprise F5 en cours sur la PR brouillon #34
 
 ## Objectif
 
-Permettre de relire les occurrences pseudonymisées après préparation d’un transcript et de modifier les masques avant confirmation, avec la source originale disponible uniquement pendant cette préparation temporaire.
+Permettre de relire les occurrences pseudonymisées après préparation d’un transcript et de modifier les masques avant confirmation, avec la source originale disponible uniquement pendant cette préparation temporaire. Reprendre la page et les modifications après F5 tant que le backend conserve la session temporaire.
 
 ## Périmètre
 
-- Inclus : modèle d’occurrences source, préparation temporaire, état de relecture accessible au clavier et au tactile, édition des catégories, ajout de masques par sélection, annulation/rétablissement, rôles de locuteurs et prompt partagé Produit/BizDev.
+- Inclus : modèle d’occurrences source, préparation temporaire, état de relecture accessible au clavier et au tactile, édition des catégories, ajout de masques par sélection, annulation/rétablissement, rôles de locuteurs et prompt partagé Produit/BizDev; reprise de session en mémoire serveur après rechargement.
 - Exclu : stockage des originaux, modification des contrats POST/PUT de confirmation, redesign du shell DSFR, changement des analyses historiques.
 
 ## Critères d'acceptation
@@ -26,6 +26,11 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - [x] Les speakers ont un style distinct, sont renommables en ligne et globalement; leur identifiant technique est conservé et leur libellé ne peut pas être ajouté comme masque.
 - [x] La même relecture est utilisée pour Produit et BizDev, avec le prompt partagé mis à jour pour la classification prudente des technologies/produits et la préservation des fonctions professionnelles.
 - [x] Les tests métier et la preuve de parcours navigateur couvrent les occurrences globales, collisions, Unicode Python/JavaScript, historique, interactions desktop/mobile et textes longs.
+- [x] La préparation est retrouvable par un identifiant non secret en sessionStorage et un cookie `HttpOnly`, `SameSite=Strict`, limité à la route et `Secure` sous HTTPS.
+- [x] Les mises à jour structurées restaurent plages, états, catégories, historique, rôles, libellés et métadonnées sans envoyer le texte original ou projeté.
+- [x] Les lectures et mutations de préparation sont `no-store`; les mutations vérifient l’origine; les sessions sont isolées et expirent après 30 minutes d’inactivité.
+- [x] Confirmation, abandon, expiration et redémarrage du backend effacent ou rendent indisponible le brouillon; l’interface informe avant de quitter avec des changements non synchronisés.
+- [ ] Une vérification F5 synthétique confirme la restauration complète sans transcript dans le stockage navigateur, l’URL, les journaux ou la base.
 
 ## Plan
 
@@ -33,13 +38,13 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 2. Construire un modèle frontend pur pour les plages, la projection, les pseudonymes stables et l’historique.
 3. Intégrer un écran de relecture à la préparation existante et préserver le flux de confirmation.
 4. Ajouter les tests DeTest et un scénario navigateur synthétique sans persistance.
-5. Exécuter les contrôles requis, demander la revue Sol, puis préparer une PR brouillon sans fusion.
+5. Ajouter les routes de reprise sécurisées, le stockage RAM glissant et la restauration de l’état éditorial.
+6. Exécuter les contrôles requis et pousser sur la PR #34 sans fusion.
 
 ## Validation
 
-- `uv run ruff check .`, `uv run mypy` (135 fichiers) et `uv run pytest` passent : 332 tests réussis, deux ignorés, couverture globale 99 % (service.py 99 %); Ruff et format des fichiers modifiés OK.
-- Contrôles frontend Windows : lint, format, `svelte-check` (zéro erreur/avertissement), Vitest (90 tests), TypeScript et build passent.
-- `bash scripts/harness.sh complet` retourne 1 uniquement à l’étape frontend WSL : `@rollup/rollup-linux-x64-gnu` ne peut pas être chargé depuis `node_modules` Windows. Les contrôles frontend équivalents passent nativement sous Windows.
+- Validation finale : `bash scripts/harness.sh complet` passe Ruff, mypy (135 fichiers) et pytest (334 réussis, deux ignorés, couverture globale 99 %), puis échoue au contrôle Svelte WSL car `@rollup/rollup-linux-x64-gnu` manque dans le `node_modules` Windows partagé.
+- Contrôles frontend Windows : `pnpm test` (93 tests), `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` passent; `svelte-check` signale zéro erreur et zéro avertissement.
 - `uv run ruff format --check` passe sur les fichiers backend modifiés; le format complet de la base contient sept fichiers préexistants non formatés hors périmètre.
 - Parcours navigateur synthétique réel : desktop 1440 px et mobile 390 px sans débordement horizontal; panneau sous le document mobile; survol garde une géométrie stable; reveal clavier/tactile puis Échap; navigation, bascule globale, ajout par sélection, undo/redo; texte long de 80 891 caractères et 3 600 boutons, 1 802 occurrences Alice basculées.
 - Essai sémantique Albert avec données uniquement synthétiques : la réponse s’est terminée normalement (`HTTP 200`, `finish_reason=stop`, une tentative) mais a été refusée avec `code=chevauchement_expansion`; le backend a donc interrompu la projection sans exposer les données. Le prompt a depuis été renforcé pour éviter les plages imbriquées. La sortie sémantique du modèle reste non concluante.
@@ -49,7 +54,9 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Complément UX desktop navigateur (1440×900) : la barre conserve exactement sa position pendant le défilement interne (`top=196`, `scrollTop=0→2337`); le speaker `Indéterminé · 4` est visuellement distinct et chaque alias global affiche un seul champ en édition.
 - Complément UX mobile navigateur (390×844) : panneau sous le transcript, largeur document 375 px pour viewport 390 px; révélation explicite affiche les 3 mentions et `Échap` les masque de nouveau.
 - Complément clavier et sérialisation : activation au clavier d’un speaker et d’Occurrence suivante, alias `Alice` sur les 60 mentions, `SPEAKER_04` conservé dans le contenu et les métadonnées, aucun masque sur les identifiants; glisser sur le libellé ne crée pas de sélection caviardable.
-- Validation finale après ajout de ces cas : `uv run ruff check .`, `uv run ruff format --check` (trois fichiers backend), `uv run mypy` et `uv run pytest` passent; 332 tests backend passent et deux sont ignorés. `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm test` (92 tests) et `pnpm build` passent sous Windows. `bash scripts/harness.sh complet` passe les contrôles backend puis échoue au `svelte-check` WSL parce que `@rollup/rollup-linux-x64-gnu` est absent du `node_modules` Windows partagé; le contrôle natif Windows équivalent passe.
+- Validation finale après ajout de ces cas : `uv run ruff check .`, `uv run ruff format --check` (trois fichiers backend), `uv run mypy` et `uv run pytest` passent; 334 tests backend passent et deux sont ignorés. `pnpm check`, `pnpm lint:check`, `pnpm format:check`, `pnpm test` (93 tests) et `pnpm build` passent sous Windows. `bash scripts/harness.sh complet` passe les contrôles backend puis échoue au `svelte-check` WSL parce que `@rollup/rollup-linux-x64-gnu` est absent du `node_modules` Windows partagé; le contrôle natif Windows équivalent passe.
+- Reprise F5 : TestClient valide le cookie, l’isolation, l’expiration glissante, la suppression, le `no-store`, le refus d’un corps contenant le transcript, et la restauration des modifications complètes; le modèle frontend valide la réhydratation de l’historique. La vérification intégrée du F5 dans un navigateur réel reste à faire.
+- Origine de l’upload en développement : Vite ne réécrit plus l’en-tête `Host`; après redémarrage du seul conteneur frontend, une requête `DELETE` de contrôle avec `Origin: http://localhost:5173` a atteint la validation de préparation et renvoyé le `404` attendu sur un identifiant fictif, sans `403 Origine invalide`.
 - CI GitHub du code `610a158` : Backend Python, Frontend Svelte, CodeQL, Analyze (actions, JavaScript/TypeScript, Python) et GitGuardian passent.
 
 ## Décisions
@@ -61,8 +68,8 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : commit `610a158` poussé sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Le harness complet passe le backend; son étape UI WSL reste bloquée par le `node_modules` Windows partagé, avec les contrôles UI équivalents verts sous Windows.
-- Prochaine action : revue humaine de la PR; aucune fusion automatique.
+- État du code : correctif de reprise F5 et de proxy local prêt à commiter sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Le harness backend passe; ses contrôles frontend WSL échouent sur la dépendance Rollup Linux manquante, alors que tous les contrôles frontend Windows passent.
+- Prochaine action : terminer la validation navigateur F5 synthétique, puis revue humaine de la PR; aucune fusion automatique.
 - Risques ou limites : l’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
 
 ## Revue indépendante

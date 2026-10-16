@@ -9,7 +9,6 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://backend:3001',
-        changeOrigin: true,
       },
     },
   },

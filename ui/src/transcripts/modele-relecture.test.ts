@@ -37,7 +37,7 @@ describe('modèle de relecture pseudonymisation', () => {
       'Alice',
       occurrencesDans('Alice et Alice', 'Alice')
     );
-    modele.basculer('Alice');
+    modele.basculer(modele.lireMasques()[0].identifiant);
     expect(modele.projeter('transcript')).toBe('Alice et Alice');
     expect(modele.projeter('contexte')).toBe('Alice');
     modele.annuler();
@@ -64,7 +64,7 @@ describe('modèle de relecture pseudonymisation', () => {
     const modele = new ModeleRelecture('Alice Bob', '', [
       ...occurrencesDans('Alice Bob', '', ['Alice', 'Bob']),
     ]);
-    modele.categoriser('Alice', 'secret');
+    modele.categoriser(modele.lireMasques()[0].identifiant, 'secret');
     expect(modele.lireMasques().map((m) => m.valeur_anonyme)).toEqual([
       '[SECRET_01]',
       '[IDENTITE_02]',
@@ -79,7 +79,7 @@ describe('modèle de relecture pseudonymisation', () => {
       '',
       occurrencesDans('Alice Dupont et alice Dupont', '')
     );
-    modele.basculer('Alice');
+    modele.basculer(modele.lireMasques()[0].identifiant);
     expect(modele.ajouterValeur('lic')).toBe(false);
     expect(modele.ajouterValeur('alice')).toBe(true);
     expect(modele.projeter('transcript')).toBe(
@@ -100,5 +100,32 @@ describe('modèle de relecture pseudonymisation', () => {
     expect(modele.projeter('transcript')).toBe(
       '[IDENTITE_01], Bob et [DONNEE_SENSIBLE_01]'
     );
+  });
+
+  it('restaure les plages, catégories, masques et historique sans sérialiser le texte source', () => {
+    const texte = 'Élodie a choisi Alice';
+    const contexte = 'Alice est aussi citée';
+    const modele = new ModeleRelecture(
+      texte,
+      contexte,
+      occurrencesDans(texte, contexte, ['Élodie', 'Alice'])
+    );
+    const alice = modele
+      .lireMasques()
+      .find((masque) => masque.valeur_originale === 'Alice')!;
+    modele.categoriser(alice.identifiant, 'organisation');
+    modele.basculer(alice.identifiant);
+    expect(modele.ajouterValeur('choisi', 'identite')).toBe(true);
+    const etat = modele.lireEtat();
+    expect(JSON.stringify(etat)).not.toContain(texte);
+    expect(JSON.stringify(etat)).not.toContain(contexte);
+    const restaure = new ModeleRelecture(texte, contexte, [], etat);
+    expect(restaure.projeter('transcript')).toBe(modele.projeter('transcript'));
+    expect(restaure.projeter('contexte')).toBe(modele.projeter('contexte'));
+    expect(restaure.lireMasques()).toEqual(modele.lireMasques());
+    expect(restaure.annuler()).toBe(true);
+    expect(
+      restaure.lireMasques().some((masque) => masque.valeur_originale === 'choisi')
+    ).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import type { ProgressionPreparation } from './progression';
-import type { OccurrenceSource } from './modele-relecture';
+import type { EtatRelecture, OccurrenceSource } from './modele-relecture';
 
 type LocuteurPreparation = {
   identifiant: string;
@@ -31,6 +31,8 @@ export type ResultatPreparation =
       occurrences: OccurrenceSource[];
       remplacements: RemplacementPreparation[];
       conflits_categories_fusionnes: number;
+      etat_relecture?: EtatRelecture;
+      projet_id?: number | null;
     };
 
 export class ErreurSuiviPreparation extends Error {

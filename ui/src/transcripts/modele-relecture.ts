@@ -18,13 +18,36 @@ export type OccurrenceSource = {
 };
 
 export type Masque = {
+  identifiant: string;
   valeur_originale: string;
   categorie: CategorieRelecture;
   valeur_anonyme: string;
   actif: boolean;
 };
 
-type Plage = Pick<OccurrenceSource, 'valeur_originale' | 'debut' | 'fin' | 'champ'>;
+export type PlageEtatRelecture = {
+  identifiant: string;
+  masque_identifiant: string;
+  champ: ChampRelecture;
+  debut: number;
+  fin: number;
+};
+
+export type MasqueEtatRelecture = Omit<Masque, 'valeur_originale'>;
+
+export type InstantaneRelecture = {
+  masques: MasqueEtatRelecture[];
+  plages: PlageEtatRelecture[];
+};
+
+export type EtatRelecture = InstantaneRelecture & {
+  selection: string | null;
+  annulations: InstantaneRelecture[];
+  retablissements: InstantaneRelecture[];
+};
+
+type Plage = PlageEtatRelecture & { valeur_originale: string };
+type Instantane = { masques: Masque[]; plages: Plage[] };
 
 export const categoriesRelecture: { id: CategorieRelecture; label: string }[] = [
   { id: 'identite', label: 'Identité' },
@@ -38,35 +61,69 @@ export const categoriesRelecture: { id: CategorieRelecture; label: string }[] = 
 export class ModeleRelecture {
   private masques: Masque[];
   private plages: Plage[];
-  private annulations: { masques: Masque[]; plages: Plage[] }[] = [];
-  private retablissements: { masques: Masque[]; plages: Plage[] }[] = [];
-  selection: string | null = null;
+  private annulations: Instantane[] = [];
+  private retablissements: Instantane[] = [];
+  selection: string | null;
   revelation: string | null = null;
 
   constructor(
     readonly contenuOriginal: string,
     readonly contexteOriginal: string,
-    occurrences: OccurrenceSource[]
+    occurrences: OccurrenceSource[],
+    etat?: EtatRelecture
   ) {
-    this.plages = occurrences.map(({ valeur_originale, debut, fin, champ }) => {
-      if (this.source(champ).slice(debut, fin) !== valeur_originale)
-        throw new Error('Plage de relecture invalide.');
-      return { valeur_originale, debut, fin, champ };
-    });
+    const identifiants = new Map<string, string>();
     this.masques = [
       ...new Map(
-        occurrences.map((o) => [
-          o.valeur_originale,
-          {
-            valeur_originale: o.valeur_originale,
-            categorie: o.categorie,
-            valeur_anonyme: o.valeur_anonyme,
-            actif: true,
-          },
-        ])
+        occurrences.map((occurrence) => {
+          const identifiant =
+            identifiants.get(occurrence.valeur_originale) ?? crypto.randomUUID();
+          identifiants.set(occurrence.valeur_originale, identifiant);
+          return [
+            occurrence.valeur_originale,
+            {
+              identifiant,
+              valeur_originale: occurrence.valeur_originale,
+              categorie: occurrence.categorie,
+              valeur_anonyme: occurrence.valeur_anonyme,
+              actif: true,
+            },
+          ];
+        })
       ).values(),
     ];
-    this.selection = this.masques[0]?.valeur_originale ?? null;
+    this.plages = occurrences.map((occurrence) => {
+      if (
+        this.source(occurrence.champ).slice(occurrence.debut, occurrence.fin) !==
+        occurrence.valeur_originale
+      )
+        throw new Error('Plage de relecture invalide.');
+      return {
+        identifiant: crypto.randomUUID(),
+        masque_identifiant: identifiants.get(occurrence.valeur_originale)!,
+        champ: occurrence.champ,
+        debut: occurrence.debut,
+        fin: occurrence.fin,
+        valeur_originale: occurrence.valeur_originale,
+      };
+    });
+    this.selection = this.masques[0]?.identifiant ?? null;
+    if (etat) {
+      const instantane = this.restaurerInstantane(etat);
+      this.masques = instantane.masques;
+      this.plages = instantane.plages;
+      this.annulations = etat.annulations.map((element) =>
+        this.restaurerInstantane(element)
+      );
+      this.retablissements = etat.retablissements.map((element) =>
+        this.restaurerInstantane(element)
+      );
+      this.selection = this.masques.some(
+        (masque) => masque.identifiant === etat.selection
+      )
+        ? etat.selection
+        : (this.masques[0]?.identifiant ?? null);
+    }
   }
 
   lireMasques() {
@@ -74,21 +131,33 @@ export class ModeleRelecture {
   }
 
   lireOccurrences() {
-    return this.plages.flatMap((plage) => {
+    return this.plages.map((plage) => {
       const masque = this.masques.find(
-        (m) => m.valeur_originale === plage.valeur_originale
-      );
-      return masque
-        ? [
-            {
-              ...plage,
-              valeur_affichee: masque.actif
-                ? masque.valeur_anonyme
-                : masque.valeur_originale,
-            },
-          ]
-        : [];
+        (element) => element.identifiant === plage.masque_identifiant
+      )!;
+      return {
+        ...plage,
+        valeur_affichee: masque.actif
+          ? masque.valeur_anonyme
+          : masque.valeur_originale,
+      };
     });
+  }
+
+  lireEtat(): EtatRelecture {
+    return {
+      ...this.etatInstantane(this.instantane()),
+      selection: this.selection,
+      annulations: this.annulations.map((element) => this.etatInstantane(element)),
+      retablissements: this.retablissements.map((element) =>
+        this.etatInstantane(element)
+      ),
+    };
+  }
+
+  selectionner(identifiant: string) {
+    if (this.masques.some((masque) => masque.identifiant === identifiant))
+      this.selection = identifiant;
   }
 
   projeter(champ: ChampRelecture) {
@@ -102,47 +171,63 @@ export class ModeleRelecture {
       );
   }
 
-  basculer(valeur: string) {
+  basculer(identifiant: string) {
     this.modifier((masques) =>
-      masques.map((m) =>
-        m.valeur_originale === valeur ? { ...m, actif: !m.actif } : m
+      masques.map((masque) =>
+        masque.identifiant === identifiant
+          ? { ...masque, actif: !masque.actif }
+          : masque
       )
     );
+    this.selectionner(identifiant);
   }
 
-  categoriser(valeur: string, categorie: CategorieRelecture) {
-    const masque = this.masques.find((m) => m.valeur_originale === valeur);
+  categoriser(identifiant: string, categorie: CategorieRelecture) {
+    const masque = this.masques.find(
+      (element) => element.identifiant === identifiant
+    );
     if (!masque || masque.categorie === categorie) return;
     const pseudo = this.nouveauPseudonyme(categorie);
     this.modifier((masques) =>
-      masques.map((m) =>
-        m.valeur_originale === valeur
-          ? { ...m, categorie, valeur_anonyme: pseudo }
-          : m
+      masques.map((element) =>
+        element.identifiant === identifiant
+          ? { ...element, categorie, valeur_anonyme: pseudo }
+          : element
       )
     );
   }
 
   ajouterValeur(valeur: string, categorie: CategorieRelecture = 'donnee_sensible') {
     if (!valeur.trim()) return false;
-    if (this.masques.some((m) => m.valeur_originale === valeur)) {
-      this.selection = valeur;
+    const existant = this.masques.find(
+      (masque) => masque.valeur_originale === valeur
+    );
+    if (existant) {
+      this.selection = existant.identifiant;
       return true;
     }
     const plages = this.positions(valeur);
-    if (!plages.length) return false;
-    if (this.chevauche(plages)) return false;
+    if (!plages.length || this.chevauche(plages)) return false;
+    const identifiant = crypto.randomUUID();
     this.modifier((masques) => [
       ...masques,
       {
+        identifiant,
         valeur_originale: valeur,
         categorie,
         valeur_anonyme: this.nouveauPseudonyme(categorie),
         actif: true,
       },
     ]);
-    this.plages = [...this.plages, ...plages];
-    this.selection = valeur;
+    this.plages = [
+      ...this.plages,
+      ...plages.map((plage) => ({
+        ...plage,
+        identifiant: crypto.randomUUID(),
+        masque_identifiant: identifiant,
+      })),
+    ];
+    this.selection = identifiant;
     return true;
   }
 
@@ -165,8 +250,8 @@ export class ModeleRelecture {
       Math.max(
         0,
         ...this.masques
-          .filter((m) => m.categorie === categorie)
-          .map((m) => Number(/_(\d+)\]$/.exec(m.valeur_anonyme)?.[1] ?? 0))
+          .filter((masque) => masque.categorie === categorie)
+          .map((masque) => Number(/_(\d+)\]$/.exec(masque.valeur_anonyme)?.[1] ?? 0))
       ) + 1;
     return `[${categorie.toLocaleUpperCase('fr-FR')}_${String(numero).padStart(2, '0')}]`;
   }
@@ -174,26 +259,26 @@ export class ModeleRelecture {
   private positions(valeur: string) {
     return (['transcript', 'contexte'] as const).flatMap((champ) =>
       [...this.source(champ).matchAll(new RegExp(escapeRegex(valeur), 'g'))]
-        .filter((m) => m.index !== undefined)
+        .filter((match) => match.index !== undefined)
         .filter(
-          (m) =>
+          (match) =>
             champ !== 'transcript' ||
             !chevaucheLocuteur(
               this.source(champ),
-              m.index!,
-              m.index! + valeur.length
+              match.index!,
+              match.index! + valeur.length
             )
         )
-        .map((m) => ({
+        .map((match) => ({
           champ,
+          debut: match.index!,
+          fin: match.index! + valeur.length,
           valeur_originale: valeur,
-          debut: m.index!,
-          fin: m.index! + valeur.length,
         }))
     );
   }
 
-  private chevauche(plages: Plage[]) {
+  private chevauche(plages: Pick<Plage, 'champ' | 'debut' | 'fin'>[]) {
     return plages.some((plage) =>
       this.plages.some(
         (existante) =>
@@ -204,11 +289,68 @@ export class ModeleRelecture {
     );
   }
 
-  private instantane() {
+  private instantane(): Instantane {
     return {
-      masques: this.masques.map((m) => ({ ...m })),
-      plages: this.plages.map((p) => ({ ...p })),
+      masques: this.masques.map((masque) => ({ ...masque })),
+      plages: this.plages.map((plage) => ({ ...plage })),
     };
+  }
+
+  private etatInstantane(instantane: Instantane): InstantaneRelecture {
+    return {
+      masques: instantane.masques.map(
+        ({ identifiant, categorie, valeur_anonyme, actif }) => ({
+          identifiant,
+          categorie,
+          valeur_anonyme,
+          actif,
+        })
+      ),
+      plages: instantane.plages.map(
+        ({ identifiant, masque_identifiant, champ, debut, fin }) => ({
+          identifiant,
+          masque_identifiant,
+          champ,
+          debut,
+          fin,
+        })
+      ),
+    };
+  }
+
+  private restaurerInstantane(etat: InstantaneRelecture): Instantane {
+    const plages = etat.plages.map((plage) => {
+      const valeur_originale = this.source(plage.champ).slice(
+        plage.debut,
+        plage.fin
+      );
+      if (!valeur_originale || plage.fin > this.source(plage.champ).length)
+        throw new Error('Plage de relecture invalide.');
+      return { ...plage, valeur_originale };
+    });
+    const masques = etat.masques.map((masque) => {
+      const plage = plages.find(
+        (element) => element.masque_identifiant === masque.identifiant
+      );
+      if (
+        !plage ||
+        plages.some(
+          (element) =>
+            element.masque_identifiant === masque.identifiant &&
+            element.valeur_originale !== plage.valeur_originale
+        )
+      )
+        throw new Error('Masque de relecture invalide.');
+      return { ...masque, valeur_originale: plage.valeur_originale };
+    });
+    if (
+      plages.some(
+        (plage) =>
+          !masques.some((masque) => masque.identifiant === plage.masque_identifiant)
+      )
+    )
+      throw new Error('Plage de relecture invalide.');
+    return { masques, plages };
   }
 
   private source(champ: ChampRelecture) {
@@ -217,8 +359,9 @@ export class ModeleRelecture {
 
   private modifier(operation: (masques: Masque[]) => Masque[]) {
     this.annulations.push(this.instantane());
+    if (this.annulations.length > 100) this.annulations.shift();
     this.retablissements = [];
-    this.masques = operation(this.masques.map((m) => ({ ...m })));
+    this.masques = operation(this.masques.map((masque) => ({ ...masque })));
   }
 }
 
@@ -226,6 +369,6 @@ const escapeRegex = (valeur: string) =>
   valeur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const chevaucheLocuteur = (source: string, debut: number, fin: number) =>
-  [...source.matchAll(/^SPEAKER_\d{2}:[ \t]*/gm)].some(
+  [...source.matchAll(/^SPEAKER_\d{2,}:[ \t]*/gm)].some(
     (repere) => debut < repere.index! + repere[0].length && repere.index! < fin
   );

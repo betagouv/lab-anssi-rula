@@ -32,6 +32,7 @@ class Rula(NamedTuple):
     port: int
     hote: str
     max_requetes_par_minute: int
+    secure_cookie: bool
 
 
 class Configuration(NamedTuple):
@@ -71,6 +72,8 @@ def charge_configuration() -> Configuration:
             max_requetes_par_minute=int(
                 os.environ.get("RULA_MAX_REQUETES_PAR_MINUTE", "100")
             ),
+            secure_cookie=os.environ.get("RULA_COOKIE_SECURE", "true").lower()
+            in {"1", "true", "yes", "on"},
         ),
         albert=Albert(
             url=os.environ.get("ALBERT_URL", ""),
