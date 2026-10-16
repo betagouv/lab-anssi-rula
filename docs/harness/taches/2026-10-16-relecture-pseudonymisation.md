@@ -59,6 +59,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Reprise F5 : TestClient valide le cookie, l’isolation, l’expiration glissante, la suppression, le `no-store`, le refus d’un corps contenant le transcript, et la restauration des modifications complètes; le modèle frontend valide la réhydratation de l’historique. La vérification intégrée du F5 dans un navigateur réel reste à faire.
 - Origine de l’upload en développement : Vite ne réécrit plus l’en-tête `Host`; après redémarrage du seul conteneur frontend, une requête `DELETE` de contrôle avec `Origin: http://localhost:5173` a atteint la validation de préparation et renvoyé le `404` attendu sur un identifiant fictif, sans `403 Origine invalide`.
 - Correctif de sélection : l’action d’ajout est rendue dans le panneau latéral et la capture ignore une sélection native repliée; `Échap` ou Annuler la ferme. `pnpm test`, `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` passent (93 tests, zéro diagnostic Svelte).
+- Parcours de sélection synthétique dans le navigateur : à 1280×720, la zone transcript reste à `x=16, y=172, 924×325,25` avant et après sélection; cliquer sur « Occurrence suivante » conserve le panneau d’ajout. À 390×844, le panneau reste après le document et l’ajout depuis ce panneau masque le texte sélectionné. Les données de test ont été retirées et le viewport réinitialisé.
 - CI GitHub du code `610a158` : Backend Python, Frontend Svelte, CodeQL, Analyze (actions, JavaScript/TypeScript, Python) et GitGuardian passent.
 
 ## Décisions
@@ -70,7 +71,7 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : commit `6a59577` poussé sur `feature/relecture-pseudonymisation`; PR #34 mise à jour, ouverte en brouillon et non fusionnée. Le harness backend passe; ses contrôles frontend WSL échouent sur la dépendance Rollup Linux manquante, alors que tous les contrôles frontend Windows passent.
+- État du code : correctif de sélection `6d299b8` poussé sur `feature/relecture-pseudonymisation`; PR #34 mise à jour, ouverte en brouillon et non fusionnée. Le harness backend passe; ses contrôles frontend WSL échouent sur la dépendance Rollup Linux manquante, alors que tous les contrôles frontend Windows passent.
 - Prochaine action : revue humaine de la PR; aucune fusion automatique.
 - Risques ou limites : la reprise après F5 est couverte par les tests API et modèle, mais son parcours complet n’a pas été rejoué dans un navigateur. L’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
 
