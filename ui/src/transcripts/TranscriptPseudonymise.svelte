@@ -4,19 +4,47 @@
     decouperTranscriptPseudonymise,
   } from './marqueurs-pseudonymisation';
 
-  let { contenu }: { contenu: string } = $props();
+  let {
+    contenu = $bindable(),
+    mode = 'lecture',
+    id = 'transcript',
+    titre = 'Transcript pseudonymisé',
+    lignes = 14,
+    legende = true,
+  }: {
+    contenu: string;
+    mode?: 'lecture' | 'edition';
+    id?: string;
+    titre?: string;
+    lignes?: number;
+    legende?: boolean;
+  } = $props();
   let segments = $derived(decouperTranscriptPseudonymise(contenu));
   let pseudonymise = $derived(
     segments.some((segment) => segment.categorie !== null)
   );
+  let idTitre = $derived(
+    mode === 'lecture' ? 'titre-transcript-pseudonymise' : `${id}-titre`
+  );
+  let defilementX = $state(0);
+  let defilementY = $state(0);
 </script>
 
-<section aria-labelledby="titre-transcript-pseudonymise">
-  <h3 id="titre-transcript-pseudonymise">Transcript pseudonymisé</h3>
-  {#if pseudonymise}
+<section aria-labelledby={mode === 'lecture' ? idTitre : undefined}>
+  {#if mode === 'edition'}
+    <label class="fr-label" for={id}>{titre}</label>
+  {:else}
+    <h3 id={idTitre}>{titre}</h3>
+  {/if}
+  {#if pseudonymise && legende}
     <p class="aide-copie">
-      Les valeurs d’origine ont été remplacées par ces pseudonymes. Sélectionnez le
-      texte pour le copier.
+      {#if mode === 'edition'}
+        Les pseudonymes colorés restent modifiables. Le texte sélectionné et copié
+        conserve les marqueurs.
+      {:else}
+        Les valeurs d’origine ont été remplacées par ces pseudonymes. Sélectionnez le
+        texte pour le copier.
+      {/if}
     </p>
     <ul class="legende" aria-label="Légende des catégories pseudonymisées">
       {#each CATEGORIES_PSEUDONYMISATION as categorie (categorie.id)}
@@ -28,12 +56,35 @@
       {/each}
     </ul>
   {/if}
-  <pre
-    class="transcript">{#each segments as segment, index (index)}{#if segment.categorie}<span
-          class={`pseudonyme pseudonyme--${segment.categorie.id}`}
-          aria-label={`${segment.categorie.libelle} : ${segment.texte}`}
-          title={segment.categorie.libelle}>{segment.texte}</span
-        >{:else}{segment.texte}{/if}{/each}</pre>
+  {#if mode === 'edition'}
+    <div class="editeur">
+      <pre
+        class="transcript superposition"
+        aria-hidden="true"
+        style={`transform: translate(${-defilementX}px, ${-defilementY}px)`}>{#each segments as segment, index (index)}{#if segment.categorie}<span
+              class={`pseudonyme pseudonyme--${segment.categorie.id}`}
+              title={segment.categorie.libelle}>{segment.texte}</span
+            >{:else}{segment.texte}{/if}{/each}</pre>
+      <textarea
+        class="fr-input transcript saisie"
+        {id}
+        bind:value={contenu}
+        rows={lignes}
+        spellcheck="false"
+        onscroll={(event) => {
+          defilementX = event.currentTarget.scrollLeft;
+          defilementY = event.currentTarget.scrollTop;
+        }}
+      ></textarea>
+    </div>
+  {:else}
+    <pre
+      class="transcript">{#each segments as segment, index (index)}{#if segment.categorie}<span
+            class={`pseudonyme pseudonyme--${segment.categorie.id}`}
+            aria-label={`${segment.categorie.libelle} : ${segment.texte}`}
+            title={segment.categorie.libelle}>{segment.texte}</span
+          >{:else}{segment.texte}{/if}{/each}</pre>
+  {/if}
 </section>
 
 <style>
@@ -62,6 +113,9 @@
     height: 0.75rem;
     width: 0.75rem;
   }
+  .editeur {
+    position: relative;
+  }
   .transcript {
     background: var(--background-alt-grey);
     border-left: 0.25rem solid var(--border-default-grey);
@@ -71,6 +125,40 @@
     padding: 1.5rem;
     user-select: text;
     white-space: pre-wrap;
+  }
+  .superposition,
+  .saisie {
+    box-sizing: border-box;
+    font: inherit;
+    line-height: 1.5;
+    margin: 0;
+    overflow-wrap: anywhere;
+    padding: 1.5rem;
+    tab-size: 2;
+    width: 100%;
+  }
+  .superposition {
+    border: 1px solid transparent;
+    inset: 0;
+    max-height: none;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    user-select: none;
+    white-space: pre-wrap;
+  }
+  .saisie {
+    background: transparent;
+    border: 1px solid var(--border-plain-grey);
+    color: transparent;
+    min-height: 0;
+    position: relative;
+    resize: vertical;
+    -webkit-text-fill-color: transparent;
+    caret-color: var(--text-default-grey);
+  }
+  .saisie::selection {
+    background: rgb(0 0 145 / 25%);
   }
   .pseudonyme {
     border-radius: 0.2rem;
