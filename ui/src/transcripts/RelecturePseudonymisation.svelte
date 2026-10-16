@@ -49,7 +49,11 @@
   let texteSelectionne = $state('');
   let categorieSelection = $state<CategorieRelecture>('donnee_sensible');
   let refusSelection = $state(false);
+  let positionPopup = $state<{ gauche: number; haut: number } | null>(null);
+  let popupSelection = $state<HTMLElement>();
+  let plageSelectionnee: Range | null = null;
   let minuteurSelection: ReturnType<typeof setTimeout> | null = null;
+  let framePositionPopup: number | null = null;
   let segmentLocuteurEnEdition = $state<string | null>(null);
   let nomLocuteurSaisi = $state('');
   let champNomLocuteur = $state<HTMLInputElement | undefined>();
@@ -151,6 +155,37 @@
   function fermerAjoutSelection() {
     texteSelectionne = '';
     refusSelection = false;
+    plageSelectionnee = null;
+    positionPopup = null;
+  }
+
+  async function positionnerPopup() {
+    await tick();
+    if (!texteSelectionne || !plageSelectionnee || !popupSelection) return;
+    const selection = plageSelectionnee.getBoundingClientRect();
+    const popup = popupSelection.getBoundingClientRect();
+    const gauche = Math.min(
+      Math.max(8, selection.left + (selection.width - popup.width) / 2),
+      window.innerWidth - popup.width - 8
+    );
+    const haut = Math.max(
+      8,
+      selection.top - popup.height - 10 >= 8
+        ? selection.top - popup.height - 10
+        : selection.bottom + 10
+    );
+    positionPopup = {
+      gauche,
+      haut: Math.min(haut, window.innerHeight - popup.height - 8),
+    };
+  }
+
+  function programmerPositionPopup() {
+    if (framePositionPopup !== null) return;
+    framePositionPopup = requestAnimationFrame(() => {
+      framePositionPopup = null;
+      void positionnerPopup();
+    });
   }
 
   function parcourir(sens: -1 | 1) {
@@ -236,6 +271,8 @@
       if (!valeur.trim()) return;
       texteSelectionne = valeur;
       refusSelection = false;
+      plageSelectionnee = plage.cloneRange();
+      void positionnerPopup();
     } else {
       fermerAjoutSelection();
     }
@@ -269,12 +306,17 @@
     document.addEventListener('keyup', selectionnerTexte);
     document.addEventListener('selectionchange', programmerSelection);
     document.addEventListener('keydown', echapper);
+    document.addEventListener('scroll', programmerPositionPopup, true);
+    window.addEventListener('resize', programmerPositionPopup);
     return () => {
       document.removeEventListener('mouseup', selectionnerTexte);
       document.removeEventListener('keyup', selectionnerTexte);
       document.removeEventListener('selectionchange', programmerSelection);
       document.removeEventListener('keydown', echapper);
+      document.removeEventListener('scroll', programmerPositionPopup, true);
+      window.removeEventListener('resize', programmerPositionPopup);
       if (minuteurSelection !== null) clearTimeout(minuteurSelection);
+      if (framePositionPopup !== null) cancelAnimationFrame(framePositionPopup);
     };
   });
 </script>
@@ -288,7 +330,7 @@
     <p>
       Survolez ou placez le focus sur un masque pour révéler temporairement son
       original. Cliquez pour basculer toutes ses occurrences. Sélectionnez du texte
-      pour afficher l’ajout de masque dans le panneau latéral.
+      pour afficher l’ajout de masque au-dessus de la sélection.
     </p>
     <ul class="legende" aria-label="Légende des catégories">
       {#each categoriesRelecture as categorie (categorie.id)}
@@ -402,36 +444,54 @@
       {/each}
     </div>
   </div>
+  {#if texteSelectionne}
+    <div
+      class="selection-popover"
+      class:selection-popover-erreur={refusSelection}
+      bind:this={popupSelection}
+      role="group"
+      aria-label="Créer un masque depuis la sélection"
+      style:left={`${positionPopup?.gauche ?? 0}px`}
+      style:top={`${positionPopup?.haut ?? 0}px`}
+      style:visibility={positionPopup ? 'visible' : 'hidden'}
+    >
+      <p class="texte-selectionne">
+        <strong>Texte à masquer</strong>
+        <span>« {texteSelectionne} »</span>
+      </p>
+      <div class="commandes-selection">
+        <div class="choix-categories" role="group" aria-label="Catégorie">
+          {#each categoriesRelecture as categorie (categorie.id)}
+            <button
+              type="button"
+              class="choix-categorie"
+              class:choisi={categorieSelection === categorie.id}
+              aria-pressed={categorieSelection === categorie.id}
+              onclick={() => (categorieSelection = categorie.id)}
+            >
+              <span class={`pastille ${categorie.id}`}></span>{categorie.label}
+            </button>
+          {/each}
+        </div>
+        <div class="actions-selection">
+          <button type="button" class="fr-btn" onclick={ajouterSelection}
+            >Masquer toutes les occurrences</button
+          >
+          <button
+            type="button"
+            class="fr-btn fr-btn--secondary"
+            onclick={fermerAjoutSelection}>Annuler</button
+          >
+        </div>
+      </div>
+      {#if refusSelection}<p class="erreur" role="alert">
+          Cette sélection chevauche un masque existant. Sélectionnez ce masque pour
+          le modifier.
+        </p>{/if}
+    </div>
+  {/if}
   <aside class="panneau" aria-label="Détail du masque sélectionné">
     <h2>Masque sélectionné</h2>
-    {#if texteSelectionne}
-      <div
-        class="selection"
-        role="group"
-        aria-label="Créer un masque depuis la sélection"
-      >
-        <p><strong>Texte sélectionné :</strong> {texteSelectionne}</p>
-        <label
-          >Catégorie<select class="fr-select" bind:value={categorieSelection}
-            >{#each categoriesRelecture as categorie (categorie.id)}<option
-                value={categorie.id}>{categorie.label}</option
-              >{/each}</select
-          ></label
-        >
-        <button type="button" class="fr-btn" onclick={ajouterSelection}
-          >Masquer toutes les occurrences</button
-        >
-        <button
-          type="button"
-          class="fr-btn fr-btn--secondary"
-          onclick={fermerAjoutSelection}>Annuler</button
-        >
-        {#if refusSelection}<p class="erreur" role="alert">
-            Cette sélection chevauche un masque existant. Sélectionnez ce masque pour
-            le modifier.
-          </p>{/if}
-      </div>
-    {/if}
     <p>
       {masques.length
         ? `${indexSelection + 1} sur ${masques.length}`
@@ -532,6 +592,78 @@
     overflow: auto;
     border: 1px solid var(--border-default-grey);
     padding: 1rem;
+  }
+  .selection-popover {
+    position: fixed;
+    z-index: 10;
+    width: min(36rem, calc(100vw - 1rem));
+    box-sizing: border-box;
+    padding: 0.75rem;
+    border: 2px solid var(--border-active-blue-france);
+    background: var(--background-default-grey);
+    box-shadow: 0 4px 16px #0003;
+  }
+  .texte-selectionne {
+    display: grid;
+    gap: 0.2rem;
+    margin: 0 0 0.6rem;
+    overflow-wrap: anywhere;
+  }
+  .texte-selectionne span {
+    max-height: 5rem;
+    overflow: auto;
+  }
+  .commandes-selection {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .choix-categories {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+  .choix-categorie {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    min-height: 2rem;
+    padding: 0.2rem 0.3rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-default-grey);
+    font: inherit;
+    font-size: 0.8rem;
+    line-height: 1.1rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .choix-categorie.choisi {
+    border-color: var(--border-active-blue-france);
+    background: var(--background-contrast-info);
+    font-weight: 700;
+  }
+  .choix-categorie:focus-visible {
+    outline: 2px solid var(--border-active-blue-france);
+    outline-offset: 2px;
+  }
+  .choix-categorie .pastille {
+    flex: 0 0 0.65rem;
+    width: 0.65rem;
+    height: 0.65rem;
+  }
+  .actions-selection {
+    display: grid;
+    justify-items: stretch;
+    gap: 0.35rem;
+  }
+  .actions-selection .fr-btn {
+    white-space: normal;
+  }
+  .selection-popover-erreur {
+    border-color: var(--border-plain-error);
   }
   .source {
     border: 1px solid var(--border-default-grey);
@@ -653,16 +785,10 @@
     white-space: nowrap;
     box-shadow: 0 2px 8px #0003;
   }
-  .original-selectionne,
-  .selection {
+  .original-selectionne {
     padding: 0.75rem;
     background: var(--background-alt-grey);
   }
-  .selection {
-    border: 1px solid var(--border-default-grey);
-    margin-block: 1rem;
-  }
-  .selection label,
   .panneau label {
     display: block;
     margin-block: 0.4rem;
@@ -691,6 +817,18 @@
       position: static;
       max-height: none;
       grid-row: 2;
+    }
+  }
+  @media (max-width: 36rem) {
+    .commandes-selection {
+      grid-template-columns: 1fr;
+    }
+    .choix-categories {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .actions-selection {
+      grid-template-columns: 1fr auto;
+      align-items: center;
     }
   }
 </style>
