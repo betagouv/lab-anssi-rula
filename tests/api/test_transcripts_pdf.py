@@ -167,12 +167,15 @@ def test_confirme_la_projection_fusionnee_sans_transmettre_les_occurrences() -> 
     body["contenu"] = preparation.contenu
     body["contexte"] = preparation.contexte
     body["locuteurs"] = [locuteur._asdict() for locuteur in preparation.locuteurs]
+    body["locuteurs"][0]["nom_affiche"] = "Ada"
 
     reponse = client.post("/api/transcripts-pdf", json=body)
 
     assert reponse.status_code == 201
+    assert reponse.json()["locuteurs"][0]["nom_affiche"] == "Ada"
     assert depot.sources[0].contenu == preparation.contenu
     assert depot.sources[0].contexte == preparation.contexte
+    assert depot.sources[0].locuteurs[0]["nom_affiche"] == "Ada"
     assert "occurrences" not in body
     assert "contenu_original" not in body
     assert "Pierre" not in depot.sources[0].contenu + depot.sources[0].contexte

@@ -5,6 +5,7 @@ type LocuteurPreparation = {
   identifiant: string;
   role: 'interne' | 'externe' | 'indetermine';
   justification: string;
+  nom_affiche?: string;
 };
 
 type RemplacementPreparation = {

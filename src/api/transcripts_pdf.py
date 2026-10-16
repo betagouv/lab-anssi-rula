@@ -55,6 +55,7 @@ class LocuteurBody(BaseModel):
     identifiant: str
     role: Literal["interne", "externe", "indetermine"]
     justification: str
+    nom_affiche: str = ""
 
 
 class SourcePdfBody(BaseModel):
