@@ -51,8 +51,8 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : implémentation, contrôles automatisés, parcours navigateur synthétique et revue Sol terminés.
-- Prochaine action : préparer et pousser une PR brouillon sans fusion.
+- État du code : PR brouillon #34 ouverte; implémentation, contrôles automatisés, parcours navigateur synthétique et revue Sol terminés.
+- Prochaine action : revue humaine de la PR; aucune fusion automatique.
 - Risques ou limites : une réponse Albert peut contenir des plages distinctes dont l’expansion exacte globale se chevauche; la préparation échoue alors atomiquement avec un message générique. L’essai Albert synthétique a confirmé ce refus sûr, mais n’a pas validé la sémantique après la dernière amélioration du prompt.
 
 ## Revue indépendante
