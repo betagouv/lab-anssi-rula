@@ -813,13 +813,13 @@
             programmerSauvegarde();
           }}
         />
-        <p role="status" aria-live="polite">
-          {etatSynchronisation === 'enregistre'
-            ? 'Relecture enregistrée temporairement sur le serveur.'
-            : etatSynchronisation === 'en_attente'
-              ? 'Enregistrement des modifications…'
-              : 'La synchronisation a échoué. Gardez cette page ouverte et réessayez.'}
-        </p>
+        {#if etatSynchronisation === 'en_attente'}
+          <p role="status" aria-live="polite">Enregistrement des modifications…</p>
+        {:else if etatSynchronisation === 'echec'}
+          <p role="alert">
+            La synchronisation a échoué. Gardez cette page ouverte et réessayez.
+          </p>
+        {/if}
         <button
           class="fr-btn fr-btn--secondary"
           type="button"

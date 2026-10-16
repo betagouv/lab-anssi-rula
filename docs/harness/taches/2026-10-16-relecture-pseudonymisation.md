@@ -62,6 +62,8 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 - Parcours de sélection synthétique initial, avant le placement en popup : à 1280×720, la zone transcript reste à `x=16, y=172, 924×325,25` avant et après sélection; cliquer sur « Occurrence suivante » conserve l’action d’ajout. À 390×844, l’ajout masque bien le texte sélectionné. Les données de test ont été retirées et le viewport réinitialisé.
 - Variante C de l’ajout par sélection : navigateur synthétique à 1280×900, popup ancrée au-dessus de la phrase sélectionnée (`x=211,6`, `y=136`, `576×174,4`); à 390×844, popup au-dessus du texte (`x=8`, `y=344,4`, `374×280,3`) et zone transcript identique avant/après (`x=0`, `y=408,8`, `375×506,4`). Le choix de catégorie conserve la popup et ne déplace pas le document; le clic extérieur la conserve, Échap la ferme, et l’action crée bien le masque avec la catégorie choisie. Les fichiers du scénario synthétique ont été supprimés et le viewport réinitialisé.
 - CI GitHub du code `610a158` : Backend Python, Frontend Svelte, CodeQL, Analyze (actions, JavaScript/TypeScript, Python) et GitGuardian passent.
+- Le message « Relecture enregistrée temporairement sur le serveur. » a été retiré; l’interface n’affiche plus que les états d’enregistrement en cours et d’échec. Après cette modification, `pnpm format:check`, `pnpm lint:check`, `pnpm check`, `pnpm test` (93 tests) et `pnpm build` passent.
+- Contrôle CodeQL du commit `c4833b3` : échec avec une alerte haute `Clear-text storage of sensitive information` sur le cookie de reprise. L’alerte est à revoir : le cookie est aléatoire, `HttpOnly` et `SameSite=Strict`, `Secure` est vrai par défaut hors Compose, mais Compose désactive `Secure` et publie le port sans restriction d’adresse; aucun `SECURITY.md` ne définit le périmètre réseau local.
 
 ## Décisions
 
@@ -72,8 +74,8 @@ Permettre de relire les occurrences pseudonymisées après préparation d’un t
 
 ## Handoff
 
-- État du code : correctif de sélection et variante C de popup sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Les contrôles frontend Windows passent; le harness complet passe le backend et bute sur Rollup Linux manquant dans le `node_modules` Windows partagé sous WSL.
-- Prochaine action : revue humaine de la PR; aucune fusion automatique.
+- État du code : correctif de sélection, variante C de popup et suppression du message d’enregistrement sur `feature/relecture-pseudonymisation`; PR #34 ouverte en brouillon, non fusionnée. Les contrôles frontend Windows passent; le harness complet passe le backend et bute sur Rollup Linux manquant dans le `node_modules` Windows partagé sous WSL. Le CodeQL du dernier commit échoue sur l’alerte haute du cookie de reprise.
+- Prochaine action : revoir l’alerte CodeQL avant la fusion, puis déployer la PR fusionnée via l’action GitHub DÉMO.
 - Risques ou limites : la reprise après F5 est couverte par les tests API et modèle, mais son parcours complet n’a pas été rejoué dans un navigateur. L’essai Albert synthétique initial a révélé le chevauchement; le modèle n’a pas été rappelé après correction. Les tests DeTest valident la fusion déterministe et l’absence de suffixe exposé, sans attester la qualité sémantique Albert après le changement.
 
 ## Revue indépendante
