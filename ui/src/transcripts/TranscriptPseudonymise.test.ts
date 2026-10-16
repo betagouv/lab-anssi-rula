@@ -26,4 +26,17 @@ describe('rendu du transcript pseudonymisé', () => {
     expect(body).not.toContain('<script>');
     expect(body).toContain('[IDENTITE_02]');
   });
+
+  it('colore les marqueurs derrière un champ toujours modifiable', () => {
+    const contenu = 'Zoé [IDENTITE_02]';
+    const { body } = render(TranscriptPseudonymise, {
+      props: { contenu, mode: 'edition', id: 'transcript' },
+    });
+
+    expect(body).toContain('for="transcript"');
+    expect(body).toContain('textarea');
+    expect(body).toContain('aria-hidden="true"');
+    expect(body).toContain('pseudonyme--identite');
+    expect(body).toContain('Zoé [IDENTITE_02]');
+  });
 });

@@ -23,6 +23,7 @@
   import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
   import { decouperLocuteurs } from './modele-locuteurs';
   import TranscriptPseudonymise from './TranscriptPseudonymise.svelte';
+  import ConfirmationPseudonymisation from './ConfirmationPseudonymisation.svelte';
 
   let {
     produitId,
@@ -469,7 +470,7 @@
     etatSynchronisation = 'enregistre';
   }
 
-  async function confirmer() {
+  async function confirmer(): Promise<boolean> {
     enCours = true;
     progression = null;
     erreur = '';
@@ -510,8 +511,10 @@
       transcriptId = resultat.id;
       edition = false;
       await consulter(resultat.id);
+      return true;
     } catch (cause) {
       erreur = cause instanceof Error ? cause.message : 'Enregistrement impossible.';
+      return false;
     } finally {
       enCours = false;
     }
@@ -836,18 +839,22 @@
           </div>
         {/if}
       {:else}
-        <label class="fr-label" for="transcript">Transcript pseudonymisé</label>
-        <textarea class="fr-input" id="transcript" bind:value={contenu} rows="14"
-        ></textarea>
+        <TranscriptPseudonymise
+          bind:contenu
+          mode="edition"
+          id="transcript"
+          lignes={14}
+        />
         <RemplacementsTranscript {remplacements} {conflitsCategoriesFusionnes} />
         <div class="fr-input-group">
-          <label class="fr-label" for="contexte-edite">Contexte pseudonymisé</label>
-          <textarea
-            class="fr-input"
+          <TranscriptPseudonymise
+            bind:contenu={contexte}
+            mode="edition"
             id="contexte-edite"
-            bind:value={contexte}
-            rows="4"
-          ></textarea>
+            titre="Contexte pseudonymisé"
+            lignes={4}
+            legende={false}
+          />
         </div>
       {/if}
       <fieldset>
@@ -880,13 +887,16 @@
           />
         {/each}
       </fieldset>
-      <button
-        class="fr-btn"
-        disabled={enCours ||
+      <ConfirmationPseudonymisation
+        modalId="confirmation-pseudonymisation"
+        confirmationNecessaire={!transcriptId}
+        desactive={enCours ||
           !dateEntretien ||
           (typeSource === 'produit' && !selectionProjet)}
-        onclick={confirmer}>Valider et enregistrer</button
-      >
+        {enCours}
+        {erreur}
+        onconfirmer={confirmer}
+      />
       {#if problemes.length}
         <ul class="problemes" aria-label="Éléments à corriger">
           {#each problemes as probleme (probleme.categorie + probleme.element)}
