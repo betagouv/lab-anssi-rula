@@ -29,11 +29,13 @@ Rendre le transcript enregistré plus lisible en colorant les pseudonymes selon 
 
 ## Validation
 
-- `cd ui && pnpm format:check`, `pnpm lint:check`, `pnpm svelte:check`, `pnpm check`, `pnpm test` (90 tests) et `pnpm build` : réussis.
+- `cd ui && pnpm format:check`, `pnpm lint:check`, `pnpm svelte:check`, `pnpm check`, `pnpm test` (99 tests après intégration de la #34) et `pnpm build` : réussis.
 - Vérification navigateur sur transcript synthétique : les six catégories, pseudonymes, libellés, accents, locuteurs et retours à la ligne sont présents. Sélection, copie et collage natifs restituent le texte pseudonymisé et ses marqueurs comme du texte; aucun mapping d’originaux n’est ajouté.
 - `git diff --check` : réussi.
-- `bash scripts/harness.sh complet` : backend réussi (Ruff, mypy, 325 tests réussis et 2 ignorés, couverture 99 %). Étape frontend WSL interrompue car le `node_modules` partagé Windows ne contient pas le binaire Rollup Linux `@rollup/rollup-linux-x64-gnu`; les contrôles frontend équivalents ont réussi depuis Windows.
+- `bash scripts/harness.sh complet` avant l’intégration de la #34 : backend réussi (Ruff, mypy, 325 tests réussis et 2 ignorés, couverture 99 %). Étape frontend WSL interrompue car le `node_modules` partagé Windows ne contient pas le binaire Rollup Linux `@rollup/rollup-linux-x64-gnu`; les contrôles frontend équivalents ont réussi depuis Windows. La CI GitHub backend et frontend de la #34 passe.
+- L’agrégat CodeQL de la #34 a signalé un niveau élevé (`py/clear-text-storage-sensitive-data`) sur le jeton aléatoire placé dans le cookie `HttpOnly`; l’empreinte seule est conservée en RAM côté serveur. Ce signalement reste à suivre.
 - `bash scripts/harness.sh audit` : non exécuté, contrôle facultatif.
+- Contrôles GitHub de la nouvelle tête de la #35 : Backend Python, Frontend Svelte, CodeQL, analyses de langages et GitGuardian réussis.
 
 ## Décisions
 
@@ -42,13 +44,15 @@ Rendre le transcript enregistré plus lisible en colorant les pseudonymes selon 
 
 ## Handoff
 
-- État du code : implémentation terminée sur `feature/transcript-pseudonymise-couleur`, créée depuis `origin/main` à jour.
-- Prochaine action : pousser la branche et ouvrir une PR vers `main` pour relecture; ne pas fusionner.
+- Base : PR #34 fusionnée dans `main` au commit `17a56e2`.
+- État du code : branche #35 rebasée sur `origin/main`; le rendu coloré reçoit aussi les libellés stables des locuteurs et garde les transformations de la #34.
+- PR : [#35](https://github.com/betagouv/lab-anssi-rula/pull/35), ouverte vers `main` pour relecture; la #35 reste non fusionnée.
+- Contrôles GitHub de la nouvelle tête : tous réussis après le push avec lease.
 - Risques ou limites : le harness complet nécessite des dépendances frontend installées pour Linux dans WSL; elles n’ont pas été ajoutées au `node_modules` partagé.
 
 ## Revue indépendante
 
 - Diff examiné : composant de rendu, découpage des marqueurs, vue d’import et tests associés.
-- Critères vérifiés : six catégories, texte exact pseudonymisé, contenu HTML échappé, locuteurs et marqueurs inconnus préservés.
+- Critères vérifiés : six catégories, texte pseudonymisé exact, contenu HTML échappé, libellés de locuteurs et marqueurs inconnus préservés.
 - Remarques :
 - Verdict : prêt pour relecture
