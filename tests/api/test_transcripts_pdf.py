@@ -145,6 +145,39 @@ def test_confirme_apres_validation_humaine_sans_appel_albert_ni_analyse() -> Non
     assert depot.jobs == []
 
 
+def test_confirme_la_projection_fusionnee_sans_transmettre_les_occurrences() -> None:
+    texte = "Locutrr_01: Pierre; Pierre Leroy; Leroy Dupont; Pierre Leroy Dupont"
+    contexte = "Pierre Leroy Dupont et Pierre"
+    preparation = ServicePreparationTranscript(
+        AdaptateurAlbertDeTest().avec_reponses(
+            _reponses_preparation(
+                texte,
+                contexte,
+                detections=[
+                    ("transcript", "Pierre", "identite"),
+                    ("transcript", "Pierre Leroy", "identite"),
+                    ("transcript", "Leroy Dupont", "organisation"),
+                ],
+            )
+        ),
+        "prompt",
+    ).preparer("reunion.pdf", _pdf(texte), "bizdev", contexte)
+    client, depot, _ = _client(None)
+    body = _payload()
+    body["contenu"] = preparation.contenu
+    body["contexte"] = preparation.contexte
+    body["locuteurs"] = [locuteur._asdict() for locuteur in preparation.locuteurs]
+
+    reponse = client.post("/api/transcripts-pdf", json=body)
+
+    assert reponse.status_code == 201
+    assert depot.sources[0].contenu == preparation.contenu
+    assert depot.sources[0].contexte == preparation.contexte
+    assert "occurrences" not in body
+    assert "contenu_original" not in body
+    assert "Pierre" not in depot.sources[0].contenu + depot.sources[0].contexte
+
+
 def test_modification_apres_validation_humaine_sans_appel_albert() -> None:
     client, depot, _ = _client(None)
     source = depot.ajouter(
