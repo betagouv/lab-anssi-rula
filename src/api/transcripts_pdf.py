@@ -35,6 +35,7 @@ from transcripts_pdf.depot import (
     SourceTranscriptPdf,
 )
 from transcripts_pdf.extraction import ErreurPdf, TAILLE_MAXIMALE
+from transcripts_pdf.export import generer_pdf
 from transcripts_pdf.orchestration import (
     ServiceTranscriptsPdf,
     SourcePdfInvalide,
@@ -566,6 +567,26 @@ def lister(
     service: ServiceTranscriptsPdf = Depends(fabrique_service_transcripts_pdf),
 ) -> list[dict]:
     return [_source_dict(source) for source in service.lister(produit_id)]
+
+
+@routeur.get("/transcripts-pdf/{transcript_id}/pdf")
+def exporter_pdf(
+    transcript_id: int,
+    depot: DepotTranscriptsPdf = Depends(fabrique_depot_transcripts_pdf),
+) -> Response:
+    source = depot.obtenir(transcript_id)
+    if source is None:
+        raise HTTPException(404, headers={"Cache-Control": "no-store"})
+    nom = f"transcript-{source.type_source}-{source.id}-pseudonymise.pdf"
+    return Response(
+        content=generer_pdf(source),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nom}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @routeur.get("/transcripts-pdf/{transcript_id}")

@@ -11,6 +11,7 @@ dependencies = [
     "python-multipart",
     "httpx",
     "pypdf",
+    "reportlab",
     "slowapi",
     "starlette",
 ]
@@ -23,6 +24,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "types-psycopg2",
+    "types-reportlab>=5.0.0.20261008",
 ]
 
 [tool.mypy]

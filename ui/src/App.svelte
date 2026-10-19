@@ -109,10 +109,12 @@
 {:else if route?.nom === 'source' && produit && route.source}
   <AjouterSource {produit} source={route.source} />
 {:else if route?.nom === 'source-pdf' && produit && route.source}
-  <ImportTranscriptPdf
-    produitId={produit.id}
-    typeSource={route.source === 'transcript' ? 'produit' : 'bizdev'}
-  />
+  {#key `${produit.id}-${route.source}`}
+    <ImportTranscriptPdf
+      produitId={produit.id}
+      typeSource={route.source === 'transcript' ? 'produit' : 'bizdev'}
+    />
+  {/key}
 {:else if route?.nom === 'transcript-produit' && produit}
   <EntretienTranscriptPdf
     produitId={route.produitId}
@@ -131,11 +133,13 @@
     projetInitialId={projet.id}
   />
 {:else if route?.nom === 'source-pdf-projet' && projet}
-  <ImportTranscriptPdf
-    produitId={projet.produit_id}
-    projetId={projet.id}
-    typeSource="produit"
-  />
+  {#key `${projet.id}-produit`}
+    <ImportTranscriptPdf
+      produitId={projet.produit_id}
+      projetId={projet.id}
+      typeSource="produit"
+    />
+  {/key}
 {:else if projet && route?.nom === 'projet'}
   <ProjetVue {projet} produitNom={produitEntete} />
 {:else if projet && route?.nom === 'configuration'}
