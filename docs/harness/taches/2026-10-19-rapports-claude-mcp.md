@@ -46,7 +46,9 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 
 - `bash scripts/harness.sh complet --cible backend` : Ruff et mypy réussis; 341 tests passés, 4 intégrations ignorées.
 - `NODE_OPTIONS=--experimental-global-webcrypto bash scripts/harness.sh complet --cible frontend` : sous WSL Node 24.13.0, 18 suites/101 tests passés, svelte-check sans erreur ni avertissement, `pnpm check`, ESLint, Prettier et build Vite réussis. L’option compense le global WebCrypto manquant dans l’isolate Vitest de ce runtime local.
-- `RULA_TEST_POSTGRES=1 uv run --offline pytest -q tests/integration/test_rapports_claude_postgres.py` avec base dédiée `rula_mcp_test` sur `127.0.0.1:55432` : 2 tests passés en 2,33 s; preuve dans `.harness/rapports/pr1-postgres-integration.log`.
+- `RULA_TEST_POSTGRES=1 uv run pytest tests/integration/test_rapports_claude_postgres.py -q` sur la base dédiée `rula_mcp_test` (`127.0.0.1:55432`) : 3 tests passés, dont client MCP stdio réel avec écriture PostgreSQL puis relecture depuis un second processus; cette base contient uniquement les données synthétiques du test.
+- Le harness PR2 est passé : `ruff check src/ tests/`, mypy sur 146 modules, puis `pytest -q` avec 345 tests passés et 5 ignorés; les 3 intégrations PostgreSQL dédiées passent séparément. `tests/test_serveur_mcp.py` vérifie le client SDK officiel v2, les trois outils, l’idempotence et les réponses HTTP sans bearer, avec bearer faux et valide.
+- Frontend inchangé revalidé sous WSL Node 24.13.0 et ses dépendances Linux existantes : 18 suites / 101 tests, Svelte-check (0 erreur, 0 avertissement), `pnpm check`, lint, format et build Vite réussis. `NODE_OPTIONS=--experimental-global-webcrypto` est requis par l’isolate Vitest local.
 - La CI utilise le service éphémère `pgvector/pgvector:pg17`, applique les migrations puis exécute ces intégrations dans une étape isolée. La CI distante n’a pas encore été exécutée.
 - `bash scripts/harness.sh audit` : non requis.
 - Tests d’intégration PostgreSQL exécutés uniquement sur la base dédiée du worktree; identité `rula_mcp_test|rula_test|5432`, tables initialement vides, extension `vector` disponible.
@@ -58,8 +60,9 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 
 ## Handoff
 
-- État du code : PR1 domaine/API relue et acceptée par Sol; worktree `D:\RULA-mcp-integration-20261019`, branche `feature/rapports-claude`, base `origin/main` à `8a2c9a7`.
-- Prochaine action : commit et draft PR1, puis démarrer le serveur MCP dans la branche empilée.
+- État du code : PR1 domaine/API et PR2 transports MCP relus par Sol; worktree `D:\RULA-mcp-integration-20261019`, branche PR2 `feature/mcp-transcripts` empilée sur PR1 `feature/rapports-claude`.
+- PR2 expose `python -m serveur_mcp` en stdio et `serveur_mcp:app` en HTTP `/mcp`; `/healthz` est public, les autres chemins exigent un bearer constant-time, et chaque transport vérifie en lecture seule les colonnes nécessaires avant de servir. Aucun transport ne lance de migration.
+- Prochaine action : ouvrir le draft PR2 puis poursuivre la consultation minimale et le parcours synthétique PR3.
 - Risques ou limites : CI distante non exécutée; `pgdata/` est la base jetable locale du conteneur, reste hors staging. Le POC local n’ajoute pas d’authentification applicative à RULA.
 
 ## Revue indépendante

@@ -1,5 +1,6 @@
 import os
 from typing import NamedTuple
+from pydantic import SecretStr
 
 
 class Albert(NamedTuple):
@@ -35,8 +36,15 @@ class Rula(NamedTuple):
     secure_cookie: bool
 
 
+class Mcp(NamedTuple):
+    hote: str
+    port: int
+    jeton: SecretStr
+
+
 class Configuration(NamedTuple):
     rula: Rula
+    mcp: Mcp
     albert: Albert
     base_de_donnees: BaseDeDonnees
     correspondance: Correspondance
@@ -74,6 +82,11 @@ def charge_configuration() -> Configuration:
             ),
             secure_cookie=os.environ.get("RULA_COOKIE_SECURE", "true").lower()
             in {"1", "true", "yes", "on"},
+        ),
+        mcp=Mcp(
+            hote=os.environ.get("RULA_MCP_HOTE", "0.0.0.0"),
+            port=int(os.environ.get("RULA_MCP_PORT", "8080")),
+            jeton=SecretStr(os.environ.get("RULA_MCP_BEARER_TOKEN", "")),
         ),
         albert=Albert(
             url=os.environ.get("ALBERT_URL", ""),

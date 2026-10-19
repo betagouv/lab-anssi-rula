@@ -8,6 +8,7 @@ from configuration import (
     BaseDeDonnees,
     Configuration,
     Correspondance,
+    Mcp,
     Rula,
     charge_configuration,
     _valider_effort_analyse_transcripts,
@@ -20,6 +21,9 @@ def test_valeurs_par_defaut():
     assert config.rula.port == 3001
     assert config.rula.max_requetes_par_minute == 100
     assert config.rula.secure_cookie
+    assert config.mcp.hote == "0.0.0.0"
+    assert config.mcp.port == 8080
+    assert not config.mcp.jeton.get_secret_value()
     assert config.albert.modele == "openweight-medium"
     assert config.albert.modele_embeddings == "BAAI/bge-m3"
     assert config.albert.delai_transcripts == 180
@@ -58,6 +62,7 @@ def test_configuration_constructible_avec_valeurs_custom():
             max_requetes_par_minute=50,
             secure_cookie=False,
         ),
+        mcp=Mcp(hote="127.0.0.1", port=9000, jeton=charge_configuration().mcp.jeton),
         albert=Albert(
             url="https://albert.example.com",
             cle_api="ma-cle",
