@@ -1,0 +1,70 @@
+# Tâche : consulter et enregistrer les analyses Claude des transcripts confirmés
+
+Statut : PR1 domaine/API prêt; transports MCP, consultation UI et runbook restent à livrer.
+
+## Objectif
+
+Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés, puis d’enregistrer dans RULA des analyses Markdown révisables depuis l’interface, sans remplacer ni appeler Albert.
+
+## Périmètre
+
+- Inclus : historique immuable et idempotent des analyses Claude; catalogue, lecture paginée et consultation REST; trois outils MCP `lister_transcripts`, `lire_transcript` et `enregistrer_analyse`; transport stdio local et transport HTTP authentifié; consultation minimale dans l’écran d’import des transcripts; recette avec données synthétiques; documentation et workflow manuel Clever Cloud.
+- Exclu : déploiement ou provisionnement cloud, nouvel addon PostgreSQL, appels à un modèle externe, modification des analyses Albert, lecture des sources non confirmées, migration destructive ou changement de l’anonymisation existante.
+
+## Contrat de données et API
+
+- Une source est éligible si `confirme = TRUE` et `type_source IN ('produit', 'bizdev')`.
+- L’empreinte SHA-256 est calculée côté serveur sur une représentation canonique de `type_source`, `contenu`, `contexte` et `locuteurs`.
+- `rapports_claude` conserve `id`, `transcript_id` avec cascade à la suppression, révision, empreinte, clé UUID globalement unique, Markdown et date serveur. Les rapports sont immuables; une modification de source les rend obsolètes sans les modifier. Le statut courant du catalogue est dérivé de la révision, que le dépôt PDF incrémente lors de toute modification applicative; l’empreinte protège les lectures par blocs et les écritures. Les analyses Albert ne participent pas à ce statut.
+- L’écriture exige une clé UUID, la révision et l’empreinte observées. Une clé réutilisée pour la même requête retourne le même rapport, même après modification de source; la même clé pour une requête différente produit un conflit. Une nouvelle clé vérifie sous verrou l’éligibilité, la révision et l’empreinte avant insertion. Le Markdown doit être non blanc et contenir au plus 200 000 caractères.
+- Le catalogue ordonne les IDs de transcript par ordre croissant, pages de 20 par défaut et 100 au maximum, avec filtres produit, projet, type et statut `tous|analyses|non_analyses`. Il ne retourne ni titre, ni nom de fichier, ni nom de produit, ni contenu.
+- La lecture source assemble contexte et transcript avec des séparateurs explicites, renvoie la longueur totale et des blocs d’au plus 30 000 caractères Unicode. Après le premier bloc, chaque lecture exige révision et empreinte; toute modification rend la lecture conflictuelle. L’historique est paginé en métadonnées; un rapport est lu par blocs avec état courant ou obsolète.
+- Les lectures REST restent dans le périmètre de l’API RULA : `GET /api/rapports-claude/transcripts`, `GET /api/rapports-claude/transcripts/{id}`, `GET /api/rapports-claude/transcripts/{id}/rapports` et `GET /api/rapports-claude/{rapport_id}`. Le POC local n’a pas d’authentification applicative; l’accès public n’est autorisé que derrière la protection HTTP Basic Clever existante. L’écriture reste réservée à MCP.
+- Le serveur MCP expose exactement ces trois outils. `lire_transcript` prend le mode explicite `source|historique|rapport`. Le transport stdio local utilise la configuration PostgreSQL RULA; le transport HTTP stateless `/mcp` exige un bearer secret comparé en temps constant sur toute route hors santé minimale, échoue au démarrage si le secret manque et ne journalise jamais ce secret.
+
+## Critères d’acceptation
+
+- [ ] La migration additive n’efface aucune donnée, conserve l’historique et cascade uniquement à la suppression du transcript.
+- [ ] Le domaine distingue source absente, source non éligible, source modifiée et conflit d’idempotence; les tests métier couvrent replay, conflit de clé, obsolescence et limites Markdown.
+- [ ] Une modification du transcript via le parcours PDF augmente sa révision, rend l’ancien rapport obsolète et réintègre la source au filtre « non analysées ».
+- [ ] Les dépôts PostgreSQL ouvrent une connexion par opération et ne partagent pas de connexion mutable.
+- [ ] Les routes REST exposent seulement les métadonnées nécessaires et des lectures paginées/bloc par bloc.
+- [ ] Le serveur MCP implémente les trois outils en stdio et HTTP; les tests de protocole vérifient authentification absente/incorrecte/correcte, blocs, écriture et persistance après redémarrage.
+- [ ] L’interface permet de retrouver un rapport, son statut courant/obsolète et sa date; le Markdown est affiché comme texte échappé.
+- [ ] La recette de bout en bout synthétique couvre anonymisation test, confirmation API, catalogue MCP, écriture et relecture du rapport dans RULA sans appel réseau Albert.
+- [ ] Le workflow manuel et le runbook isolent les identifiants de l’application MCP des secrets DEMO et n’effectuent aucun déploiement dans cette tâche.
+- [ ] Les branches stacked déclenchent la CI PR. Les contrôles backend et frontend requis passent avant chaque PR.
+
+## Plan
+
+1. Ajouter le domaine, le dépôt de test, l’adaptateur PostgreSQL, la migration additive et les lectures REST.
+2. Ajouter les transports MCP stdio et HTTP autour d’une factory d’outils partagée et valider le protocole.
+3. Rendre les rapports retrouvables dans l’écran de transcript et exécuter la recette synthétique intégrée.
+4. Documenter la configuration d’exploitation et ajouter un workflow manuel séparé, sans provisionner ni déployer.
+
+## Validation
+
+- `bash scripts/harness.sh complet --cible backend` : Ruff et mypy réussis; 341 tests passés, 4 intégrations ignorées.
+- `NODE_OPTIONS=--experimental-global-webcrypto bash scripts/harness.sh complet --cible frontend` : sous WSL Node 24.13.0, 18 suites/101 tests passés, svelte-check sans erreur ni avertissement, `pnpm check`, ESLint, Prettier et build Vite réussis. L’option compense le global WebCrypto manquant dans l’isolate Vitest de ce runtime local.
+- `RULA_TEST_POSTGRES=1 uv run --offline pytest -q tests/integration/test_rapports_claude_postgres.py` avec base dédiée `rula_mcp_test` sur `127.0.0.1:55432` : 2 tests passés en 2,33 s; preuve dans `.harness/rapports/pr1-postgres-integration.log`.
+- La CI utilise le service éphémère `pgvector/pgvector:pg17`, applique les migrations puis exécute ces intégrations dans une étape isolée. La CI distante n’a pas encore été exécutée.
+- `bash scripts/harness.sh audit` : non requis.
+- Tests d’intégration PostgreSQL exécutés uniquement sur la base dédiée du worktree; identité `rula_mcp_test|rula_test|5432`, tables initialement vides, extension `vector` disponible.
+
+## Décisions
+
+- ADR associée : [0004 — Rapports Claude et accès MCP](../../adr/0004-rapports-claude-mcp.md).
+- Ordre des PR : `feature/rapports-claude` → `feature/mcp-transcripts` → `feature/parcours-rapports-claude` → `ops/deploiement-mcp-clever`. Aucune fusion ni exécution de déploiement n’est incluse.
+
+## Handoff
+
+- État du code : PR1 domaine/API relue et acceptée par Sol; worktree `D:\RULA-mcp-integration-20261019`, branche `feature/rapports-claude`, base `origin/main` à `8a2c9a7`.
+- Prochaine action : commit et draft PR1, puis démarrer le serveur MCP dans la branche empilée.
+- Risques ou limites : CI distante non exécutée; `pgdata/` est la base jetable locale du conteneur, reste hors staging. Le POC local n’ajoute pas d’authentification applicative à RULA.
+
+## Revue indépendante
+
+- Diff examiné :
+- Critères vérifiés :
+- Remarques :
+- Verdict :

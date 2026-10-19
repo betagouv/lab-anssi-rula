@@ -9,6 +9,7 @@ from api.idees import routeur as routeur_idees
 from api.identites import routeur as routeur_identites
 from api.produits import routeur as routeur_produits
 from api.projets import routeur as routeur_projets
+from api.rapports_claude import routeur as routeur_rapports_claude
 from api.retours_bizdev import routeur as routeur_retours_bizdev
 from api.transcripts import routeur as routeur_transcripts
 from api.transcripts_pdf import routeur as routeur_transcripts_pdf
@@ -22,6 +23,7 @@ routeur.include_router(routeur_produits)
 routeur.include_router(routeur_projets)
 routeur.include_router(routeur_transcripts)
 routeur.include_router(routeur_transcripts_pdf)
+routeur.include_router(routeur_rapports_claude)
 routeur.include_router(routeur_analyses)
 routeur.include_router(routeur_besoins)
 routeur.include_router(routeur_fonctionnalites)
