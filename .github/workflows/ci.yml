@@ -62,7 +62,7 @@ jobs:
           DB_UTILISATEUR: rula_test
           DB_MOT_DE_PASSE: ''
           RULA_TEST_POSTGRES: '1'
-        run: uv run pytest tests/integration/test_rapports_claude_postgres.py
+        run: PYTHONPATH=.:src uv run pytest tests/integration/test_rapports_claude_postgres.py
 
   frontend:
     name: Frontend Svelte

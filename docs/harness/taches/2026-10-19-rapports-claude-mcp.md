@@ -1,6 +1,6 @@
 # Tâche : consulter et enregistrer les analyses Claude des transcripts confirmés
 
-Statut : PR1 domaine/API prêt; transports MCP, consultation UI et runbook restent à livrer.
+Statut : PR1 et PR2 livrés en drafts; PR3 en validation; PR4 reste à intégrer.
 
 ## Objectif
 
@@ -30,8 +30,8 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 - [ ] Les dépôts PostgreSQL ouvrent une connexion par opération et ne partagent pas de connexion mutable.
 - [ ] Les routes REST exposent seulement les métadonnées nécessaires et des lectures paginées/bloc par bloc.
 - [ ] Le serveur MCP implémente les trois outils en stdio et HTTP; les tests de protocole vérifient authentification absente/incorrecte/correcte, blocs, écriture et persistance après redémarrage.
-- [ ] L’interface permet de retrouver un rapport, son statut courant/obsolète et sa date; le Markdown est affiché comme texte échappé.
-- [ ] La recette de bout en bout synthétique couvre anonymisation test, confirmation API, catalogue MCP, écriture et relecture du rapport dans RULA sans appel réseau Albert.
+- [x] L’interface permet de retrouver un rapport, son statut courant/obsolète et sa date; le Markdown est affiché comme texte échappé.
+- [x] La recette de bout en bout synthétique couvre anonymisation test, confirmation API, catalogue MCP, écriture et relecture du rapport dans RULA sans appel réseau Albert.
 - [ ] Le workflow manuel et le runbook isolent les identifiants de l’application MCP des secrets DEMO et n’effectuent aucun déploiement dans cette tâche.
 - [ ] Les branches stacked déclenchent la CI PR. Les contrôles backend et frontend requis passent avant chaque PR.
 
@@ -47,8 +47,11 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 - `bash scripts/harness.sh complet --cible backend` : Ruff et mypy réussis; 341 tests passés, 4 intégrations ignorées.
 - `NODE_OPTIONS=--experimental-global-webcrypto bash scripts/harness.sh complet --cible frontend` : sous WSL Node 24.13.0, 18 suites/101 tests passés, svelte-check sans erreur ni avertissement, `pnpm check`, ESLint, Prettier et build Vite réussis. L’option compense le global WebCrypto manquant dans l’isolate Vitest de ce runtime local.
 - `RULA_TEST_POSTGRES=1 uv run pytest tests/integration/test_rapports_claude_postgres.py -q` sur la base dédiée `rula_mcp_test` (`127.0.0.1:55432`) : 3 tests passés, dont client MCP stdio réel avec écriture PostgreSQL puis relecture depuis un second processus; cette base contient uniquement les données synthétiques du test.
-- Le harness PR2 est passé : `ruff check src/ tests/`, mypy sur 146 modules, puis `pytest -q` avec 345 tests passés et 5 ignorés; les 3 intégrations PostgreSQL dédiées passent séparément. `tests/test_serveur_mcp.py` vérifie le client SDK officiel v2, les trois outils, l’idempotence et les réponses HTTP sans bearer, avec bearer faux et valide.
+- Le scénario intégré PR3 exécute l’upload PDF avec `AdaptateurAlbertDeTest`, vérifie que la source pseudonymisée n’apparaît au catalogue qu’après confirmation API, puis la lit et écrit un rapport via le client MCP avant relecture REST. `PYTHONPATH=.:src RULA_TEST_POSTGRES=1 uv run pytest tests/integration/test_rapports_claude_postgres.py -q` : 4 tests passés en 24,18 s sur la base dédiée; aucune requête Albert externe.
+- PR3 corrige également les pages complètes du catalogue et de l’historique, ajoute l’actualisation manuelle et distingue une erreur de chargement de l’état « à analyser ». Une actualisation recharge aussi le rapport ouvert pour éviter un statut courant périmé. La confirmation de recette utilise une date synthétique explicite.
+- Le harness backend PR3 est passé : `ruff check src/ tests/`, mypy sur 146 modules, puis `pytest -q` avec 345 tests passés et 6 ignorés; les 4 intégrations PostgreSQL dédiées passent séparément. `tests/test_serveur_mcp.py` vérifie le client SDK officiel v2, les trois outils, l’idempotence et les réponses HTTP sans bearer, avec bearer faux et valide.
 - Frontend inchangé revalidé sous WSL Node 24.13.0 et ses dépendances Linux existantes : 18 suites / 101 tests, Svelte-check (0 erreur, 0 avertissement), `pnpm check`, lint, format et build Vite réussis. `NODE_OPTIONS=--experimental-global-webcrypto` est requis par l’isolate Vitest local.
+- Harness frontend PR3 sous WSL Node 24.13.0 : `NODE_OPTIONS=--experimental-global-webcrypto pnpm check` (Svelte-check 0 erreur/avertissement et TypeScript), `pnpm lint:check`, `pnpm format:check`, `pnpm test` (19 suites, 102 tests) et `pnpm build` réussis. Les dépendances Linux isolées du worktree ont été réutilisées.
 - La CI utilise le service éphémère `pgvector/pgvector:pg17`, applique les migrations puis exécute ces intégrations dans une étape isolée. La CI distante n’a pas encore été exécutée.
 - `bash scripts/harness.sh audit` : non requis.
 - Tests d’intégration PostgreSQL exécutés uniquement sur la base dédiée du worktree; identité `rula_mcp_test|rula_test|5432`, tables initialement vides, extension `vector` disponible.
@@ -60,9 +63,9 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 
 ## Handoff
 
-- État du code : PR1 domaine/API et PR2 transports MCP relus par Sol; worktree `D:\RULA-mcp-integration-20261019`, branche PR2 `feature/mcp-transcripts` empilée sur PR1 `feature/rapports-claude`.
+- État du code : PR1 domaine/API et PR2 transports MCP relus par Sol; PR3 consultation et recette validées par Sol, contrôles complets réussis avant draft. Worktree `D:\RULA-mcp-integration-20261019`, branche PR3 `feature/parcours-rapports-claude` empilée sur PR2 `feature/mcp-transcripts` et PR1 `feature/rapports-claude`.
 - PR2 expose `python -m serveur_mcp` en stdio et `serveur_mcp:app` en HTTP `/mcp`; `/healthz` est public, les autres chemins exigent un bearer constant-time, et chaque transport vérifie en lecture seule les colonnes nécessaires avant de servir. Aucun transport ne lance de migration.
-- Prochaine action : ouvrir le draft PR2 puis poursuivre la consultation minimale et le parcours synthétique PR3.
+- Prochaine action : terminer les contrôles frontend complets, puis ouvrir le draft PR3; intégrer ensuite les trois fichiers préparés pour PR4 après leurs corrections de revue.
 - Risques ou limites : CI distante non exécutée; `pgdata/` est la base jetable locale du conteneur, reste hors staging. Le POC local n’ajoute pas d’authentification applicative à RULA.
 
 ## Revue indépendante

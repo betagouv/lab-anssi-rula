@@ -4,18 +4,27 @@ from datetime import date
 import os
 from pathlib import Path
 import sys
+import time
 from uuid import uuid4
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 import psycopg2
 import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
+from api.api import routeur
+from api.transcripts_pdf import fabrique_service_preparation_pdf
 from configuration import charge_configuration
 from infra.postgres.depot_rapports_claude import DepotRapportsClaudePostgres
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from rapports_claude.depot import ConflitIdempotence, SourceModifiee
 from rapports_claude.service import ServiceRapportsClaude
+from serveur_mcp import fabrique_serveur_mcp
+from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
+from tests.test_transcripts_pdf import _pdf, _reponses_preparation
+from transcripts_pdf.service import ServicePreparationTranscript
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RULA_TEST_POSTGRES") != "1", reason="PostgreSQL integration disabled"
@@ -282,3 +291,110 @@ async def test_serveur_stdio_persiste_un_rapport_entre_processus(
             "lire_transcript", {"mode": "rapport", "rapport_id": rapport_id}
         )
         assert rapport.structured_content["bloc"] == "Analyse MCP stdio synthétique"
+
+
+@pytest.mark.asyncio
+async def test_preparation_confirmee_mcp_et_lecture_rest(
+    transcript_postgres: tuple[int, int, int, int, int],
+) -> None:
+    _, produit_id, _, _, _ = transcript_postgres
+    texte = "Speaker_01: Alice présente une idée."
+    service_preparation = ServicePreparationTranscript(
+        AdaptateurAlbertDeTest().avec_reponses(
+            _reponses_preparation(
+                texte, detections=[("transcript", "Alice", "identite")]
+            )
+        ),
+        "Prompt synthétique",
+    )
+    application = FastAPI()
+    application.include_router(routeur, prefix="/api")
+    application.dependency_overrides[fabrique_service_preparation_pdf] = lambda: (
+        service_preparation
+    )
+    with TestClient(
+        application,
+        base_url="https://testserver",
+        headers={"Origin": "https://testserver"},
+    ) as client:
+        avant = client.get(
+            "/api/rapports-claude/transcripts",
+            params={"produit_id": produit_id, "type_source": "bizdev"},
+        ).json()["elements"]
+        soumission = client.post(
+            "/api/transcripts-pdf/preparation",
+            data={"type_source": "bizdev"},
+            files={"fichier": ("reunion.pdf", _pdf(texte), "application/pdf")},
+        )
+        assert soumission.status_code == 202
+        jeton = soumission.json()["identifiant"]
+        chemin = f"/api/transcripts-pdf/preparation/{jeton}"
+        preparation = client.get(chemin).json()
+        for _ in range(100):
+            if preparation["statut"] != "en_cours":
+                break
+            time.sleep(0.01)
+            preparation = client.get(chemin).json()
+        assert preparation["statut"] == "termine"
+        assert "Alice" not in preparation["contenu"]
+        assert "[IDENTITE_01]" in preparation["contenu"]
+        assert (
+            client.get(
+                "/api/rapports-claude/transcripts",
+                params={"produit_id": produit_id, "type_source": "bizdev"},
+            ).json()["elements"]
+            == avant
+        )
+
+        confirmation = client.post(
+            "/api/transcripts-pdf",
+            json={
+                "type_source": "bizdev",
+                "nom_source": preparation["nom_source"],
+                "produit_id": produit_id,
+                "projet_id": None,
+                "date_entretien": "2026-10-19",
+                "contenu": preparation["contenu"],
+                "contexte": preparation["contexte"],
+                "locuteurs": preparation["locuteurs"],
+            },
+        )
+        assert confirmation.status_code == 201
+        transcript_id = confirmation.json()["id"]
+        assert transcript_id not in {element["id"] for element in avant}
+        client.delete(chemin)
+
+        depot = DepotRapportsClaudePostgres(charge_configuration().base_de_donnees)
+        service = ServiceRapportsClaude(depot)
+        async with Client(fabrique_serveur_mcp(lambda: service)) as mcp:
+            catalogue = await mcp.call_tool(
+                "lister_transcripts",
+                {"produit_id": produit_id, "type_source": "bizdev"},
+            )
+            assert transcript_id in {
+                element["id"] for element in catalogue.structured_content["elements"]
+            }
+            source = await mcp.call_tool(
+                "lire_transcript",
+                {"mode": "source", "transcript_id": transcript_id},
+            )
+            assert "[IDENTITE_01]" in source.structured_content["bloc"]
+            assert "Alice" not in source.structured_content["bloc"]
+            analyse = await mcp.call_tool(
+                "enregistrer_analyse",
+                {
+                    "transcript_id": transcript_id,
+                    "revision": source.structured_content["revision"],
+                    "empreinte": source.structured_content["empreinte"],
+                    "cle_idempotence": str(uuid4()),
+                    "contenu": "# Analyse synthétique\n\nBesoin confirmé.",
+                },
+            )
+            rapport_id = analyse.structured_content["rapport_id"]
+        historique = client.get(
+            f"/api/rapports-claude/transcripts/{transcript_id}/rapports"
+        ).json()
+        rapport = client.get(f"/api/rapports-claude/{rapport_id}").json()
+        assert historique["elements"][0]["id"] == rapport_id
+        assert rapport["bloc"] == "# Analyse synthétique\n\nBesoin confirmé."
+        assert rapport["courant"]
