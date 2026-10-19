@@ -174,6 +174,15 @@
     document.getElementById(`onglet-${suivant}`)?.focus();
   }
 
+  async function chargerSources() {
+    const valeur = await fetch(`/api/transcripts-pdf/produits/${produitId}`).then(
+      (reponse) => reponse.json()
+    );
+    sources = valeur.filter(
+      (source: { type_source: string }) => source.type_source === typeSource
+    );
+  }
+
   onMount(() => {
     monte = true;
     window.addEventListener('beforeunload', avertirAvantSortie);
@@ -182,13 +191,7 @@
       listerProjets(produitId)
         .then((valeur) => (projets = valeur))
         .finally(() => (projetsCharges = true));
-    fetch(`/api/transcripts-pdf/produits/${produitId}`)
-      .then((reponse) => reponse.json())
-      .then((valeur) => {
-        sources = valeur.filter(
-          (source: { type_source: string }) => source.type_source === typeSource
-        );
-      });
+    void chargerSources();
     const preparationEnregistree = sessionStorage.getItem(clePreparation);
     if (preparationEnregistree && /^[0-9a-f]{32}$/.test(preparationEnregistree)) {
       jetonPreparation = preparationEnregistree;
@@ -504,6 +507,7 @@
         );
       }
       problemes = [];
+      await chargerSources();
       await abandonnerPreparation();
       contenuOriginal = '';
       contexteOriginal = '';
@@ -584,39 +588,46 @@
   </h1>
   {#if sources.length}
     <h2>Transcripts enregistrés</h2>
-    <table>
-      <thead
-        ><tr><th>Nom de source</th><th>Date</th><th>Projet</th><th>Actions</th></tr
-        ></thead
-      >
-      <tbody
-        >{#each sources as source (source.id)}
-          <tr
-            ><td>{source.nom_source}</td><td
-              >{source.date_entretien ?? 'À compléter'}</td
-            ><td
-              >{projets.find((projet) => projet.id === source.projet_id)?.nom ??
-                '—'}</td
-            ><td
-              ><div class="actions-source">
-                <button
-                  class="fr-btn fr-btn--secondary"
-                  type="button"
-                  onclick={() => consulter(source.id)}>Consulter</button
-                >
-                <SuppressionConfirmee
-                  modalId={`suppression-transcript-${source.id}`}
-                  titre={`Supprimer le transcript « ${source.nom_source} » ?`}
-                  description="Le transcript PDF, son analyse générée et ses données dérivées seront supprimés définitivement."
-                  onconfirmer={() => supprimerTranscriptPdf(source.id)}
-                  onsucces={() => apresSuppression(source.id)}
-                />
-              </div></td
-            ></tr
-          >
-        {/each}</tbody
-      >
-    </table>
+    <div class="tableau">
+      <table>
+        <thead
+          ><tr><th>Nom de source</th><th>Date</th><th>Projet</th><th>Actions</th></tr
+          ></thead
+        ><tbody
+          >{#each sources as source (source.id)}
+            <tr
+              ><td>{source.nom_source}</td><td
+                >{source.date_entretien ?? 'À compléter'}</td
+              ><td
+                >{projets.find((projet) => projet.id === source.projet_id)?.nom ??
+                  '—'}</td
+              ><td
+                ><div class="actions-source">
+                  <button
+                    class="fr-btn fr-btn--secondary"
+                    type="button"
+                    onclick={() => consulter(source.id)}>Consulter</button
+                  >
+                  <a
+                    class="fr-btn fr-btn--secondary"
+                    href={`/api/transcripts-pdf/${source.id}/pdf`}
+                    aria-label={`Télécharger le transcript pseudonymisé de ${source.nom_source} en PDF`}
+                    download>Télécharger PDF</a
+                  >
+                  <SuppressionConfirmee
+                    modalId={`suppression-transcript-${source.id}`}
+                    titre={`Supprimer le transcript « ${source.nom_source} » ?`}
+                    description="Le transcript PDF, son analyse générée et ses données dérivées seront supprimés définitivement."
+                    onconfirmer={() => supprimerTranscriptPdf(source.id)}
+                    onsucces={() => apresSuppression(source.id)}
+                  />
+                </div></td
+              ></tr
+            >
+          {/each}</tbody
+        >
+      </table>
+    </div>
   {/if}
   {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
   {#if !transcriptId || edition}
@@ -973,11 +984,18 @@
             {locuteur.justification}
           </li>{/each}
       </ul>
-      <button
-        class="fr-btn fr-btn--secondary"
-        type="button"
-        onclick={() => (edition = true)}>Modifier</button
-      >
+      <div class="actions-transcript">
+        <button
+          class="fr-btn fr-btn--secondary"
+          type="button"
+          onclick={() => (edition = true)}>Modifier</button
+        >
+        <a
+          class="fr-btn fr-btn--secondary"
+          href={`/api/transcripts-pdf/${transcriptId}/pdf`}
+          download>Télécharger PDF</a
+        >
+      </div>
     </div>
   {/if}
 </main>
@@ -990,9 +1008,37 @@
     padding: 0 1rem;
   }
   .actions-source {
+    align-items: center;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+  .actions-source :global(.fr-btn) {
+    margin: 0;
+  }
+  .tableau {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 48rem;
+    width: 100%;
+  }
+  th,
+  td {
+    padding: 1rem;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .actions-transcript {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .actions-transcript button {
+    margin: 0;
   }
   label {
     display: block;

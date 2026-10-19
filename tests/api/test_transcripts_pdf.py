@@ -3,11 +3,14 @@ from fastapi.testclient import TestClient
 from concurrent.futures import Executor, Future
 import asyncio
 from hashlib import sha256
+from io import BytesIO
 import logging
 import time
 import api.transcripts_pdf as api_pdf
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, cast
+
+from pypdf import PdfReader
 
 from api.transcripts_pdf import (
     _occurrence_dict,
@@ -118,6 +121,44 @@ def test_confirme_et_liste_une_source_anonymisee() -> None:
     assert reponse.json()["nom_source"] == _payload()["nom_source"]
     assert client.get("/api/transcripts-pdf/produits/1").json()[0]["id"] == 1
     assert depot.sources[0].projet_id is None
+
+
+def test_exporte_une_source_confirmee_sans_lancer_analyse() -> None:
+    client, depot, _ = _client(None)
+    source = depot.ajouter(
+        "bizdev",
+        1,
+        None,
+        "entretien.pdf",
+        date(2026, 10, 19),
+        "SPEAKER_01: Le besoin est couvert.",
+        "",
+        [],
+    )
+
+    reponse = client.get(f"/api/transcripts-pdf/{source.id}/pdf")
+
+    assert reponse.status_code == 200
+    assert reponse.headers["content-type"] == "application/pdf"
+    assert reponse.headers["content-disposition"] == (
+        f'attachment; filename="transcript-bizdev-{source.id}-pseudonymise.pdf"'
+    )
+    assert reponse.headers["cache-control"] == "no-store"
+    assert reponse.headers["x-content-type-options"] == "nosniff"
+    assert "Le besoin est couvert." in PdfReader(BytesIO(reponse.content)).pages[
+        0
+    ].extract_text()
+    assert depot.jobs == []
+    assert depot.analyses == []
+
+
+def test_export_pdf_absent_est_un_404_sans_cache() -> None:
+    client, _, _ = _client(None)
+
+    reponse = client.get("/api/transcripts-pdf/404/pdf")
+
+    assert reponse.status_code == 404
+    assert reponse.headers["cache-control"] == "no-store"
 
 
 def test_confirme_un_nom_de_reunion_avec_doubles_tirets() -> None:
