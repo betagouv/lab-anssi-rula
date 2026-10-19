@@ -1,6 +1,6 @@
 # Tâche : consulter et enregistrer les analyses Claude des transcripts confirmés
 
-Statut : PR1, PR2 et PR3 en drafts; PR4 prêt après validation statique et smoke local, aucun déploiement effectué.
+Statut : PR #36–#39 sont des drafts empilés; leurs contrôles CI sont tous verts et Sol a accepté les quatre lots. Aucun PR n’est fusionné et aucun déploiement ni provisionnement cloud n’a été effectué.
 
 ## Objectif
 
@@ -24,16 +24,18 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 
 ## Critères d’acceptation
 
-- [ ] La migration additive n’efface aucune donnée, conserve l’historique et cascade uniquement à la suppression du transcript.
-- [ ] Le domaine distingue source absente, source non éligible, source modifiée et conflit d’idempotence; les tests métier couvrent replay, conflit de clé, obsolescence et limites Markdown.
-- [ ] Une modification du transcript via le parcours PDF augmente sa révision, rend l’ancien rapport obsolète et réintègre la source au filtre « non analysées ».
-- [ ] Les dépôts PostgreSQL ouvrent une connexion par opération et ne partagent pas de connexion mutable.
-- [ ] Les routes REST exposent seulement les métadonnées nécessaires et des lectures paginées/bloc par bloc.
-- [ ] Le serveur MCP implémente les trois outils en stdio et HTTP; les tests de protocole vérifient authentification absente/incorrecte/correcte, blocs, écriture et persistance après redémarrage.
+- [x] La migration additive n’efface aucune donnée, conserve l’historique et cascade uniquement à la suppression du transcript.
+- [x] Le domaine distingue source absente, source non éligible, source modifiée et conflit d’idempotence; les tests métier couvrent replay, conflit de clé, obsolescence et limites Markdown.
+- [x] Une modification du transcript via le parcours PDF augmente sa révision, rend l’ancien rapport obsolète et réintègre la source au filtre « non analysées ».
+- [x] Les dépôts PostgreSQL ouvrent une connexion par opération et ne partagent pas de connexion mutable.
+- [x] Les routes REST exposent seulement les métadonnées nécessaires et des lectures paginées/bloc par bloc.
+- [x] Le serveur MCP implémente les trois outils en stdio et HTTP; les tests de protocole vérifient authentification absente/incorrecte/correcte, blocs, écriture et persistance après redémarrage.
 - [x] L’interface permet de retrouver un rapport, son statut courant/obsolète et sa date; le Markdown est affiché comme texte échappé.
 - [x] La recette de bout en bout synthétique couvre anonymisation test, confirmation API, catalogue MCP, écriture et relecture du rapport dans RULA sans appel réseau Albert.
 - [x] Le workflow manuel et le runbook isolent les identifiants de l’application MCP des secrets DEMO et n’effectuent aucun déploiement dans cette tâche.
 - [x] Les branches stacked déclenchent la CI PR. Les contrôles backend et frontend requis passent avant chaque PR.
+
+- [x] La recette réelle Claude Desktop en stdio lit une source BizDev pseudonymisée, écrit un rapport et le relit; PostgreSQL et REST confirment le même résultat.
 
 ## Plan
 
@@ -54,7 +56,11 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 - Harness frontend PR3 sous WSL Node 24.13.0 : `NODE_OPTIONS=--experimental-global-webcrypto pnpm check` (Svelte-check 0 erreur/avertissement et TypeScript), `pnpm lint:check`, `pnpm format:check`, `pnpm test` (19 suites, 102 tests) et `pnpm build` réussis. Les dépendances Linux isolées du worktree ont été réutilisées.
 - La CI utilise le service éphémère `pgvector/pgvector:pg17`, applique les migrations puis exécute ces intégrations dans une étape isolée.
 - PR3 #38 : CI GitHub Backend Python, Frontend Svelte et GitGuardian toutes réussies sur le commit `06c5d70`.
-- PR4 : Prettier valide le YAML du workflow manuel et le runbook; le build Docker MCP a réussi avec un contexte isolé de 1,06 Mo excluant `pgdata/`. L’image importe `serveur_mcp`; le smoke local contre PostgreSQL de test a vérifié `/healthz` et un refus HTTP 401 sur `/mcp` sans bearer. Le conteneur jetable a été arrêté; aucun service Clever Cloud ni configuration Claude Desktop n’a été modifié.
+- PR4 : Prettier valide le YAML du workflow manuel et le runbook; le build Docker MCP a réussi avec un contexte isolé de 1,06 Mo excluant `pgdata/`. L’image importe `serveur_mcp`; le smoke local contre PostgreSQL de test a vérifié `/healthz` et un refus HTTP 401 sur `/mcp` sans bearer. Le conteneur jetable a été arrêté; aucun service Clever Cloud n’a été modifié.
+- PR #36–#39 : les checks Backend Python, Frontend Svelte et GitGuardian sont tous verts sur les derniers commits des quatre drafts; Sol a accepté chaque lot. Les drafts restent empilés et aucune fusion n’a eu lieu.
+- Recette Claude Desktop locale du 2026-10-19 : la source synthétique confirmée BizDev `110` (produit `31`, révision `1`, empreinte `e787032ab3caaba783d4d4b1cc6bb396e09d86503c454064c614475771e02019`) a été lue par MCP; Claude a enregistré le rapport `28` avec la clé d’idempotence de recette. La base et la lecture paginée REST concordent : rapport courant, 1 087 caractères, titre `# Recette Claude Desktop RULA`, SHA-256 du Markdown `0bb02c2b1c384353e7762e39d0f132bc625bf75d79b649c539eb5b44a97075cf`. Aucun contenu de transcript ni de rapport n’est recopié ici. Détails synthétiques ignorés par Git : `D:\RULA-mcp-integration-20261019\.harness\rapports\claude-desktop-2026-10-19.md`.
+- Vérification d’encodage limitée à la source synthétique `110` : le champ `transcripts.contenu` contient 80 caractères / 82 octets UTF-8 et deux U+02C6; la lecture REST assemble le contexte et le transcript en 110 caractères et restitue les mêmes deux U+02C6. Les accents sont donc déjà altérés dans la valeur persistée, avant le transport MCP; le serveur n’a pas créé cette différence. La cause exacte dans le script d’injection initial n’est pas établie. Aucune donnée ni aucun code n’a été corrigé; ne pas réécrire l’historique de recette.
+- Le test Claude Desktop prouve le compte actuellement connecté et le transport stdio local seulement. Il ne prouve ni un compte Claude Pro individuel distinct, ni l’accès distant HTTP, ni un déploiement Clever Cloud.
 - `bash scripts/harness.sh audit` : non requis.
 - Tests d’intégration PostgreSQL exécutés uniquement sur la base dédiée du worktree; identité `rula_mcp_test|rula_test|5432`, tables initialement vides, extension `vector` disponible.
 
@@ -65,14 +71,14 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 
 ## Handoff
 
-- État du code : PR1 domaine/API, PR2 transports MCP et PR3 consultation/recette acceptés par Sol; PR4 docs/workflow/Dockerfile en validation finale avant draft. Worktree `D:\RULA-mcp-integration-20261019`, branche PR4 `ops/deploiement-mcp-clever` empilée sur PR3 `feature/parcours-rapports-claude`, PR2 `feature/mcp-transcripts` et PR1 `feature/rapports-claude`.
+- État de livraison : drafts #36 (`feature/rapports-claude`) → #37 (`feature/mcp-transcripts`) → #38 (`feature/parcours-rapports-claude`) → #39 (`ops/deploiement-mcp-clever`); quatre CI vertes et quatre acceptations Sol. Les PR restent en draft, sans fusion ni déploiement. Le transport stdio local est configuré dans Claude Desktop sous `rula-integration`; cette entrée et la base PostgreSQL de test sont conservées pour permettre de rejouer la recette.
 - PR2 expose `python -m serveur_mcp` en stdio et `serveur_mcp:app` en HTTP `/mcp`; `/healthz` est public, les autres chemins exigent un bearer constant-time, et chaque transport vérifie en lecture seule les colonnes nécessaires avant de servir. Aucun transport ne lance de migration.
-- Prochaine action : obtenir la validation finale Sol des preuves PR4, puis ouvrir le draft PR4 empilé sur PR3.
-- Risques ou limites : CI distante non exécutée; `pgdata/` est la base jetable locale du conteneur, reste hors staging. Le POC local n’ajoute pas d’authentification applicative à RULA.
+- Prochaines étapes humaines : fusionner #36, puis restacker et revérifier #37, #38 et #39 dans cet ordre; après fusion, appliquer la migration `002` au schéma cible autorisé, créer et protéger le bearer distant, configurer son secret avant de déployer l’application MCP dédiée, puis valider le transport HTTP et la persistance après redémarrage. Terminer par une recette depuis un second compte Claude individuel. Aucun de ces actes n’a été exécuté.
+- Limites : la configuration locale `rula-integration` et la base de test sont conservées. Le POC local n’ajoute pas d’authentification applicative à RULA; l’accès distant dépend de la protection documentée. La corruption d’accents observée concerne uniquement les données synthétiques de cette recette et reste sans correctif.
 
 ## Revue indépendante
 
-- Diff examiné :
-- Critères vérifiés :
-- Remarques :
-- Verdict :
+- Diff examiné : mise à jour de l’état des PR, des preuves Claude Desktop et du handoff.
+- Critères vérifiés : CI #36–#39 vertes, acceptations Sol, rapport `28` courant et identique entre PostgreSQL et REST.
+- Remarques : recette locale stdio uniquement; source synthétique `110` déjà mal encodée dans PostgreSQL.
+- Verdict : mise à jour factuelle de la fiche; les étapes de fusion et de validation cloud restent humaines.
