@@ -86,19 +86,26 @@ def test_script_execute_les_migrations(monkeypatch):
     assert appels == [config]
 
 
-def test_une_migration_unifiee_remplace_les_migrations_historiques() -> None:
+def test_migration_initiale_et_migration_additive_rapports_claude() -> None:
     racine = Path(__file__).parents[1]
     chemins = list((racine / "migrations").glob("*.sql"))
     historique = json.loads(
         (racine / "tests" / "fixtures" / "migrations_legacy.json").read_text()
     )
-    contenu = chemins[0].read_text()
+    initiale = (racine / "migrations" / "001_schema_unifie.sql").read_text()
+    additive = (racine / "migrations" / "002_rapports_claude.sql").read_text()
 
-    assert [chemin.name for chemin in chemins] == ["001_schema_unifie.sql"]
+    assert [chemin.name for chemin in chemins] == [
+        "001_schema_unifie.sql",
+        "002_rapports_claude.sql",
+    ]
     assert len(historique) == 22
-    assert "migrations_executees" not in contenu
-    assert "DROP TABLE IF EXISTS calculs_transverses" in contenu
-    assert "CREATE TABLE jobs_analyse_transcripts" in contenu
-    assert "type_source IN ('ux', 'produit', 'bizdev')" in contenu
-    assert "FOREIGN KEY (projet_id, produit_id)" in contenu
-    assert "TRUNCATE" not in contenu
+    assert "migrations_executees" not in initiale
+    assert "DROP TABLE IF EXISTS calculs_transverses" in initiale
+    assert "CREATE TABLE jobs_analyse_transcripts" in initiale
+    assert "type_source IN ('ux', 'produit', 'bizdev')" in initiale
+    assert "FOREIGN KEY (projet_id, produit_id)" in initiale
+    assert "TRUNCATE" not in initiale
+    assert "CREATE TABLE rapports_claude" in additive
+    assert "REFERENCES transcripts(id) ON DELETE CASCADE" in additive
+    assert "DROP " not in additive
