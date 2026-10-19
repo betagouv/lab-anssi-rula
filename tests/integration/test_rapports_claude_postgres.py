@@ -2,10 +2,14 @@ from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Generator
 from datetime import date
 import os
+from pathlib import Path
+import sys
 from uuid import uuid4
 
 import psycopg2
 import pytest
+from mcp import Client
+from mcp.client.stdio import StdioServerParameters
 
 from configuration import charge_configuration
 from infra.postgres.depot_rapports_claude import DepotRapportsClaudePostgres
@@ -226,3 +230,55 @@ def test_postgres_rejeu_concurrent_meme_uuid_retourne_le_meme_rapport(
     with ThreadPoolExecutor(max_workers=2) as executeur:
         resultats = list(executeur.map(lambda _: enregistrer(), range(2)))
     assert resultats[0] == resultats[1]
+
+
+@pytest.mark.asyncio
+async def test_serveur_stdio_persiste_un_rapport_entre_processus(
+    transcript_postgres: tuple[int, int, int, int, int],
+) -> None:
+    transcript_id, produit_id, _, _, _ = transcript_postgres
+    configuration = charge_configuration().base_de_donnees
+    environnement = os.environ | {
+        "PYTHONPATH": str(Path(__file__).resolve().parents[2] / "src"),
+        "DB_HOTE": configuration.hote,
+        "DB_PORT": str(configuration.port),
+        "DB_NOM": configuration.nom,
+        "DB_UTILISATEUR": configuration.utilisateur,
+        "DB_MOT_DE_PASSE": configuration.mot_de_passe,
+    }
+    parametres = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "serveur_mcp"],
+        cwd=str(Path(__file__).resolve().parents[2]),
+        env=environnement,
+    )
+    cle = str(uuid4())
+
+    async with Client(parametres) as client:
+        catalogue = await client.call_tool(
+            "lister_transcripts", {"produit_id": produit_id}
+        )
+        assert any(
+            element["id"] == transcript_id
+            for element in catalogue.structured_content["elements"]
+        )
+        source = await client.call_tool(
+            "lire_transcript", {"mode": "source", "transcript_id": transcript_id}
+        )
+        resultat = await client.call_tool(
+            "enregistrer_analyse",
+            {
+                "transcript_id": transcript_id,
+                "revision": source.structured_content["revision"],
+                "empreinte": source.structured_content["empreinte"],
+                "cle_idempotence": cle,
+                "contenu": "Analyse MCP stdio synthétique",
+            },
+        )
+        rapport_id = resultat.structured_content["rapport_id"]
+
+    async with Client(parametres) as client:
+        rapport = await client.call_tool(
+            "lire_transcript", {"mode": "rapport", "rapport_id": rapport_id}
+        )
+        assert rapport.structured_content["bloc"] == "Analyse MCP stdio synthétique"

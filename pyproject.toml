@@ -5,7 +5,7 @@ description = "Research User Listening & Analysis — POC"
 requires-python = ">=3.13.0"
 dependencies = [
     "fastapi",
-    "uvicorn",
+    "uvicorn>=0.34",
     "psycopg2-binary",
     "pydantic",
     "python-multipart",
@@ -13,6 +13,7 @@ dependencies = [
     "pypdf",
     "slowapi",
     "starlette",
+    "mcp>=2.3,<3",
 ]
 
 [dependency-groups]
@@ -29,6 +30,9 @@ dev = [
 files = ["src/**/*.py", "tests/**/*.py"]
 explicit_package_bases = true
 mypy_path = "src"
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
