@@ -1,6 +1,6 @@
 # Tâche : consulter et enregistrer les analyses Claude des transcripts confirmés
 
-Statut : PR1 et PR2 livrés en drafts; PR3 en validation; PR4 reste à intégrer.
+Statut : PR1, PR2 et PR3 en drafts; PR4 prêt après validation statique et smoke local, aucun déploiement effectué.
 
 ## Objectif
 
@@ -32,8 +32,8 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 - [ ] Le serveur MCP implémente les trois outils en stdio et HTTP; les tests de protocole vérifient authentification absente/incorrecte/correcte, blocs, écriture et persistance après redémarrage.
 - [x] L’interface permet de retrouver un rapport, son statut courant/obsolète et sa date; le Markdown est affiché comme texte échappé.
 - [x] La recette de bout en bout synthétique couvre anonymisation test, confirmation API, catalogue MCP, écriture et relecture du rapport dans RULA sans appel réseau Albert.
-- [ ] Le workflow manuel et le runbook isolent les identifiants de l’application MCP des secrets DEMO et n’effectuent aucun déploiement dans cette tâche.
-- [ ] Les branches stacked déclenchent la CI PR. Les contrôles backend et frontend requis passent avant chaque PR.
+- [x] Le workflow manuel et le runbook isolent les identifiants de l’application MCP des secrets DEMO et n’effectuent aucun déploiement dans cette tâche.
+- [x] Les branches stacked déclenchent la CI PR. Les contrôles backend et frontend requis passent avant chaque PR.
 
 ## Plan
 
@@ -52,7 +52,9 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 - Le harness backend PR3 est passé : `ruff check src/ tests/`, mypy sur 146 modules, puis `pytest -q` avec 345 tests passés et 6 ignorés; les 4 intégrations PostgreSQL dédiées passent séparément. `tests/test_serveur_mcp.py` vérifie le client SDK officiel v2, les trois outils, l’idempotence et les réponses HTTP sans bearer, avec bearer faux et valide.
 - Frontend inchangé revalidé sous WSL Node 24.13.0 et ses dépendances Linux existantes : 18 suites / 101 tests, Svelte-check (0 erreur, 0 avertissement), `pnpm check`, lint, format et build Vite réussis. `NODE_OPTIONS=--experimental-global-webcrypto` est requis par l’isolate Vitest local.
 - Harness frontend PR3 sous WSL Node 24.13.0 : `NODE_OPTIONS=--experimental-global-webcrypto pnpm check` (Svelte-check 0 erreur/avertissement et TypeScript), `pnpm lint:check`, `pnpm format:check`, `pnpm test` (19 suites, 102 tests) et `pnpm build` réussis. Les dépendances Linux isolées du worktree ont été réutilisées.
-- La CI utilise le service éphémère `pgvector/pgvector:pg17`, applique les migrations puis exécute ces intégrations dans une étape isolée. La CI distante n’a pas encore été exécutée.
+- La CI utilise le service éphémère `pgvector/pgvector:pg17`, applique les migrations puis exécute ces intégrations dans une étape isolée.
+- PR3 #38 : CI GitHub Backend Python, Frontend Svelte et GitGuardian toutes réussies sur le commit `06c5d70`.
+- PR4 : Prettier valide le YAML du workflow manuel et le runbook; le build Docker MCP a réussi avec un contexte isolé de 1,06 Mo excluant `pgdata/`. L’image importe `serveur_mcp`; le smoke local contre PostgreSQL de test a vérifié `/healthz` et un refus HTTP 401 sur `/mcp` sans bearer. Le conteneur jetable a été arrêté; aucun service Clever Cloud ni configuration Claude Desktop n’a été modifié.
 - `bash scripts/harness.sh audit` : non requis.
 - Tests d’intégration PostgreSQL exécutés uniquement sur la base dédiée du worktree; identité `rula_mcp_test|rula_test|5432`, tables initialement vides, extension `vector` disponible.
 
@@ -63,9 +65,9 @@ Permettre à Claude Desktop de lire les transcripts produit et BizDev confirmés
 
 ## Handoff
 
-- État du code : PR1 domaine/API et PR2 transports MCP relus par Sol; PR3 consultation et recette validées par Sol, contrôles complets réussis avant draft. Worktree `D:\RULA-mcp-integration-20261019`, branche PR3 `feature/parcours-rapports-claude` empilée sur PR2 `feature/mcp-transcripts` et PR1 `feature/rapports-claude`.
+- État du code : PR1 domaine/API, PR2 transports MCP et PR3 consultation/recette acceptés par Sol; PR4 docs/workflow/Dockerfile en validation finale avant draft. Worktree `D:\RULA-mcp-integration-20261019`, branche PR4 `ops/deploiement-mcp-clever` empilée sur PR3 `feature/parcours-rapports-claude`, PR2 `feature/mcp-transcripts` et PR1 `feature/rapports-claude`.
 - PR2 expose `python -m serveur_mcp` en stdio et `serveur_mcp:app` en HTTP `/mcp`; `/healthz` est public, les autres chemins exigent un bearer constant-time, et chaque transport vérifie en lecture seule les colonnes nécessaires avant de servir. Aucun transport ne lance de migration.
-- Prochaine action : terminer les contrôles frontend complets, puis ouvrir le draft PR3; intégrer ensuite les trois fichiers préparés pour PR4 après leurs corrections de revue.
+- Prochaine action : obtenir la validation finale Sol des preuves PR4, puis ouvrir le draft PR4 empilé sur PR3.
 - Risques ou limites : CI distante non exécutée; `pgdata/` est la base jetable locale du conteneur, reste hors staging. Le POC local n’ajoute pas d’authentification applicative à RULA.
 
 ## Revue indépendante
