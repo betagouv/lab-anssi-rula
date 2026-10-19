@@ -20,6 +20,13 @@
   import type { EtatRelecture, OccurrenceSource } from './modele-relecture';
   import PanneauAnalyseTranscript from './PanneauAnalyseTranscript.svelte';
   import { supprimerTranscriptPdf } from '../api/transcripts_pdf';
+  import {
+    listerRapportsClaude,
+    listerTranscriptsClaude,
+    lireRapportClaude,
+    type RapportClaude,
+    type TranscriptCatalogueClaude,
+  } from '../api/rapports_claude';
   import SuppressionConfirmee from '../composants/SuppressionConfirmee.svelte';
   import { decouperLocuteurs } from './modele-locuteurs';
   import TranscriptPseudonymise from './TranscriptPseudonymise.svelte';
@@ -112,6 +119,13 @@
       projet_id: number | null;
     }[]
   >([]);
+  let catalogueClaude = $state<TranscriptCatalogueClaude[]>([]);
+  let catalogueCharge = $state(false);
+  let catalogueEnCours = $state(false);
+  let erreurCatalogueClaude = $state('');
+  let rapportClaude = $state<RapportClaude | null>(null);
+  let chargementRapportClaude = $state(false);
+  let erreurRapportClaude = $state('');
   let edition = $state(false);
   const clePreparation = $derived(`rula-preparation-${typeSource}-${produitId}`);
 
@@ -189,6 +203,7 @@
           (source: { type_source: string }) => source.type_source === typeSource
         );
       });
+    void actualiserCatalogueClaude();
     const preparationEnregistree = sessionStorage.getItem(clePreparation);
     if (preparationEnregistree && /^[0-9a-f]{32}$/.test(preparationEnregistree)) {
       jetonPreparation = preparationEnregistree;
@@ -207,6 +222,42 @@
       occurrences = [];
     };
   });
+
+  async function actualiserCatalogueClaude() {
+    catalogueEnCours = true;
+    erreurCatalogueClaude = '';
+    try {
+      catalogueClaude = (await listerTranscriptsClaude(produitId, typeSource))
+        .elements;
+      catalogueCharge = true;
+      if (rapportClaude) {
+        await afficherDernierRapportClaude(rapportClaude.transcript_id);
+      }
+    } catch {
+      catalogueClaude = [];
+      catalogueCharge = false;
+      erreurCatalogueClaude = 'État des analyses Claude indisponible.';
+    } finally {
+      catalogueEnCours = false;
+    }
+  }
+
+  async function afficherDernierRapportClaude(transcriptId: number) {
+    chargementRapportClaude = true;
+    erreurRapportClaude = '';
+    rapportClaude = null;
+    try {
+      const page = await listerRapportsClaude(transcriptId);
+      const dernier = page.elements.at(-1);
+      if (!dernier) throw new Error('Aucun rapport Claude enregistré.');
+      rapportClaude = await lireRapportClaude(dernier.id);
+    } catch (cause) {
+      erreurRapportClaude =
+        cause instanceof Error ? cause.message : 'Lecture du rapport impossible.';
+    } finally {
+      chargementRapportClaude = false;
+    }
+  }
 
   async function creerProjetRecherche() {
     if (!nomProjet.trim() || !briefProjet.trim()) {
@@ -284,6 +335,8 @@
       locuteurs = [];
       edition = false;
     }
+    if (rapportClaude?.transcript_id === id) rapportClaude = null;
+    catalogueClaude = catalogueClaude.filter((element) => element.id !== id);
   }
 
   async function preparer() {
@@ -511,6 +564,7 @@
       transcriptId = resultat.id;
       edition = false;
       await consulter(resultat.id);
+      await actualiserCatalogueClaude();
       return true;
     } catch (cause) {
       erreur = cause instanceof Error ? cause.message : 'Enregistrement impossible.';
@@ -584,19 +638,49 @@
   </h1>
   {#if sources.length}
     <h2>Transcripts enregistrés</h2>
+    <button
+      class="fr-btn fr-btn--secondary"
+      type="button"
+      onclick={actualiserCatalogueClaude}
+      disabled={catalogueEnCours}>Actualiser les analyses Claude</button
+    >
+    {#if erreurCatalogueClaude}<p class="erreur" role="alert">
+        {erreurCatalogueClaude}
+      </p>{/if}
     <table>
       <thead
-        ><tr><th>Nom de source</th><th>Date</th><th>Projet</th><th>Actions</th></tr
+        ><tr
+          ><th>Nom de source</th><th>Date</th><th>Projet</th><th>Analyse Claude</th
+          ><th>Actions</th></tr
         ></thead
       >
       <tbody
         >{#each sources as source (source.id)}
+          {@const catalogue = catalogueClaude.find(
+            (element) => element.id === source.id
+          )}
           <tr
             ><td>{source.nom_source}</td><td
               >{source.date_entretien ?? 'À compléter'}</td
             ><td
               >{projets.find((projet) => projet.id === source.projet_id)?.nom ??
                 '—'}</td
+            ><td
+              >{!catalogueCharge
+                ? 'Indisponible'
+                : catalogue?.analyse_courante
+                  ? 'À jour'
+                  : catalogue?.nombre_rapports
+                    ? 'Obsolète'
+                    : 'À analyser'}
+              {#if catalogue?.nombre_rapports}
+                <button
+                  class="fr-btn fr-btn--tertiary-no-outline"
+                  type="button"
+                  onclick={() => afficherDernierRapportClaude(source.id)}
+                  >Voir le dernier rapport</button
+                >
+              {/if}</td
             ><td
               ><div class="actions-source">
                 <button
@@ -617,6 +701,22 @@
         {/each}</tbody
       >
     </table>
+  {/if}
+  {#if erreurRapportClaude}<p class="erreur" role="alert">
+      {erreurRapportClaude}
+    </p>{/if}
+  {#if chargementRapportClaude}<p role="status">
+      Chargement du rapport Claude…
+    </p>{/if}
+  {#if rapportClaude}
+    <section aria-labelledby="titre-rapport-claude">
+      <h2 id="titre-rapport-claude">Dernier rapport Claude</h2>
+      <p>
+        {rapportClaude.courant ? 'À jour' : 'Obsolète'} —
+        {new Date(rapportClaude.cree_le).toLocaleString('fr-FR')}
+      </p>
+      <pre>{rapportClaude.contenu}</pre>
+    </section>
   {/if}
   {#if erreur}<p class="erreur" role="alert">{erreur}</p>{/if}
   {#if !transcriptId || edition}
@@ -1066,6 +1166,10 @@
     background: var(--border-action-high-blue-france);
     height: 100%;
     transition: width 200ms ease;
+  }
+  pre {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
   .progression__indeterminee {
     animation: progression 1.5s ease-in-out infinite alternate;
