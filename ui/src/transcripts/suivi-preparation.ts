@@ -8,13 +8,6 @@ type LocuteurPreparation = {
   nom_affiche?: string;
 };
 
-type RemplacementPreparation = {
-  valeur_originale: string;
-  valeur_anonyme: string;
-  categorie: string;
-  champ: string;
-};
-
 export type ResultatPreparation =
   | { statut: 'en_cours'; progression: ProgressionPreparation }
   | { statut: 'echec'; progression: ProgressionPreparation; erreur: string }
@@ -29,10 +22,8 @@ export type ResultatPreparation =
       contexte_original: string;
       locuteurs: LocuteurPreparation[];
       occurrences: OccurrenceSource[];
-      remplacements: RemplacementPreparation[];
       conflits_categories_fusionnes: number;
       etat_relecture?: EtatRelecture;
-      projet_id?: number | null;
     };
 
 export class ErreurSuiviPreparation extends Error {

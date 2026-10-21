@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ModeleRelecture } from './modele-relecture';
+import { initialiserEtatRelecture, ModeleRelecture } from './modele-relecture';
 
 const occurrencesDans = (contenu: string, contexte: string, valeurs = ['Alice']) =>
   valeurs.flatMap((valeur, index) =>
@@ -29,6 +29,36 @@ describe('modèle de relecture pseudonymisation', () => {
     );
     expect(modele.projeter('contexte')).toBe('Équipe [IDENTITE_01]');
     expect(modele.lireOccurrences().map((o) => o.debut)).toEqual([18, 25, 7]);
+  });
+
+  it('initialise la relecture sans état serveur et conserve un état déjà sauvegardé', () => {
+    const contenu = 'Alice parle à Bob';
+    const occurrences = occurrencesDans(contenu, '', ['Alice', 'Bob']);
+    const initial = initialiserEtatRelecture(contenu, '', occurrences);
+    const modeleInitial = new ModeleRelecture(contenu, '', [], initial);
+    expect(modeleInitial.projeter('transcript')).toBe(
+      '[IDENTITE_01] parle à [IDENTITE_02]'
+    );
+    modeleInitial.categoriser(modeleInitial.lireMasques()[0].identifiant, 'secret');
+    const sauvegarde = initialiserEtatRelecture(
+      contenu,
+      '',
+      occurrences,
+      modeleInitial.lireEtat()
+    );
+    const modeleRestaure = new ModeleRelecture(contenu, '', [], sauvegarde);
+    expect(modeleRestaure.projeter('transcript')).toBe(
+      '[SECRET_01] parle à [IDENTITE_02]'
+    );
+  });
+
+  it('initialise la relecture et projette le transcript sans occurrence', () => {
+    const contenu = 'Transcript sans occurrence détectée.';
+    const etat = initialiserEtatRelecture(contenu, 'Contexte sans masque.', []);
+    const modele = new ModeleRelecture(contenu, 'Contexte sans masque.', [], etat);
+    expect(modele.lireMasques()).toEqual([]);
+    expect(modele.projeter('transcript')).toBe(contenu);
+    expect(modele.projeter('contexte')).toBe('Contexte sans masque.');
   });
 
   it('active et désactive globalement un masque, avec annulation et rétablissement', () => {

@@ -365,6 +365,19 @@ export class ModeleRelecture {
   }
 }
 
+export const initialiserEtatRelecture = (
+  contenuOriginal: string,
+  contexteOriginal: string,
+  occurrences: OccurrenceSource[],
+  etat?: EtatRelecture
+) =>
+  new ModeleRelecture(
+    contenuOriginal,
+    contexteOriginal,
+    occurrences,
+    etat
+  ).lireEtat();
+
 const escapeRegex = (valeur: string) =>
   valeur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

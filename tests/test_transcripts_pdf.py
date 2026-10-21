@@ -6,7 +6,6 @@ from threading import Barrier, Event, Lock
 import httpx
 from io import BytesIO
 
-from datetime import date, datetime, timedelta
 
 from typing import Any, Callable, TypeVar, cast
 
@@ -21,7 +20,6 @@ from adaptateurs.exceptions import ErreurCommunicationAlbert
 
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 
-from infra.memoire.depot_transcripts_pdf import DepotTranscriptsPdfMemoire
 
 from transcripts_pdf.extraction import ErreurPdf, appliquer_remplacements, extraire_pdf
 
@@ -1259,60 +1257,6 @@ def test_remplacement_par_tokens_refuse_fragment_ou_borne_absente(
     assert erreur.value.code == code
 
 
-def test_job_refuse_un_ancien_jeton_apres_reprise_de_bail() -> None:
-
-    depot = DepotTranscriptsPdfMemoire()
-
-    source = depot.ajouter(
-        "bizdev", 1, None, "source.pdf", date.today(), "SPEAKER_01: Texte", "", []
-    )
-
-    job = depot.creer_job(source.id)
-
-    ancien = depot.reclamer_job(job.id)
-
-    assert ancien is not None
-
-    depot.jobs[0] = ancien._replace(bail_jusqua=datetime.now() - timedelta(seconds=1))
-
-    courant = depot.reclamer_job(job.id)
-
-    assert courant is not None
-
-    assert courant.jeton != ancien.jeton
-
-    assert not depot.finaliser(ancien, {"resume": "ancien"}, [], "v1", "v1")
-
-    assert depot.finaliser(courant, {"resume": "courant"}, [], "v1", "v1")
-
-
-def test_job_refuse_la_finalisation_apres_modification_du_transcript() -> None:
-
-    depot = DepotTranscriptsPdfMemoire()
-
-    source = depot.ajouter(
-        "bizdev", 1, None, "source.pdf", date.today(), "SPEAKER_01: Texte", "", []
-    )
-
-    job = depot.reclamer_job(depot.creer_job(source.id).id)
-
-    assert job is not None
-
-    depot.modifier(source.id, date.today(), "SPEAKER_01: ModifiÃ©", "", [])
-
-    assert not depot.finaliser(job, {"resume": "obsolÃ¨te"}, [], "v1", "v1")
-
-
-def test_depot_memoire_signale_une_source_et_un_job_absents() -> None:
-
-    depot = DepotTranscriptsPdfMemoire()
-
-    assert depot.modifier(99, date.today(), "texte", "", []) is None
-
-    with pytest.raises(ValueError, match="introuvable"):
-        depot.creer_job(99)
-
-
 T = TypeVar("T")
 
 
@@ -1426,6 +1370,16 @@ class AdaptateurGroupesDeTest(AdaptateurAlbert):
             return json.dumps({"remplacements": remplacements, "locuteurs": locuteurs})
         finally:
             self.observateur.fin(numero)
+
+    def completer_json_raisonnement_preparation(
+        self,
+        messages: list[dict[str, str]],
+        nom_schema: str,
+        schema: dict[str, object],
+        effort: str,
+        temperature: float | None = None,
+    ) -> str:
+        return self.completer(messages, 0.0 if temperature is None else temperature)
 
     def plonger(self, textes: list[str]) -> list[list[float]]:
         return []

@@ -1,17 +1,18 @@
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
-def test_lister_vide(client: TestClient):
-    assert client.get("/api/produits").json() == []
-
-
-def test_ajouter(client: TestClient):
-    reponse = client.post("/api/produits", json={"nom": "MonProduit"})
-    assert reponse.status_code == 201
-    assert reponse.json() == {"id": 1, "nom": "MonProduit"}
+from api.produits import fabrique_depot_produits, routeur
+from infra.memoire.depot_produits import DepotProduitsMemoire
 
 
-def test_lister_apres_ajout(client: TestClient):
-    client.post("/api/produits", json={"nom": "A"})
-    client.post("/api/produits", json={"nom": "B"})
-    assert len(client.get("/api/produits").json()) == 2
+def test_liste_uniquement_mss_msc() -> None:
+    depot = DepotProduitsMemoire()
+    depot.ajouter("MSS")
+    depot.ajouter("MSC")
+    depot.ajouter("hors_perimetre")
+    application = FastAPI()
+    application.include_router(routeur, prefix="/api")
+    application.dependency_overrides[fabrique_depot_produits] = lambda: depot
+    reponse = TestClient(application).get("/api/produits")
+    assert reponse.status_code == 200
+    assert [produit["nom"] for produit in reponse.json()] == ["MSS", "MSC"]

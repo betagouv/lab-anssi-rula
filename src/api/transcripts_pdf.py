@@ -1,5 +1,4 @@
 from concurrent.futures import Executor, ThreadPoolExecutor
-import asyncio
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
 import hmac
@@ -7,7 +6,7 @@ import logging
 from pathlib import Path
 import secrets
 import time
-from typing import Callable, Literal
+from typing import Literal
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -24,18 +23,18 @@ from fastapi import (
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adaptateurs.albert import AdaptateurAlbertReel
+from api.produits import fabrique_depot_produits
+from produits.depot import DepotProduits
 from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
 from configuration import charge_configuration
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
-from transcripts_pdf.analyse import ServiceAnalysePdf
 from transcripts_pdf.depot import (
-    AnalyseTranscriptPdf,
     DepotTranscriptsPdf,
-    JobAnalyseTranscript,
     SourceTranscriptPdf,
 )
 from transcripts_pdf.extraction import ErreurPdf, TAILLE_MAXIMALE
 from transcripts_pdf.export import generer_pdf
+from transcripts_pdf.noms import nom_pseudonymise
 from transcripts_pdf.orchestration import (
     ServiceTranscriptsPdf,
     SourcePdfInvalide,
@@ -49,7 +48,6 @@ from transcripts_pdf.service import (
 
 routeur = APIRouter()
 _JOURNAL = logging.getLogger(__name__)
-_EXECUTEUR = ThreadPoolExecutor(max_workers=2)
 _EXECUTEUR_PREPARATION = ThreadPoolExecutor(max_workers=1)
 _EXECUTEUR_GROUPES_PREPARATION = ThreadPoolExecutor(
     max_workers=charge_configuration().albert.parallelisme_anonymisation
@@ -72,10 +70,10 @@ class LocuteurBody(BaseModel):
 
 
 class SourcePdfBody(BaseModel):
+    preparation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     type_source: Literal["produit", "bizdev"]
     nom_source: str
     produit_id: int
-    projet_id: int | None = None
     date_entretien: date | None
     contenu: str
     contexte: str = ""
@@ -141,7 +139,6 @@ class MiseAJourPreparationBody(BaseModel):
     etat_relecture: EtatRelectureBody
     locuteurs: list[LocuteurRelectureBody] = Field(max_length=500)
     date_entretien: date | None
-    projet_id: int | None
 
 
 def fabrique_depot_transcripts_pdf() -> DepotTranscriptsPdf:
@@ -157,44 +154,20 @@ def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
     )
 
 
-def fabrique_service_analyse_pdf() -> ServiceAnalysePdf:
-    configuration = charge_configuration().albert
-    return ServiceAnalysePdf(
-        AdaptateurAlbertReel(configuration),
-        {
-            "produit": (_PROMPT / "analyse_transcript_produit.md").read_text(),
-            "bizdev": (_PROMPT / "analyse_transcript_bizdev.md").read_text(),
-        },
-        {
-            "modele": configuration.modele,
-            "temperature": configuration.temperature_transcripts,
-            "top_p": configuration.top_p_transcripts,
-            "raisonnement": configuration.effort_analyse_transcripts,
-            "budget_completion": configuration.max_completion_tokens_transcripts,
-            "delai_maximum_s": configuration.delai_transcripts,
-        },
-        configuration.effort_analyse_transcripts,
-    )
-
-
 def fabrique_service_transcripts_pdf(
     depot: DepotTranscriptsPdf = Depends(fabrique_depot_transcripts_pdf),
-    analyseur: ServiceAnalysePdf = Depends(fabrique_service_analyse_pdf),
 ) -> ServiceTranscriptsPdf:
-    return ServiceTranscriptsPdf(
-        depot, analyseur, charge_configuration().albert.delai_transcripts
-    )
+    return ServiceTranscriptsPdf(depot)
 
 
-def fabrique_service_transcripts_pdf_travail() -> ServiceTranscriptsPdf:
-    return fabrique_service_transcripts_pdf(
-        fabrique_depot_transcripts_pdf(),
-        fabrique_service_analyse_pdf(),
-    )
-
-
-def fabrique_executeur() -> Executor:
-    return _EXECUTEUR
+def _verifier_produit(produit_id: int, depot: DepotProduits) -> None:
+    if not any(
+        produit.id == produit_id and produit.nom in {"MSS", "MSC"}
+        for produit in depot.lister()
+    ):
+        raise HTTPException(
+            status_code=422, detail="Le produit MSS ou MSC est invalide."
+        )
 
 
 def fabrique_executeur_preparation() -> Executor:
@@ -246,13 +219,16 @@ async def preparer(
     request: Request,
     response: Response,
     type_source: Literal["produit", "bizdev"] = Form(),
+    produit_id: int = Form(),
     contexte: str = Form(""),
     fichier: UploadFile = File(),
     service: ServicePreparationTranscript = Depends(fabrique_service_preparation_pdf),
     executeur: Executor = Depends(fabrique_executeur_preparation),
+    depot_produits: DepotProduits = Depends(fabrique_depot_produits),
 ) -> dict:
     response.headers["Cache-Control"] = "no-store"
     _verifier_origine(request)
+    _verifier_produit(produit_id, depot_produits)
     _nettoyer_preparations()
     if (
         sum(
@@ -267,6 +243,8 @@ async def preparer(
     secret = secrets.token_urlsafe(32)
     _PREPARATIONS[identifiant] = {
         "statut": "en_cours",
+        "type_source": type_source,
+        "produit_id": produit_id,
         "empreinte_cookie": sha256(secret.encode()).hexdigest(),
         "expire": datetime.now(timezone.utc) + _TTL_PREPARATION,
         "soumis_monotonic": time.monotonic(),
@@ -285,6 +263,7 @@ async def preparer(
         contenu,
         type_source,
         contexte,
+        produit_id,
     )
     response.set_cookie(
         _nom_cookie(identifiant),
@@ -292,7 +271,7 @@ async def preparer(
         httponly=True,
         samesite="strict",
         secure=charge_configuration().rula.secure_cookie,
-        path=f"/api/transcripts-pdf/preparation/{identifiant}",
+        path="/api/transcripts-pdf",
     )
     return {
         "identifiant": identifiant,
@@ -315,7 +294,6 @@ def obtenir_preparation(identifiant: str, request: Request, response: Response) 
         if "etat_relecture" in preparation:
             resultat["etat_relecture"] = preparation["etat_relecture"]
             resultat["date_entretien"] = preparation["date_entretien"]
-            resultat["projet_id"] = preparation["projet_id"]
             locuteurs = {
                 locuteur["identifiant"]: locuteur
                 for locuteur in preparation["locuteurs"]
@@ -364,7 +342,6 @@ def mettre_a_jour_relecture(
         etat_relecture=body.etat_relecture.model_dump(),
         locuteurs=locuteurs,
         date_entretien=body.date_entretien,
-        projet_id=body.projet_id,
     )
     return {"statut": "enregistre"}
 
@@ -379,7 +356,7 @@ def abandonner_preparation(
     del _PREPARATIONS[identifiant]
     response.delete_cookie(
         _nom_cookie(identifiant),
-        path=f"/api/transcripts-pdf/preparation/{identifiant}",
+        path="/api/transcripts-pdf",
         secure=charge_configuration().rula.secure_cookie,
         httponly=True,
         samesite="strict",
@@ -400,6 +377,7 @@ def _executer_preparation(
     fichier: bytes,
     type_source: str,
     contexte: str,
+    produit_id: int,
 ) -> None:
     phase_diagnostic = "en_attente"
 
@@ -428,6 +406,7 @@ def _executer_preparation(
         )
         resultat = {
             "type_source": preparation.type_source,
+            "produit_id": produit_id,
             "nom_source": preparation.nom_source,
             "date_entretien": preparation.date_entretien,
             "contenu": preparation.contenu,
@@ -543,14 +522,29 @@ def _nettoyer_preparations() -> None:
 @routeur.post("/transcripts-pdf", status_code=201)
 def confirmer(
     body: SourcePdfBody,
+    request: Request,
+    response: Response,
     service: ServiceTranscriptsPdf = Depends(fabrique_service_transcripts_pdf),
+    depot_produits: DepotProduits = Depends(fabrique_depot_produits),
 ) -> dict:
+    if body.preparation_id is None:
+        raise HTTPException(status_code=422, detail="La préparation est obligatoire.")
+    _verifier_produit(body.produit_id, depot_produits)
+    preparation = _obtenir_preparation_autorisee(body.preparation_id, request, response)
+    if (
+        preparation["statut"] != "termine"
+        or preparation["type_source"] != body.type_source
+        or preparation["produit_id"] != body.produit_id
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Le produit ou le type ne correspond pas à la préparation.",
+        )
     try:
         source = service.confirmer(
             body.type_source,
             body.nom_source,
             body.produit_id,
-            body.projet_id,
             body.date_entretien,
             body.contenu,
             body.contexte,
@@ -558,14 +552,24 @@ def confirmer(
         )
     except SourcePdfInvalide as erreur:
         raise HTTPException(status_code=422, detail=str(erreur)) from erreur
-    return source._asdict()
+    del _PREPARATIONS[body.preparation_id]
+    response.delete_cookie(
+        _nom_cookie(body.preparation_id),
+        path="/api/transcripts-pdf",
+        secure=charge_configuration().rula.secure_cookie,
+        httponly=True,
+        samesite="strict",
+    )
+    return _source_dict(source)
 
 
 @routeur.get("/transcripts-pdf/produits/{produit_id}")
 def lister(
     produit_id: int,
     service: ServiceTranscriptsPdf = Depends(fabrique_service_transcripts_pdf),
+    depot_produits: DepotProduits = Depends(fabrique_depot_produits),
 ) -> list[dict]:
+    _verifier_produit(produit_id, depot_produits)
     return [_source_dict(source) for source in service.lister(produit_id)]
 
 
@@ -577,7 +581,7 @@ def exporter_pdf(
     source = depot.obtenir(transcript_id)
     if source is None:
         raise HTTPException(404, headers={"Cache-Control": "no-store"})
-    nom = f"transcript-{source.type_source}-{source.id}-pseudonymise.pdf"
+    nom = nom_pseudonymise(source.nom_source)
     return Response(
         content=generer_pdf(source),
         media_type="application/pdf",
@@ -611,7 +615,6 @@ def modifier(
         source is None
         or source.type_source != body.type_source
         or source.produit_id != body.produit_id
-        or source.projet_id != body.projet_id
     ):
         raise HTTPException(status_code=404)
     try:
@@ -638,81 +641,5 @@ def supprimer(
         raise HTTPException(status_code=404)
 
 
-@routeur.post("/transcripts-pdf/{transcript_id}/analyse", status_code=202)
-def analyser(
-    transcript_id: int,
-    relancer: bool = False,
-    executeur: Executor = Depends(fabrique_executeur),
-    service: ServiceTranscriptsPdf = Depends(fabrique_service_transcripts_pdf),
-) -> dict:
-    try:
-        resultat = service.demarrer_analyse(transcript_id, relancer)
-    except SourcePdfInvalide as erreur:
-        raise HTTPException(status_code=404, detail=str(erreur)) from erreur
-    if resultat.analyse is None and resultat.job.statut in {"attente", "en_cours"}:
-        executeur.submit(_executer_job, resultat.job.id)
-    return {"job": _job_dict(resultat.job), "analyse": _analyse_dict(resultat.analyse)}
-
-
-@routeur.get("/transcripts-pdf/{transcript_id}/analyse")
-def obtenir_analyse(
-    transcript_id: int,
-    service: ServiceTranscriptsPdf = Depends(fabrique_service_transcripts_pdf),
-) -> dict | None:
-    return _analyse_dict(service.obtenir_analyse(transcript_id))
-
-
-@routeur.get("/transcripts-pdf/{transcript_id}/job")
-def obtenir_job(
-    transcript_id: int,
-    depot: DepotTranscriptsPdf = Depends(fabrique_depot_transcripts_pdf),
-) -> dict:
-    job = depot.obtenir_job(transcript_id)
-    if job is None:
-        raise HTTPException(status_code=404)
-    return _job_dict(job)
-
-
-def reprendre_jobs(
-    depot: DepotTranscriptsPdf | None = None, executeur: Executor | None = None
-) -> None:
-    depot = depot or fabrique_depot_transcripts_pdf()
-    executeur = executeur or _EXECUTEUR
-    for job_id in depot.lister_jobs_a_reprendre():
-        executeur.submit(_executer_job, job_id)
-
-
-async def surveille_jobs(
-    arreter: asyncio.Event,
-    scanner: Callable[[], None] = reprendre_jobs,
-    intervalle: float = 30,
-) -> None:
-    while not arreter.is_set():
-        await asyncio.to_thread(scanner)
-        try:
-            await asyncio.wait_for(arreter.wait(), intervalle)
-        except TimeoutError:
-            pass
-
-
-def _executer_job(job_id: int, service: ServiceTranscriptsPdf | None = None) -> None:
-    try:
-        (service or fabrique_service_transcripts_pdf_travail()).executer_job(job_id)
-    except Exception as erreur:
-        _JOURNAL.error(
-            "transcript_pdf_worker_error job_id=%s exception_type=%s",
-            job_id,
-            type(erreur).__name__,
-        )
-
-
 def _source_dict(source: SourceTranscriptPdf) -> dict:
-    return source._asdict()
-
-
-def _job_dict(job: JobAnalyseTranscript) -> dict:
-    return job._replace(jeton=None)._asdict()
-
-
-def _analyse_dict(analyse: AnalyseTranscriptPdf | None) -> dict | None:
-    return analyse._asdict() if analyse is not None else None
+    return source._replace(nom_source=nom_pseudonymise(source.nom_source))._asdict()

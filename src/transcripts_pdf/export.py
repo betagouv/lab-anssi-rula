@@ -30,7 +30,9 @@ def _contenu_avec_locuteurs(source: SourceTranscriptPdf) -> str:
             return identifiant + ":"
         nom = locuteur.get("nom_affiche", "").strip()
         numero = str(int(identifiant.rsplit("_", maxsplit=1)[1]))
-        return f"{nom or _ROLES.get(locuteur['role'], 'Indéterminé') + ' · ' + numero} :"
+        return (
+            f"{nom or _ROLES.get(locuteur['role'], 'Indéterminé') + ' · ' + numero} :"
+        )
 
     return re.sub(r"SPEAKER_\d{2}:", remplacer, source.contenu)
 
