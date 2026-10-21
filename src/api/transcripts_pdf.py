@@ -27,6 +27,7 @@ from api.produits import fabrique_depot_produits
 from produits.depot import DepotProduits
 from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
 from configuration import charge_configuration
+from infra.postgres.depot_liste_blanche import DepotListeBlanchePostgres
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from transcripts_pdf.depot import (
     DepotTranscriptsPdf,
@@ -151,6 +152,9 @@ def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
         (_PROMPT / "anonymisation_transcript.md").read_text(),
         executeur=_EXECUTEUR_GROUPES_PREPARATION,
         fabrique_albert=lambda: AdaptateurAlbertReel(charge_configuration().albert),
+        depot_liste_blanche=DepotListeBlanchePostgres(
+            charge_configuration().base_de_donnees
+        ),
     )
 
 

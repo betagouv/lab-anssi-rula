@@ -8,7 +8,10 @@ from psycopg2 import sql
 import pytest
 
 from configuration import BaseDeDonnees
+from infra.postgres.depot_liste_blanche import DepotListeBlanchePostgres
 from infra.postgres.migrations import execute_migrations
+from liste_blanche.depot import RevisionObsolete, TermeDejaPresent
+from liste_blanche.service import ServiceListeBlanche
 
 
 @pytest.fixture
@@ -60,6 +63,7 @@ def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) 
     assert execute_migrations(base_temporaire, repertoire) == [
         "001_schema_unifie.sql",
         "002_pseudonymisation_seule.sql",
+        "003_liste_blanche.sql",
     ]
     assert execute_migrations(base_temporaire, repertoire) == []
     assert _verifier(base_temporaire, "SELECT nom FROM produits ORDER BY nom") == [
@@ -67,6 +71,26 @@ def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) 
         ("MSS",),
     ]
     assert _verifier(base_temporaire, "SELECT count(*) FROM transcripts")[0][0] == 0
+    assert _verifier(
+        base_temporaire,
+        "SELECT terme FROM termes_liste_blanche ORDER BY terme_normalise",
+    ) == [
+        ("Annecy",),
+        ("ANSI",),
+        ("LAB",),
+        ("Laboratoire d’innovation de l’ANSSI",),
+        ("Mon Service Sécurisé",),
+        ("MSS",),
+    ]
+    assert _verifier(
+        base_temporaire,
+        "DELETE FROM termes_liste_blanche WHERE terme = 'MSS' RETURNING terme",
+    ) == [("MSS",)]
+    assert execute_migrations(base_temporaire, repertoire) == []
+    assert _verifier(
+        base_temporaire,
+        "SELECT count(*) FROM termes_liste_blanche WHERE terme = 'MSS'",
+    ) == [(0,)]
 
 
 def test_migration_ne_garde_que_les_transcripts_pdf_confirmes_mss_msc(
@@ -140,7 +164,8 @@ def test_migration_ne_garde_que_les_transcripts_pdf_confirmes_mss_msc(
             ),
         )
     assert execute_migrations(base_temporaire, migrations) == [
-        "002_pseudonymisation_seule.sql"
+        "002_pseudonymisation_seule.sql",
+        "003_liste_blanche.sql",
     ]
     assert _verifier(
         base_temporaire,
@@ -219,3 +244,27 @@ def test_execute_migrations_annule_schema_et_marqueur_en_erreur(
     assert _verifier(
         base_temporaire, "SELECT to_regclass('public.migrations_executees')"
     ) == [(None,)]
+
+
+def test_depot_postgres_applique_revision_et_unicite_normalisee(
+    base_temporaire: BaseDeDonnees,
+) -> None:
+    execute_migrations(base_temporaire)
+    service = ServiceListeBlanche(DepotListeBlanchePostgres(base_temporaire))
+    premier = service.ajouter("  Entreprise\u00a0locale ")
+    second = service.ajouter("Autre terme")
+    with pytest.raises(TermeDejaPresent):
+        service.ajouter("ENTREPRISE   LOCALE")
+    with pytest.raises(TermeDejaPresent):
+        service.modifier(premier.id, "AUTRE TERME", premier.revision)
+    modifie = service.modifier(premier.id, "Équipe locale", premier.revision)
+    assert modifie.revision == 2
+    with pytest.raises(RevisionObsolete):
+        service.modifier(premier.id, "Ancien client", premier.revision)
+    with pytest.raises(RevisionObsolete):
+        service.supprimer(second.id, second.revision + 1)
+    service.supprimer(second.id, second.revision)
+    assert [terme for terme in service.lister() if terme.id == premier.id] == [
+        type(premier)(premier.id, "Équipe locale", 2)
+    ]
+    assert all(terme.id != second.id for terme in service.lister())

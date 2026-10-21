@@ -4,6 +4,7 @@
   import ImportTranscriptPdf from './ImportTranscriptPdf.svelte';
   import PseudonymiserHistorique from './PseudonymiserHistorique.svelte';
   import PseudonymiserDetail from './PseudonymiserDetail.svelte';
+  import ListeBlanche from './ListeBlanche.svelte';
 
   let produits = $state<Produit[]>([]);
   let erreur = $state('');
@@ -12,6 +13,7 @@
   let theme = $state<'light' | 'dark'>('dark');
   let transcriptId = $state<number | null>(null);
   let hash = $state(window.location.hash);
+  const estListeBlanche = $derived(hash === '#/liste-blanche');
   const produitId = $derived(Number(hash.match(/^#\/produits\/(\d+)/)?.[1]));
   const produit = $derived(produits.find((item) => item.id === produitId));
 
@@ -59,22 +61,35 @@
           <span>Import et pseudonymisation de transcripts PDF</span>
         </span>
       </a>
-      {#if produit}
-        <a class="changer" href="#/">Changer de produit</a>
-      {/if}
-      <button
-        class="fr-btn fr-btn--tertiary-no-outline theme"
-        type="button"
-        aria-label={theme === 'dark'
-          ? 'Activer le thème clair'
-          : 'Activer le thème sombre'}
-        onclick={() => afficherTheme(theme === 'dark' ? 'light' : 'dark')}
-        >{theme === 'dark' ? '☀ Thème clair' : '☾ Thème sombre'}</button
-      >
+      <nav class="actions" aria-label="Navigation principale">
+        {#if produit}
+          <a class="changer" href="#/">Changer de produit</a>
+        {/if}
+        <a
+          class="liste-blanche"
+          href="#/liste-blanche"
+          aria-current={estListeBlanche ? 'page' : undefined}
+        >
+          Liste blanche
+        </a>
+        <button
+          class="fr-btn fr-btn--tertiary-no-outline theme"
+          type="button"
+          aria-label={theme === 'dark'
+            ? 'Activer le thème clair'
+            : 'Activer le thème sombre'}
+          onclick={() => afficherTheme(theme === 'dark' ? 'light' : 'dark')}
+          >{theme === 'dark' ? '☀ Thème clair' : '☾ Thème sombre'}</button
+        >
+      </nav>
     </div>
   </header>
 
-  {#if erreur}
+  {#if estListeBlanche}
+    <main class="page">
+      <ListeBlanche />
+    </main>
+  {:else if erreur}
     <main class="message" role="alert">{erreur}</main>
   {:else if !produits.length}
     <main class="message" aria-live="polite">Chargement des produits…</main>
@@ -271,8 +286,12 @@
     font-size: 20px;
     font-weight: 700;
   }
-  .changer {
+  .actions {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
   }
   .theme {
     margin: 0;
@@ -425,8 +444,8 @@
     .entete-interieur {
       gap: 12px;
     }
-    .changer {
-      margin-left: auto;
+    .actions {
+      margin-left: 0;
     }
   }
 </style>
