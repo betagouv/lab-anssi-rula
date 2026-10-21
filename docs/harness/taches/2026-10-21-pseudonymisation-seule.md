@@ -1,6 +1,6 @@
 # Tâche : recentrer RULA sur la pseudonymisation de PDF
 
-Statut : écran de relecture validé en local; PR en préparation
+Statut : PR #41 ouverte; écran de relecture validé en local
 
 ## Objectif
 
@@ -22,7 +22,7 @@ Livrer une application accessible et réactive dédiée à l’import, la relect
 - [ ] L’interface et l’API ne proposent plus les analyses, projets, FeatureBase, ni les parcours correspondants.
 - [ ] La migration conserve les produits MSS/MSC et seulement les lignes PDF confirmées `type_source IN ('produit','bizdev')` rattachées à ces produits, avec les identifiants et données métier nécessaires.
 - [x] La migration fonctionne sur base existante et vide, est idempotente via le runner, et sa transaction peut être annulée sans laisser un schéma partiel.
-- [ ] Les étapes de maintenance, d’exécution et de restauration sont documentées; aucun déploiement n’est effectué.
+- [ ] Les étapes de maintenance, d’exécution et de restauration sont documentées; déploiement après checks verts et revue Sol.
 
 ## Plan
 
@@ -30,7 +30,7 @@ Livrer une application accessible et réactive dédiée à l’import, la relect
 2. Recentrer l’interface sur MSS/MSC et supprimer les parcours hors périmètre.
 3. Ajouter la migration transactionnelle et documenter la maintenance et le rollback par restauration.
 4. Exécuter les contrôles requis et vérifier les parcours desktop/mobile ainsi que le PDF réel.
-5. Après validation locale de l’écran de relecture, ouvrir une nouvelle PR; demander la revue Sol avant fusion. Ne pas fusionner ni déployer.
+5. PR #41 ouverte après validation locale de l’écran de relecture. L’utilisateur autorise le déploiement après checks verts; demander la revue Sol avant fusion.
 
 ## Validation
 
@@ -49,9 +49,9 @@ Livrer une application accessible et réactive dédiée à l’import, la relect
 
 ## Handoff
 
-- État du code : implémentation dans le worktree isolé `feature/pseudonymisation-seule`; l’utilisateur a confirmé que l’écran de relecture apparaît dans le preview local sur le port 5173. Aucun déploiement n’a été effectué.
-- Prochaine action : pousser la branche et ouvrir une PR; compléter les vérifications navigateur restantes et demander la revue Sol avant fusion. La correction initialise l’état depuis les occurrences quand le serveur n’a pas encore d’état de relecture, et conserve les choix déjà sauvegardés.
-- Risques ou limites : migration destructive sur la base active; aucun déploiement ni aucune modification de sauvegarde n’est autorisé. Aucun PDF d’exemple n’a été trouvé; aucun fichier n’a été envoyé à Albert par ce handoff.
+- État du code : implémentation dans le worktree isolé `feature/pseudonymisation-seule`, poussée dans la PR #41 (https://github.com/betagouv/lab-anssi-rula/pull/41); l’utilisateur a confirmé que l’écran de relecture apparaît dans le preview local sur le port 5173. Aucun déploiement n’a été effectué.
+- Prochaine action : attendre les checks GitHub, compléter les vérifications navigateur restantes et demander la revue Sol avant fusion et déploiement. La correction initialise l’état depuis les occurrences quand le serveur n’a pas encore d’état de relecture, et conserve les choix déjà sauvegardés.
+- Risques ou limites : migration destructive sur la base active; déploiement après checks verts et revue Sol. Les sauvegardes ne sont pas modifiées. Aucun PDF d’exemple n’a été trouvé; aucun fichier n’a été envoyé à Albert par ce handoff.
 
 ## Revue indépendante
 
