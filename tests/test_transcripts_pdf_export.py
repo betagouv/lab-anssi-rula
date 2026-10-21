@@ -12,7 +12,6 @@ def _source(contenu: str, contexte: str = "") -> SourceTranscriptPdf:
         12,
         "bizdev",
         4,
-        None,
         "entretien.pdf",
         date(2026, 10, 19),
         contenu,
@@ -31,8 +30,6 @@ def _source(contenu: str, contexte: str = "") -> SourceTranscriptPdf:
                 "justification": "Ne doit pas apparaître.",
             },
         ],
-        2,
-        None,
         datetime(2026, 10, 19),
     )
 
@@ -43,10 +40,8 @@ def test_generer_pdf_contient_le_transcript_et_le_contexte_pseudonymises() -> No
         "SPEAKER_02: Participant identifié.\nSPEAKER_03: Participant inconnu.",
         "Contexte avec œ et apostrophe typographique ’.",
     )
-
     lecteur = PdfReader(BytesIO(generer_pdf(source)))
     texte = "\n".join(page.extract_text() or "" for page in lecteur.pages)
-
     assert "Transcript pseudonymisé" in texte
     assert "BizDev" in texte
     assert "19/10/2026" in texte
@@ -59,10 +54,12 @@ def test_generer_pdf_contient_le_transcript_et_le_contexte_pseudonymises() -> No
 
 
 def test_generer_pdf_repartit_le_transcript_entier_sur_plusieurs_pages() -> None:
-    contenu = "Début " + "mot central " * 1600 + "Fin transcript."
-    lecteur = PdfReader(BytesIO(generer_pdf(_source(contenu))))
+    lecteur = PdfReader(
+        BytesIO(
+            generer_pdf(_source("Début " + "mot central " * 1600 + "Fin transcript."))
+        )
+    )
     texte = " ".join(page.extract_text() or "" for page in lecteur.pages)
-
     assert len(lecteur.pages) > 1
     assert "Début" in texte
     assert "mot central" in texte

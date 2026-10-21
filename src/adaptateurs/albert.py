@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 import asyncio
 import json
 import time
-from typing import Any
 
 import httpx
 
@@ -14,9 +13,6 @@ from adaptateurs.exceptions import (
     ErreurHTTPAlbert,
     ReponseAlbertInvalide,
 )
-
-
-DELAI_MAXIMUM_ALBERT = 30
 
 
 def _lire_evenement_flux(
@@ -57,193 +53,21 @@ def _traduit_erreur(erreur: httpx.HTTPError) -> ErreurAlbert:
     return ErreurCommunicationAlbert()
 
 
-def _metriques_reponse_transcript(donnees: Any) -> dict[str, str | int | float | None]:
-    choix = donnees.get("choices") if isinstance(donnees, dict) else None
-    premier = choix[0] if isinstance(choix, list) and choix else None
-    message = premier.get("message") if isinstance(premier, dict) else None
-    contenu = message.get("content") if isinstance(message, dict) else None
-    raisonnement = (
-        message.get("reasoning_content", message.get("reasoning"))
-        if isinstance(message, dict)
-        else None
-    )
-    fin = premier.get("finish_reason") if isinstance(premier, dict) else None
-    return {
-        "choix_nombre": len(choix) if isinstance(choix, list) else 0,
-        "message_champs_nombre": len(message) if isinstance(message, dict) else 0,
-        "finish_reason": fin
-        if isinstance(fin, str)
-        and fin in {"stop", "length", "tool_calls", "content_filter"}
-        else "autre"
-        if isinstance(fin, str)
-        else None,
-        "contenu_type": type(contenu).__name__ if contenu is not None else "absent",
-        "contenu_caracteres": len(contenu) if isinstance(contenu, str) else 0,
-        "raisonnement_type": type(raisonnement).__name__
-        if raisonnement is not None
-        else "absent",
-        "raisonnement_caracteres": len(raisonnement)
-        if isinstance(raisonnement, str)
-        else 0,
-        "refus_present": int(
-            isinstance(message, dict) and bool(message.get("refusal"))
-        ),
-    }
-
-
-class CompletionTranscript(str):
-    diagnostic: dict[str, str | int | float | None]
-
-    def __new__(
-        cls,
-        contenu: str,
-        diagnostic: dict[str, str | int | float | None],
-    ) -> "CompletionTranscript":
-        instance = super().__new__(cls, contenu)
-        instance.diagnostic = diagnostic
-        return instance
-
-
-def _lire_reponse_completion(data: Any) -> str:
-    try:
-        choix = data["choices"][0]
-        contenu = choix["message"]["content"]
-        if choix.get("finish_reason") == "length" or not isinstance(contenu, str):
-            raise TypeError
-        return contenu
-    except (ValueError, KeyError, IndexError, TypeError) as erreur:
-        raise ReponseAlbertInvalide from erreur
-
-
-def _lire_reponse_completion_transcript(data: Any) -> str:
-    try:
-        choix = data["choices"][0]
-        contenu = choix["message"]["content"]
-        if (
-            choix.get("finish_reason") != "stop"
-            or not isinstance(contenu, str)
-            or not contenu
-        ):
-            raise TypeError
-        return contenu
-    except (ValueError, KeyError, IndexError, TypeError) as erreur:
-        raise ReponseAlbertInvalide from erreur
-
-
 class AdaptateurAlbert(ABC):
     @abstractmethod
-    def completer(
-        self, messages: list[dict[str, str]], temperature: float = 0.0
-    ) -> str: ...
-
-    def completer_json(
-        self,
-        messages: list[dict[str, str]],
-        nom_schema: str,
-        schema: dict[str, object],
-        temperature: float = 0.0,
-    ) -> str:
-        return self.completer(messages, temperature)
-
-    def completer_json_raisonnement(
-        self,
-        messages: list[dict[str, str]],
-        nom_schema: str,
-        schema: dict[str, object],
-        effort: str,
-        temperature: float = 0.0,
-    ) -> str:
-        return self.completer_json(messages, nom_schema, schema, temperature)
-
     def completer_json_raisonnement_preparation(
         self,
         messages: list[dict[str, str]],
         nom_schema: str,
         schema: dict[str, object],
         effort: str,
-        temperature: float = 0.0,
-    ) -> str:
-        return self.completer_json_raisonnement(
-            messages,
-            nom_schema,
-            schema,
-            effort,
-            0.0 if temperature is None else temperature,
-        )
-
-    def completer_json_raisonnement_transcript(
-        self,
-        messages: list[dict[str, str]],
-        nom_schema: str,
-        schema: dict[str, object],
-        effort: str,
-        temperature: float = 0.0,
-        top_p: float | None = None,
-    ) -> str:
-        return self.completer_json_raisonnement(
-            messages,
-            nom_schema,
-            schema,
-            effort,
-            temperature,
-        )
-
-    @abstractmethod
-    def plonger(self, textes: list[str]) -> list[list[float]]: ...
+        temperature: float | None = None,
+    ) -> str: ...
 
 
-class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
+class AdaptateurAlbertReel(AdaptateurAlbert):
     def __init__(self, config: Albert) -> None:
         self._config = config
-
-    def completer(
-        self, messages: list[dict[str, str]], temperature: float = 0.0
-    ) -> str:
-        return self._completer(messages, temperature)
-
-    def completer_json(
-        self,
-        messages: list[dict[str, str]],
-        nom_schema: str,
-        schema: dict[str, object],
-        temperature: float = 0.0,
-    ) -> str:
-        return self._completer(
-            messages,
-            temperature,
-            {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": nom_schema,
-                    "strict": True,
-                    "schema": schema,
-                },
-            },
-        )
-
-    def completer_json_raisonnement(
-        self,
-        messages: list[dict[str, str]],
-        nom_schema: str,
-        schema: dict[str, object],
-        effort: str,
-        temperature: float = 0.0,
-    ) -> str:
-        return self._completer(
-            messages,
-            temperature,
-            {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": nom_schema,
-                    "strict": True,
-                    "schema": schema,
-                },
-            },
-            effort,
-            self._config.delai_transcripts,
-            self._config.max_completion_tokens_transcripts,
-        )
 
     def completer_json_raisonnement_preparation(
         self,
@@ -378,9 +202,7 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                     delai.diagnostic.update(
                         groupe=None,
                         delai_tentative_s=self._config.delai_preparation_transcripts,
-                        duree_tentative_s=round(
-                            time.monotonic() - debut_tentative, 3
-                        ),
+                        duree_tentative_s=round(time.monotonic() - debut_tentative, 3),
                         duree_totale_s=round(time.monotonic() - debut, 3),
                         tentatives=tentatives,
                         retry_cause_type=cause_retry,
@@ -419,156 +241,6 @@ class AdaptateurAlbertReel(AdaptateurAlbert):  # pragma: no cover
                     metriques["duree_tentative_s"] = round(
                         time.monotonic() - debut_tentative, 3
                     )
-                    metriques["duree_totale_s"] = round(
-                        time.monotonic() - debut, 3
-                    )
+                    metriques["duree_totale_s"] = round(time.monotonic() - debut, 3)
         finally:
             metriques["duree_totale_s"] = round(time.monotonic() - debut, 3)
-
-    def _completer(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        response_format: dict[str, object] | None = None,
-        reasoning_effort: str | None = None,
-        delai: int = DELAI_MAXIMUM_ALBERT,
-        max_completion_tokens: int | None = None,
-        top_p: float | None = None,
-        exiger_reponse_transcript: bool = False,
-    ) -> str:
-        debut = time.monotonic()
-        diagnostic: dict[str, str | int | float | None] = {
-            "modele": self._config.modele,
-            "temperature": temperature,
-            "top_p": top_p,
-            "raisonnement": reasoning_effort,
-            "budget_completion": max_completion_tokens,
-            "statut_http": None,
-            "finish_reason": None,
-            "contenu_caracteres": 0,
-            "raisonnement_caracteres": 0,
-            "duree_secondes": None,
-        }
-        try:
-            with httpx.Client(timeout=delai) as client:
-                corps: dict[str, object] = {
-                    "model": self._config.modele,
-                    "messages": messages,
-                    "temperature": temperature,
-                }
-                if response_format:
-                    corps["response_format"] = response_format
-                if reasoning_effort:
-                    corps["reasoning_effort"] = reasoning_effort
-                if max_completion_tokens is not None:
-                    corps["max_completion_tokens"] = max_completion_tokens
-                if top_p is not None:
-                    corps["top_p"] = top_p
-                reponse = client.post(
-                    f"{self._config.url}/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self._config.cle_api}",
-                        "Content-Type": "application/json",
-                    },
-                    json=corps,
-                )
-                reponse.raise_for_status()
-        except httpx.HTTPError as erreur:
-            diagnostic["statut_http"] = (
-                erreur.response.status_code
-                if isinstance(erreur, httpx.HTTPStatusError)
-                and erreur.response is not None
-                else None
-            )
-            traduit = _traduit_erreur(erreur)
-            if exiger_reponse_transcript:
-                diagnostic["duree_secondes"] = round(time.monotonic() - debut, 3)
-                traduit.diagnostic = diagnostic
-            raise traduit from erreur
-        try:
-            donnees = reponse.json()
-            if exiger_reponse_transcript:
-                diagnostic.update(_metriques_reponse_transcript(donnees))
-            lecteur = (
-                _lire_reponse_completion_transcript
-                if exiger_reponse_transcript
-                else _lire_reponse_completion
-            )
-            contenu = lecteur(donnees)
-            if exiger_reponse_transcript:
-                diagnostic["statut_http"] = reponse.status_code
-                diagnostic["duree_secondes"] = round(time.monotonic() - debut, 3)
-                return CompletionTranscript(contenu, diagnostic)
-            return contenu
-        except (
-            ValueError,
-            KeyError,
-            IndexError,
-            TypeError,
-            ReponseAlbertInvalide,
-        ) as erreur:
-            invalide = ReponseAlbertInvalide()
-            if exiger_reponse_transcript:
-                diagnostic["statut_http"] = reponse.status_code
-                diagnostic["duree_secondes"] = round(time.monotonic() - debut, 3)
-                diagnostic["code_reponse"] = (
-                    "json_reponse_invalide"
-                    if isinstance(erreur, ValueError)
-                    else "finish_reason_invalide"
-                    if diagnostic.get("finish_reason") != "stop"
-                    else "contenu_completion_invalide"
-                )
-                invalide.diagnostic = diagnostic
-            raise invalide from erreur
-
-    def completer_json_raisonnement_transcript(
-        self,
-        messages: list[dict[str, str]],
-        nom_schema: str,
-        schema: dict[str, object],
-        effort: str,
-        temperature: float = 0.0,
-        top_p: float | None = None,
-    ) -> str:
-        return self._completer(
-            messages,
-            temperature,
-            {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": nom_schema,
-                    "strict": True,
-                    "schema": schema,
-                },
-            },
-            effort,
-            self._config.delai_transcripts,
-            self._config.max_completion_tokens_transcripts,
-            top_p,
-            exiger_reponse_transcript=True,
-        )
-
-    def plonger(self, textes: list[str]) -> list[list[float]]:
-        vecteurs: list[list[float]] = []
-        try:
-            with httpx.Client(timeout=DELAI_MAXIMUM_ALBERT) as client:
-                for debut in range(0, len(textes), 32):
-                    reponse = client.post(
-                        f"{self._config.url}/v1/embeddings",
-                        headers={
-                            "Authorization": f"Bearer {self._config.cle_api}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": self._config.modele_embeddings,
-                            "input": textes[debut : debut + 32],
-                        },
-                    )
-                    reponse.raise_for_status()
-                    try:
-                        vecteurs.extend(d["embedding"] for d in reponse.json()["data"])
-                    except (ValueError, KeyError, IndexError, TypeError) as erreur:
-                        raise ReponseAlbertInvalide from erreur
-        except httpx.HTTPError as erreur:
-            raise _traduit_erreur(erreur) from erreur
-        return vecteurs

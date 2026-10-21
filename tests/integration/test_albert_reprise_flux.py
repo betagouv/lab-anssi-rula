@@ -136,7 +136,6 @@ def _adaptateur(
             url=f"http://127.0.0.1:{serveur.server_port}",
             cle_api="test",
             modele="modele-test",
-            modele_embeddings="embeddings-test",
             delai_transcripts=delai_http,
             delai_preparation_transcripts=delai,
         )

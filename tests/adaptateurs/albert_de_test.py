@@ -63,6 +63,18 @@ class AdaptateurAlbertDeTest(AdaptateurAlbert):
         self.efforts_recus.append(effort)
         return self.completer_json(messages, nom_schema, schema, temperature)
 
+    def completer_json_raisonnement_preparation(
+        self,
+        messages: list[dict[str, str]],
+        nom_schema: str,
+        schema: dict[str, object],
+        effort: str,
+        temperature: float | None = None,
+    ) -> str:
+        self.efforts_recus.append(effort)
+        self.schemas_recus.append(schema)
+        return self.completer(messages, 0.0 if temperature is None else temperature)
+
     def completer_json_raisonnement_transcript(
         self,
         messages: list[dict[str, str]],
@@ -72,9 +84,7 @@ class AdaptateurAlbertDeTest(AdaptateurAlbert):
         temperature: float = 0.0,
         top_p: float | None = None,
     ) -> str:
-        self.parametres_transcript.append(
-            (temperature, top_p, effort)
-        )
+        self.parametres_transcript.append((temperature, top_p, effort))
         self.efforts_recus.append(effort)
         self.schemas_recus.append(schema)
         return self.completer(messages, temperature)

@@ -8,7 +8,7 @@ describe('confirmation de suppression', () => {
       props: {
         modalId: 'suppression-test',
         titre: 'Supprimer ce transcript ?',
-        description: 'Le transcript et son analyse seront supprimés.',
+        description: 'Le transcript pseudonymisé sera supprimé.',
         onconfirmer: async () => {},
         onsucces: () => {},
       },

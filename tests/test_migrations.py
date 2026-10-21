@@ -1,104 +1,142 @@
-import json
 from pathlib import Path
+from uuid import uuid4
+import os
+
+import psycopg2
+from psycopg2 import sql
+import pytest
 
 from configuration import BaseDeDonnees
-from infra.postgres import migrations
-from infra.postgres import execute_migrations as script_migrations
+from infra.postgres.migrations import execute_migrations
 
 
-class _Curseur:
-    def __init__(self, executees: set[str]):
-        self._executees = executees
-        self._nom: str | None = None
-        self.requetes: list[tuple[str, tuple | None]] = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return None
-
-    def execute(self, requete: str, parametres: tuple | None = None):
-        self.requetes.append((requete, parametres))
-        if requete.startswith("SELECT 1 FROM migrations_executees"):
-            self._nom = parametres[0] if parametres else None
-        if requete.startswith("INSERT INTO migrations_executees") and parametres:
-            self._executees.add(parametres[0])
-
-    def fetchone(self):
-        return (1,) if self._nom in self._executees else None
-
-
-class _Connexion:
-    def __init__(self, curseur: _Curseur):
-        self._curseur = curseur
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return None
-
-    def cursor(self):
-        return self._curseur
-
-
-def test_execute_migrations_execute_une_seule_fois(monkeypatch, tmp_path):
-    (tmp_path / "001_premiere.sql").write_text("SELECT 'premiere';", encoding="utf-8")
-    (tmp_path / "002_seconde.sql").write_text("SELECT 'seconde';", encoding="utf-8")
-    executees: set[str] = set()
-    curseur = _Curseur(executees)
-    monkeypatch.setattr(
-        migrations.psycopg2,
-        "connect",
-        lambda **kwargs: _Connexion(curseur),
+@pytest.fixture
+def base_temporaire(tmp_path: Path):
+    dsn = os.getenv("RULA_TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("RULA_TEST_DATABASE_URL must point to disposable PostgreSQL")
+    admin = psycopg2.connect(dsn)
+    admin.autocommit = True
+    nom = f"rula_test_{uuid4().hex}"
+    with admin.cursor() as curseur:
+        curseur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nom)))
+    parametres = psycopg2.extensions.parse_dsn(dsn)
+    config = BaseDeDonnees(
+        parametres["host"],
+        int(parametres.get("port", 5432)),
+        nom,
+        parametres["user"],
+        parametres["password"],
     )
-    config = BaseDeDonnees("hote", 5432, "nom", "utilisateur", "mot-de-passe")
+    try:
+        yield config
+    finally:
+        admin.cursor().execute(
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                sql.Identifier(nom)
+            )
+        )
+        admin.close()
 
-    assert migrations.execute_migrations(config, tmp_path) == [
-        "001_premiere.sql",
-        "002_seconde.sql",
+
+def _verifier(config: BaseDeDonnees, requete: str):
+    with (
+        psycopg2.connect(
+            host=config.hote,
+            port=config.port,
+            dbname=config.nom,
+            user=config.utilisateur,
+            password=config.mot_de_passe,
+        ) as connexion,
+        connexion.cursor() as curseur,
+    ):
+        curseur.execute(requete)
+        return curseur.fetchall()
+
+
+def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) -> None:
+    repertoire = Path(__file__).parents[1] / "migrations"
+    assert execute_migrations(base_temporaire, repertoire) == [
+        "001_schema_unifie.sql",
+        "002_pseudonymisation_seule.sql",
     ]
-    assert migrations.execute_migrations(config, tmp_path) == []
-    assert executees == {"001_premiere.sql", "002_seconde.sql"}
-    assert (
-        "SELECT pg_advisory_xact_lock(%s)",
-        (migrations.VERROU_MIGRATIONS,),
-    ) in curseur.requetes
+    assert execute_migrations(base_temporaire, repertoire) == []
+    assert _verifier(base_temporaire, "SELECT nom FROM produits ORDER BY nom") == [
+        ("MSC",),
+        ("MSS",),
+    ]
+    assert _verifier(base_temporaire, "SELECT count(*) FROM transcripts")[0][0] == 0
 
 
-def test_script_execute_les_migrations(monkeypatch):
-    config = BaseDeDonnees("hote", 5432, "nom", "utilisateur", "mot-de-passe")
-    appels = []
-    monkeypatch.setattr(
-        script_migrations,
-        "charge_configuration",
-        lambda: type("ConfigurationDeTest", (), {"base_de_donnees": config})(),
+def test_migration_preserve_transcript_confirme_et_ses_identifiants(
+    base_temporaire: BaseDeDonnees, tmp_path: Path
+) -> None:
+    migrations = Path(__file__).parents[1] / "migrations"
+    premiere = tmp_path / "premiere"
+    premiere.mkdir()
+    (premiere / "001_schema_unifie.sql").write_text(
+        (migrations / "001_schema_unifie.sql").read_text(encoding="utf-8"),
+        encoding="utf-8",
     )
-    monkeypatch.setattr(
-        script_migrations,
-        "execute_migrations",
-        lambda base_de_donnees: appels.append(base_de_donnees),
+    execute_migrations(base_temporaire, premiere)
+    with (
+        psycopg2.connect(
+            host=base_temporaire.hote,
+            port=base_temporaire.port,
+            dbname=base_temporaire.nom,
+            user=base_temporaire.utilisateur,
+            password=base_temporaire.mot_de_passe,
+        ) as connexion,
+        connexion.cursor() as curseur,
+    ):
+        curseur.execute("SELECT id FROM produits WHERE nom = 'MSS'")
+        ligne = curseur.fetchone()
+        assert ligne is not None
+        produit_id = ligne[0]
+        curseur.execute(
+            "INSERT INTO transcripts(id, produit_id, contenu, date_entretien, type_source, contexte, locuteurs, nom_fichier, confirme) VALUES (73, %s, 'Texte pseudonymise', '2025-02-03', 'bizdev', 'Contexte', '[{\"identifiant\":\"SPEAKER_01\"}]', 'reunion.pdf', TRUE)",
+            (produit_id,),
+        )
+    assert execute_migrations(base_temporaire, migrations) == [
+        "002_pseudonymisation_seule.sql"
+    ]
+    assert _verifier(
+        base_temporaire,
+        "SELECT id, produit_id, contenu, date_entretien, type_source, contexte, locuteurs, nom_fichier, confirme FROM transcripts",
+    ) == [
+        (
+            73,
+            3,
+            "Texte pseudonymise",
+            __import__("datetime").date(2025, 2, 3),
+            "bizdev",
+            "Contexte",
+            [{"identifiant": "SPEAKER_01"}],
+            "reunion.pdf",
+            True,
+        )
+    ]
+    assert _verifier(base_temporaire, "SELECT id, nom FROM produits") == [
+        (2, "MSC"),
+        (3, "MSS"),
+    ]
+
+
+def test_execute_migrations_annule_schema_et_marqueur_en_erreur(
+    base_temporaire: BaseDeDonnees, tmp_path: Path
+) -> None:
+    (tmp_path / "001_ok.sql").write_text(
+        "CREATE TABLE temporaire (id INT);", encoding="utf-8"
     )
-
-    script_migrations.main()
-
-    assert appels == [config]
-
-
-def test_une_migration_unifiee_remplace_les_migrations_historiques() -> None:
-    racine = Path(__file__).parents[1]
-    chemins = list((racine / "migrations").glob("*.sql"))
-    historique = json.loads(
-        (racine / "tests" / "fixtures" / "migrations_legacy.json").read_text()
+    (tmp_path / "002_erreur.sql").write_text(
+        "CREATE TABLE autre (id INT); SELECT 1 / 0;", encoding="utf-8"
     )
-    contenu = chemins[0].read_text()
-
-    assert [chemin.name for chemin in chemins] == ["001_schema_unifie.sql"]
-    assert len(historique) == 22
-    assert "migrations_executees" not in contenu
-    assert "DROP TABLE IF EXISTS calculs_transverses" in contenu
-    assert "CREATE TABLE jobs_analyse_transcripts" in contenu
-    assert "type_source IN ('ux', 'produit', 'bizdev')" in contenu
-    assert "FOREIGN KEY (projet_id, produit_id)" in contenu
-    assert "TRUNCATE" not in contenu
+    with pytest.raises(psycopg2.errors.DivisionByZero):
+        execute_migrations(base_temporaire, tmp_path)
+    assert _verifier(
+        base_temporaire,
+        "SELECT to_regclass('public.temporaire'), to_regclass('public.autre')",
+    ) == [(None, None)]
+    assert _verifier(
+        base_temporaire, "SELECT to_regclass('public.migrations_executees')"
+    ) == [(None,)]

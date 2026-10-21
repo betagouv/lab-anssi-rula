@@ -6,18 +6,12 @@ class Albert(NamedTuple):
     url: str
     cle_api: str
     modele: str
-    modele_embeddings: str
     delai_transcripts: int = 180
     max_completion_tokens_transcripts: int = 16384
     temperature_transcripts: float = 1.0
     top_p_transcripts: float = 1.0
     parallelisme_anonymisation: int = 8
-    effort_analyse_transcripts: str = "medium"
     delai_preparation_transcripts: int = 180
-
-
-class Correspondance(NamedTuple):
-    seuil: float
 
 
 class BaseDeDonnees(NamedTuple):
@@ -39,7 +33,6 @@ class Configuration(NamedTuple):
     rula: Rula
     albert: Albert
     base_de_donnees: BaseDeDonnees
-    correspondance: Correspondance
 
 
 def _variable(nom: str, defaut: str, *noms_secours: str) -> str:
@@ -53,14 +46,6 @@ def _variable(nom: str, defaut: str, *noms_secours: str) -> str:
 def _valider_parallelisme_anonymisation(valeur: int) -> int:
     if valeur < 1:
         raise ValueError("ALBERT_PARALLELISME_ANONYMISATION doit être positif.")
-    return valeur
-
-
-def _valider_effort_analyse_transcripts(valeur: str) -> str:
-    if valeur not in {"low", "medium", "high"}:
-        raise ValueError(
-            "ALBERT_EFFORT_ANALYSE_TRANSCRIPTS doit être low, medium ou high."
-        )
     return valeur
 
 
@@ -79,7 +64,6 @@ def charge_configuration() -> Configuration:
             url=os.environ.get("ALBERT_URL", ""),
             cle_api=os.environ.get("ALBERT_CLE_API", ""),
             modele=os.environ.get("ALBERT_MODELE", "openweight-medium"),
-            modele_embeddings=os.environ.get("ALBERT_MODELE_EMBEDDINGS", "BAAI/bge-m3"),
             delai_transcripts=int(os.environ.get("ALBERT_DELAI_TRANSCRIPTS", "180")),
             max_completion_tokens_transcripts=int(
                 os.environ.get("ALBERT_MAX_COMPLETION_TOKENS_TRANSCRIPTS", "16384")
@@ -91,9 +75,6 @@ def charge_configuration() -> Configuration:
             parallelisme_anonymisation=_valider_parallelisme_anonymisation(
                 int(os.environ.get("ALBERT_PARALLELISME_ANONYMISATION", "8"))
             ),
-            effort_analyse_transcripts=_valider_effort_analyse_transcripts(
-                os.environ.get("ALBERT_EFFORT_ANALYSE_TRANSCRIPTS", "medium")
-            ),
             delai_preparation_transcripts=int(
                 os.environ.get("ALBERT_DELAI_PREPARATION_TRANSCRIPTS", "180")
             ),
@@ -104,8 +85,5 @@ def charge_configuration() -> Configuration:
             nom=_variable("DB_NOM", "rula", "POSTGRESQL_ADDON_DB"),
             utilisateur=_variable("DB_UTILISATEUR", "rula", "POSTGRESQL_ADDON_USER"),
             mot_de_passe=_variable("DB_MOT_DE_PASSE", "", "POSTGRESQL_ADDON_PASSWORD"),
-        ),
-        correspondance=Correspondance(
-            seuil=float(os.environ.get("CORRESPONDANCE_SEUIL", "0.35")),
         ),
     )
