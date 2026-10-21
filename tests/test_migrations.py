@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from uuid import uuid4
 import os
@@ -68,7 +69,7 @@ def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) 
     assert _verifier(base_temporaire, "SELECT count(*) FROM transcripts")[0][0] == 0
 
 
-def test_migration_preserve_transcript_confirme_et_ses_identifiants(
+def test_migration_ne_garde_que_les_transcripts_pdf_confirmes_mss_msc(
     base_temporaire: BaseDeDonnees, tmp_path: Path
 ) -> None:
     migrations = Path(__file__).parents[1] / "migrations"
@@ -89,32 +90,110 @@ def test_migration_preserve_transcript_confirme_et_ses_identifiants(
         ) as connexion,
         connexion.cursor() as curseur,
     ):
-        curseur.execute("SELECT id FROM produits WHERE nom = 'MSS'")
-        ligne = curseur.fetchone()
-        assert ligne is not None
-        produit_id = ligne[0]
+        curseur.execute("SELECT nom, id FROM produits")
+        produits = dict(curseur.fetchall())
+        curseur.executemany(
+            "INSERT INTO projets_recherche(id, produit_id, nom) VALUES (%s, %s, %s)",
+            [
+                (901, produits["MSS"], "Projet MSS"),
+                (902, produits["MSC"], "Projet MSC"),
+                (903, produits["MQC"], "Projet hors périmètre"),
+            ],
+        )
         curseur.execute(
-            "INSERT INTO transcripts(id, produit_id, contenu, date_entretien, type_source, contexte, locuteurs, nom_fichier, confirme) VALUES (73, %s, 'Texte pseudonymise', '2025-02-03', 'bizdev', 'Contexte', '[{\"identifiant\":\"SPEAKER_01\"}]', 'reunion.pdf', TRUE)",
-            (produit_id,),
+            """
+            INSERT INTO transcripts(
+                id, produit_id, projet_id, contenu, date_entretien, type_source,
+                contexte, locuteurs, nom_fichier, confirme
+            ) VALUES
+                (71, %s, 901, 'MSS produit confirmé', '2025-02-01', 'produit',
+                 'Contexte 71', '[{"identifiant":"SPEAKER_01"}]', '71.pdf', TRUE),
+                (72, %s, NULL, 'MSS bizdev confirmé', '2025-02-02', 'bizdev',
+                 'Contexte 72', '[{"identifiant":"SPEAKER_02"}]', '72.pdf', TRUE),
+                (73, %s, 902, 'MSC produit confirmé', '2025-02-03', 'produit',
+                 'Contexte 73', '[{"identifiant":"SPEAKER_03"}]', '73.pdf', TRUE),
+                (74, %s, NULL, 'MSC bizdev confirmé', '2025-02-04', 'bizdev',
+                 'Contexte 74', '[{"identifiant":"SPEAKER_04"}]', '74.pdf', TRUE),
+                (75, %s, 901, 'MSS produit non confirmé', '2025-02-05', 'produit',
+                 '', '[]', '75.pdf', FALSE),
+                (76, %s, NULL, 'MSC bizdev non confirmé', '2025-02-06', 'bizdev',
+                 '', '[]', '76.pdf', FALSE),
+                (77, %s, NULL, 'MSS UX confirmé', '2025-02-07', 'ux',
+                 '', '[]', '77.pdf', TRUE),
+                (78, %s, 903, 'MQC produit confirmé', '2025-02-08', 'produit',
+                 '', '[]', '78.pdf', TRUE),
+                (79, %s, NULL, 'MQC bizdev confirmé', '2025-02-09', 'bizdev',
+                 '', '[]', '79.pdf', TRUE),
+                (80, NULL, NULL, 'Sans produit confirmé', '2025-02-10', 'ux',
+                 '', '[]', '80.pdf', TRUE)
+            """,
+            (
+                produits["MSS"],
+                produits["MSS"],
+                produits["MSC"],
+                produits["MSC"],
+                produits["MSS"],
+                produits["MSC"],
+                produits["MSS"],
+                produits["MQC"],
+                produits["MQC"],
+            ),
         )
     assert execute_migrations(base_temporaire, migrations) == [
         "002_pseudonymisation_seule.sql"
     ]
     assert _verifier(
         base_temporaire,
-        "SELECT id, produit_id, contenu, date_entretien, type_source, contexte, locuteurs, nom_fichier, confirme FROM transcripts",
+        """
+        SELECT id, produit_id, contenu, date_entretien, type_source, contexte,
+               locuteurs, nom_fichier, confirme
+        FROM transcripts ORDER BY id
+        """,
     ) == [
         (
-            73,
+            71,
             3,
-            "Texte pseudonymise",
-            __import__("datetime").date(2025, 2, 3),
-            "bizdev",
-            "Contexte",
+            "MSS produit confirmé",
+            date(2025, 2, 1),
+            "produit",
+            "Contexte 71",
             [{"identifiant": "SPEAKER_01"}],
-            "reunion.pdf",
+            "71.pdf",
             True,
-        )
+        ),
+        (
+            72,
+            3,
+            "MSS bizdev confirmé",
+            date(2025, 2, 2),
+            "bizdev",
+            "Contexte 72",
+            [{"identifiant": "SPEAKER_02"}],
+            "72.pdf",
+            True,
+        ),
+        (
+            73,
+            2,
+            "MSC produit confirmé",
+            date(2025, 2, 3),
+            "produit",
+            "Contexte 73",
+            [{"identifiant": "SPEAKER_03"}],
+            "73.pdf",
+            True,
+        ),
+        (
+            74,
+            2,
+            "MSC bizdev confirmé",
+            date(2025, 2, 4),
+            "bizdev",
+            "Contexte 74",
+            [{"identifiant": "SPEAKER_04"}],
+            "74.pdf",
+            True,
+        ),
     ]
     assert _verifier(base_temporaire, "SELECT id, nom FROM produits") == [
         (2, "MSC"),
