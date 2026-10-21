@@ -9,10 +9,15 @@ from uuid import uuid4
 
 from adaptateurs.albert import AdaptateurAlbert
 from adaptateurs.exceptions import DelaiAlbertDepasse
+from liste_blanche.depot import DepotListeBlanche
 from transcripts_pdf.extraction import (
     appliquer_remplacements_positions,
     anonymiser_locuteurs,
     extraire_pdf,
+)
+from transcripts_pdf.protection_liste_blanche import (
+    positions_liste_blanche,
+    soustraire_intervalle,
 )
 
 _CATEGORIES = (
@@ -242,6 +247,7 @@ class ServicePreparationTranscript:
         prompt: str,
         executeur: Executor | None = None,
         fabrique_albert: Callable[[], AdaptateurAlbert] | None = None,
+        depot_liste_blanche: DepotListeBlanche | None = None,
     ) -> None:
         if albert is None and fabrique_albert is None:
             raise ValueError("Une fabrique Albert est requise.")
@@ -251,6 +257,7 @@ class ServicePreparationTranscript:
         self._prompt = prompt
         self._executeur = executeur
         self._fabrique_albert = fabrique_albert
+        self._depot_liste_blanche = depot_liste_blanche
 
     def preparer(
         self,
@@ -529,6 +536,25 @@ class ServicePreparationTranscript:
                     )
                 )
                 conflits_expansion += len(categories) > 1
+        termes_proteges = (
+            [terme.terme for terme in self._depot_liste_blanche.lister()]
+            if self._depot_liste_blanche is not None
+            else []
+        )
+        for champ, positions in positions_fusionnees.items():
+            source = sources[champ]
+            protections = positions_liste_blanche(source, termes_proteges)
+            positions_filtrees: list[tuple[int, int, str]] = []
+            for debut, fin, categorie in positions:
+                if not any(caractere.isalnum() for caractere in source[debut:fin]):
+                    continue
+                positions_filtrees.extend(
+                    (debut_restant, fin_restant, categorie)
+                    for debut_restant, fin_restant in soustraire_intervalle(
+                        source, debut, fin, protections
+                    )
+                )
+            positions_fusionnees[champ] = positions_filtrees
         categories_par_valeur_finale: dict[str, set[str]] = {}
         for champ, positions in positions_fusionnees.items():
             for debut, fin, categorie in positions:

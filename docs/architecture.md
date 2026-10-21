@@ -1,6 +1,6 @@
 # Architecture de RULA
 
-RULA sert à pseudonymiser des transcripts PDF avant de conserver leur contenu. L’application propose MSS (MonServiceSécurisé) et MSC (MesServicesCyber), avec une liste séparée par produit. Les PDF de type Produit et BizDev suivent le même parcours de pseudonymisation.
+RULA sert à pseudonymiser des transcripts PDF avant de conserver leur contenu. L’application propose MSS (MonServiceSécurisé) et MSC (MesServicesCyber), avec une liste blanche partagée. Les PDF de type Produit et BizDev suivent le même parcours de pseudonymisation.
 
 ## Services
 
@@ -12,9 +12,11 @@ Les analyses, projets de recherche, imports FeatureBase et retours BizDev tabula
 
 ## Données
 
-Les seules tables applicatives sont `produits` et `transcripts`. Les produits conservés sont MSS et MSC. Un transcript conserve son identifiant, son produit, son nom de fichier, son type (`produit` ou `bizdev`), sa date, son contenu pseudonymisé, son contexte pseudonymisé, ses locuteurs, son état de confirmation et ses dates de création/modification.
+Les seules tables applicatives sont `produits`, `transcripts` et `termes_liste_blanche`. Les produits conservés sont MSS et MSC. Un transcript conserve son identifiant, son produit, son nom de fichier, son type (`produit` ou `bizdev`), sa date, son contenu pseudonymisé, son contexte pseudonymisé, ses locuteurs, son état de confirmation et ses dates de création/modification.
 
-La migration `001_schema_unifie.sql` est conservée pour préserver l’historique de migration. La migration versionnée `002_pseudonymisation_seule.sql` réduit une base existante au nouveau schéma et ne garde que les lignes confirmées de type Produit/BizDev rattachées à MSS ou MSC. Sur une base vide, le runner exécute `001`, puis `002`. Le runner enregistre chaque migration dans `migrations_executees` dans la même transaction que son SQL.
+La migration `001_schema_unifie.sql` est conservée pour préserver l’historique de migration. La migration versionnée `002_pseudonymisation_seule.sql` réduit une base existante au nouveau schéma et ne garde que les lignes confirmées de type Produit/BizDev rattachées à MSS ou MSC. La migration `003_liste_blanche.sql` ajoute la liste partagée et ses termes initiaux. Ces seeds sont insérés à la migration seulement; supprimer un terme ne le recrée pas au redémarrage. Sur une base vide, le runner exécute `001`, `002`, puis `003`. Le runner enregistre chaque migration dans `migrations_executees` dans la même transaction que son SQL.
+
+La liste blanche est gérée depuis une page dédiée. Elle est normalisée en NFC, espaces comprimés et `casefold` pour l’unicité; les révisions empêchent d’écraser une modification concurrente. Une préparation lit un snapshot après la fin des réponses Albert et soustrait les expressions protégées aux intervalles finaux avant l’attribution des pseudonymes. La liste n’est jamais envoyée à Albert. Les préparations déjà enregistrées ne sont pas recalculées et la relecture humaine peut toujours corriger les masques.
 
 La préparation en mémoire est reliée au navigateur par un identifiant et un cookie `HttpOnly`, `SameSite=Strict`; les réponses de préparation interdisent le cache et les mutations valident l’origine. Une préparation expirée ou interrompue doit être réimportée.
 
