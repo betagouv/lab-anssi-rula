@@ -4,12 +4,12 @@ import logging
 import re
 from time import perf_counter
 from threading import Event, Lock
-from typing import Callable, NamedTuple, NotRequired, TypedDict, cast
+from typing import Callable, NamedTuple, TypedDict, cast
 from uuid import uuid4
 
 from adaptateurs.albert import AdaptateurAlbert
 from adaptateurs.exceptions import DelaiAlbertDepasse
-from liste_blanche.depot import DepotListeBlanche
+from termes_liste import DepotListeTermes
 from transcripts_pdf.extraction import (
     appliquer_remplacements_positions,
     anonymiser_locuteurs,
@@ -188,7 +188,6 @@ class RemplacementResolu(TypedDict):
     champ: str
     debut: int
     fin: int
-    impose: NotRequired[bool]
 
 
 class LocuteurPrepare(TypedDict):
@@ -224,6 +223,41 @@ class OccurrencePseudonymisation(NamedTuple):
     impose: bool = False
 
 
+def _fusionner_positions(
+    candidates: list[tuple[int, int, str, bool]],
+) -> tuple[list[tuple[int, int, str, bool]], int]:
+    resultats: list[tuple[int, int, str, bool]] = []
+    conflits = 0
+    composante: list[tuple[int, int, str, bool]] = []
+    fin_composante = 0
+    for candidate in sorted(candidates, key=lambda position: position[0]):
+        if composante and candidate[0] >= fin_composante:
+            resultats.append(_fusionner_composante(composante))
+            conflits += len({position[2] for position in composante}) > 1
+            composante = []
+        composante.append(candidate)
+        fin_composante = max(fin_composante, candidate[1])
+    if composante:
+        resultats.append(_fusionner_composante(composante))
+        conflits += len({position[2] for position in composante}) > 1
+    return resultats, conflits
+
+
+def _fusionner_composante(
+    composante: list[tuple[int, int, str, bool]],
+) -> tuple[int, int, str, bool]:
+    debut = min(position[0] for position in composante)
+    fin = max(position[1] for position in composante)
+    impose = any(position[3] for position in composante)
+    categories = {position[2] for position in composante}
+    return (
+        debut,
+        fin,
+        "donnee_sensible" if impose or len(categories) > 1 else next(iter(categories)),
+        impose,
+    )
+
+
 class PreparationLue(TypedDict):
     remplacements: list[Remplacement]
     locuteurs: list[LocuteurPrepare]
@@ -250,7 +284,7 @@ class ServicePreparationTranscript:
         prompt: str,
         executeur: Executor | None = None,
         fabrique_albert: Callable[[], AdaptateurAlbert] | None = None,
-        depot_liste_blanche: DepotListeBlanche | None = None,
+        depot_liste_blanche: DepotListeTermes | None = None,
     ) -> None:
         if albert is None and fabrique_albert is None:
             raise ValueError("Une fabrique Albert est requise.")
@@ -511,39 +545,12 @@ class ServicePreparationTranscript:
                     position = (champ, debut, fin)
                     if position not in positions_vues:
                         positions_vues.add(position)
-                        positions_source[champ].append(
-                            (debut, fin, categorie, remplacement.get("impose", False))
-                        )
-        positions_fusionnees: dict[str, list[tuple[int, int, str, bool]]] = {
-            champ: [] for champ in sources
-        }
+                        positions_source[champ].append((debut, fin, categorie, False))
+        positions_fusionnees: dict[str, list[tuple[int, int, str, bool]]] = {}
         conflits_expansion = 0
         for champ, candidates in positions_source.items():
-            composantes: list[list[tuple[int, int, str, bool]]] = []
-            fin_composante = 0
-            for candidate in sorted(candidates, key=lambda position: position[0]):
-                if composantes and candidate[0] < fin_composante:
-                    composantes[-1].append(candidate)
-                    fin_composante = max(fin_composante, candidate[1])
-                else:
-                    composantes.append([candidate])
-                    fin_composante = candidate[1]
-            for composante in composantes:
-                categories = {candidate[2] for candidate in composante}
-                impose = any(candidate[3] for candidate in composante)
-                debut = min(candidate[0] for candidate in composante)
-                fin = max(candidate[1] for candidate in composante)
-                positions_fusionnees[champ].append(
-                    (
-                        debut,
-                        fin,
-                        "donnee_sensible"
-                        if impose or len(categories) > 1
-                        else next(iter(categories)),
-                        impose,
-                    )
-                )
-                conflits_expansion += len(categories) > 1
+            positions_fusionnees[champ], conflits = _fusionner_positions(candidates)
+            conflits_expansion += conflits
         termes_proteges = (
             [terme.terme for terme in self._depot_liste_blanche.lister()]
             if self._depot_liste_blanche is not None
@@ -579,33 +586,9 @@ class ServicePreparationTranscript:
                     else positions_liste_blanche(source, list(termes_imposes))
                 )
             )
-            composantes_finales: list[list[tuple[int, int, str, bool]]] = []
-            fin_composante = 0
-            for position_finale in sorted(
-                positions_fusionnees[champ], key=lambda valeur: valeur[0]
-            ):
-                if composantes_finales and position_finale[0] < fin_composante:
-                    composantes_finales[-1].append(position_finale)
-                    fin_composante = max(fin_composante, position_finale[1])
-                else:
-                    composantes_finales.append([position_finale])
-                    fin_composante = position_finale[1]
-            positions_fusionnees[champ] = []
-            for composante_finale in composantes_finales:
-                impose = any(position[3] for position in composante_finale)
-                categories = {position[2] for position in composante_finale}
-                debut = min(position[0] for position in composante_finale)
-                fin = max(position[1] for position in composante_finale)
-                positions_fusionnees[champ].append(
-                    (
-                        debut,
-                        fin,
-                        "donnee_sensible"
-                        if impose or len(categories) > 1
-                        else next(iter(categories)),
-                        impose,
-                    )
-                )
+            positions_fusionnees[champ], _ = _fusionner_positions(
+                positions_fusionnees[champ]
+            )
         categories_par_valeur_finale: dict[str, set[str]] = {}
         for champ, positions in positions_fusionnees.items():
             for debut, fin, categorie, _ in positions:
@@ -977,17 +960,12 @@ def _positions_valides(
                 fin_composante = position[2]
         for composante in composantes:
             categories = {position[0]["categorie"] for position in composante}
-            impose = any(position[0].get("impose", False) for position in composante)
-            if len(categories) == 1 and not impose:
+            if len(categories) == 1:
                 triees.extend(composante)
                 continue
             debut = min(position[1] for position in composante)
             fin = max(position[2] for position in composante)
-            categorie = (
-                "donnee_sensible"
-                if impose or len(categories) > 1
-                else next(iter(categories))
-            )
+            categorie = "donnee_sensible"
             triees.append(
                 (
                     {
@@ -996,7 +974,6 @@ def _positions_valides(
                         "champ": champ,
                         "debut": debut,
                         "fin": fin,
-                        "impose": impose,
                     },
                     debut,
                     fin,

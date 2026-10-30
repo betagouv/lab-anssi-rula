@@ -8,13 +8,11 @@ from psycopg2 import sql
 import pytest
 
 from configuration import BaseDeDonnees
-from infra.postgres.depot_liste_blanche import DepotListeBlanchePostgres
-from infra.postgres.depot_liste_noire import DepotListeNoirePostgres
+from infra.postgres.depot_termes import DepotListeTermesPostgres
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from infra.postgres.migrations import execute_migrations
-from liste_blanche.depot import RevisionObsolete, TermeDejaPresent
-from liste_blanche.service import ServiceListeBlanche
-from liste_noire.service import ServiceListeNoire
+from termes_liste import RevisionObsolete, TermeDejaPresent
+from termes_liste import ServiceListeTermes
 
 
 @pytest.fixture
@@ -184,7 +182,10 @@ def test_migration_liste_noire_conserve_les_snapshots_et_est_idempotente(
     )
     assert capture_modifiee is not None
     assert capture_modifiee.termes_imposes == ("Alice",)
-    assert ServiceListeNoire(DepotListeNoirePostgres(base_temporaire)).lister() == []
+    assert (
+        ServiceListeTermes(DepotListeTermesPostgres(base_temporaire, "noire")).lister()
+        == []
+    )
 
 
 def test_migration_ne_garde_que_les_transcripts_pdf_confirmes_mss_msc(
@@ -345,8 +346,10 @@ def test_depot_postgres_applique_revision_et_unicite_normalisee(
     base_temporaire: BaseDeDonnees,
 ) -> None:
     execute_migrations(base_temporaire)
-    service = ServiceListeBlanche(DepotListeBlanchePostgres(base_temporaire))
+    service = ServiceListeTermes(DepotListeTermesPostgres(base_temporaire, "blanche"))
+    noire = ServiceListeTermes(DepotListeTermesPostgres(base_temporaire, "noire"))
     premier = service.ajouter("  Entreprise\u00a0locale ")
+    terme_noir = noire.ajouter("Entreprise locale")
     second = service.ajouter("Autre terme")
     with pytest.raises(TermeDejaPresent):
         service.ajouter("ENTREPRISE   LOCALE")
@@ -363,3 +366,4 @@ def test_depot_postgres_applique_revision_et_unicite_normalisee(
         type(premier)(premier.id, "Équipe locale", 2)
     ]
     assert all(terme.id != second.id for terme in service.lister())
+    assert noire.lister() == [terme_noir]

@@ -1,8 +1,8 @@
 import { requete } from '../api/requete';
 
 export type Produit = { id: number; nom: string };
-export type TermeListeBlanche = { id: number; terme: string; revision: number };
-export type TermeListeNoire = { id: number; terme: string; revision: number };
+export type CouleurListe = 'blanche' | 'noire';
+export type TermeListe = { id: number; terme: string; revision: number };
 export type TranscriptPdf = {
   id: number;
   type_source: 'produit' | 'bizdev';
@@ -19,47 +19,31 @@ export const nomPseudonymise = (nom: string) =>
   `pseudonymiser_${nom.replace(/^(?:pseudonymiser_)+/i, '')}`;
 
 export const listerProduits = () => requete<Produit[]>('/api/produits');
-export const listerListeBlanche = () =>
-  requete<TermeListeBlanche[]>('/api/liste-blanche');
-export const ajouterTermeListeBlanche = (terme: string) =>
-  requete<TermeListeBlanche>('/api/liste-blanche', {
+export const listerTermes = (couleur: CouleurListe) =>
+  requete<TermeListe[]>(`/api/liste-${couleur}`);
+export const ajouterTerme = (couleur: CouleurListe, terme: string) =>
+  requete<TermeListe>(`/api/liste-${couleur}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ terme }),
   });
-export const modifierTermeListeBlanche = (
+export const modifierTerme = (
+  couleur: CouleurListe,
   id: number,
   terme: string,
   revision: number
 ) =>
-  requete<TermeListeBlanche>(`/api/liste-blanche/${id}`, {
+  requete<TermeListe>(`/api/liste-${couleur}/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ terme, revision }),
   });
-export const supprimerTermeListeBlanche = (id: number, revision: number) =>
-  requete<void>(`/api/liste-blanche/${id}?revision=${revision}`, {
-    method: 'DELETE',
-  });
-export const listerListeNoire = () => requete<TermeListeNoire[]>('/api/liste-noire');
-export const ajouterTermeListeNoire = (terme: string) =>
-  requete<TermeListeNoire>('/api/liste-noire', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ terme }),
-  });
-export const modifierTermeListeNoire = (
+export const supprimerTerme = (
+  couleur: CouleurListe,
   id: number,
-  terme: string,
   revision: number
 ) =>
-  requete<TermeListeNoire>(`/api/liste-noire/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ terme, revision }),
-  });
-export const supprimerTermeListeNoire = (id: number, revision: number) =>
-  requete<void>(`/api/liste-noire/${id}?revision=${revision}`, {
+  requete<void>(`/api/liste-${couleur}/${id}?revision=${revision}`, {
     method: 'DELETE',
   });
 export const listerTranscriptsPdf = (produitId: number) =>

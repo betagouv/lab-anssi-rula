@@ -19,12 +19,12 @@ from api.transcripts_pdf import (
 )
 from api.transcripts_pdf import fabrique_depot_transcripts_pdf
 from infra.memoire.depot_produits import DepotProduitsMemoire
-from infra.memoire.depot_liste_noire import DepotListeNoireMemoire
+from infra.memoire.depot_termes import DepotListeTermesMemoire
 from infra.memoire.depot_transcripts_pdf import DepotTranscriptsPdfMemoire
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.test_transcripts_pdf import _pdf, _reponses_preparation
 from transcripts_pdf.service import ServicePreparationTranscript
-from liste_noire.service import ServiceListeNoire
+from termes_liste import ServiceListeTermes
 
 _T = TypeVar("_T")
 _ORIGINE = {"Origin": "https://testserver"}
@@ -72,7 +72,7 @@ class ApiPdfDeTest(NamedTuple):
     application: FastAPI
     produits: DepotProduitsMemoire
     transcripts: DepotTranscriptsPdfMemoire
-    liste_noire: DepotListeNoireMemoire
+    liste_noire: DepotListeTermesMemoire
 
 
 def _service_preparation(reponses: list[str]) -> ServicePreparationTranscript:
@@ -89,7 +89,7 @@ def api_pdf_de_test() -> Iterator[ApiPdfDeTest]:
     produits.ajouter("MSC")
     produits.ajouter("MQC")
     transcripts = DepotTranscriptsPdfMemoire()
-    liste_noire = DepotListeNoireMemoire()
+    liste_noire = DepotListeTermesMemoire()
     service = _service_preparation(
         _reponses_preparation(
             _TEXTE_SOURCE,
@@ -348,7 +348,7 @@ def test_snapshot_noir_capture_avant_execution_et_garde_confirmation_et_modifica
     api_pdf_de_test: ApiPdfDeTest,
 ) -> None:
     client = api_pdf_de_test.client
-    service_liste = ServiceListeNoire(api_pdf_de_test.liste_noire)
+    service_liste = ServiceListeTermes(api_pdf_de_test.liste_noire)
     alice = service_liste.ajouter("Alice")
     executeur = ExecuteurDiffereDeTest()
     api_pdf_de_test.application.dependency_overrides[fabrique_executeur_preparation] = (
@@ -450,7 +450,7 @@ def test_relecture_refuse_etats_et_historiques_falsifies_sans_mutation(
     api_pdf_de_test: ApiPdfDeTest,
 ) -> None:
     client = api_pdf_de_test.client
-    ServiceListeNoire(api_pdf_de_test.liste_noire).ajouter("Alice")
+    ServiceListeTermes(api_pdf_de_test.liste_noire).ajouter("Alice")
     api_pdf_de_test.application.dependency_overrides[
         fabrique_service_preparation_pdf
     ] = lambda: _service_preparation(

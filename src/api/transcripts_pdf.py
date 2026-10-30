@@ -27,9 +27,8 @@ from api.produits import fabrique_depot_produits
 from produits.depot import DepotProduits
 from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
 from configuration import charge_configuration
-from infra.postgres.depot_liste_blanche import DepotListeBlanchePostgres
-from infra.postgres.depot_liste_noire import DepotListeNoirePostgres
-from liste_noire.depot import DepotListeNoire
+from infra.postgres.depot_termes import DepotListeTermesPostgres
+from termes_liste import DepotListeTermes
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from transcripts_pdf.depot import (
     DepotTranscriptsPdf,
@@ -152,8 +151,8 @@ def fabrique_depot_transcripts_pdf() -> DepotTranscriptsPdf:
     return DepotTranscriptsPdfPostgres(charge_configuration().base_de_donnees)
 
 
-def fabrique_depot_liste_noire() -> DepotListeNoire:
-    return DepotListeNoirePostgres(charge_configuration().base_de_donnees)
+def fabrique_depot_liste_noire() -> DepotListeTermes:
+    return DepotListeTermesPostgres(charge_configuration().base_de_donnees, "noire")
 
 
 def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
@@ -162,8 +161,8 @@ def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
         (_PROMPT / "anonymisation_transcript.md").read_text(),
         executeur=_EXECUTEUR_GROUPES_PREPARATION,
         fabrique_albert=lambda: AdaptateurAlbertReel(charge_configuration().albert),
-        depot_liste_blanche=DepotListeBlanchePostgres(
-            charge_configuration().base_de_donnees
+        depot_liste_blanche=DepotListeTermesPostgres(
+            charge_configuration().base_de_donnees, "blanche"
         ),
     )
 
@@ -239,7 +238,7 @@ async def preparer(
     service: ServicePreparationTranscript = Depends(fabrique_service_preparation_pdf),
     executeur: Executor = Depends(fabrique_executeur_preparation),
     depot_produits: DepotProduits = Depends(fabrique_depot_produits),
-    depot_liste_noire: DepotListeNoire = Depends(fabrique_depot_liste_noire),
+    depot_liste_noire: DepotListeTermes = Depends(fabrique_depot_liste_noire),
 ) -> dict:
     response.headers["Cache-Control"] = "no-store"
     _verifier_origine(request)

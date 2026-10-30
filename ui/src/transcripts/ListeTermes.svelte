@@ -1,15 +1,37 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { ErreurApi } from '../api/requete';
   import {
-    ajouterTermeListeBlanche,
-    listerListeBlanche,
-    modifierTermeListeBlanche,
-    supprimerTermeListeBlanche,
-    type TermeListeBlanche,
+    ajouterTerme,
+    listerTermes,
+    modifierTerme,
+    supprimerTerme,
+    type CouleurListe,
+    type TermeListe,
   } from './pseudonymiser_api';
 
-  let termes = $state<TermeListeBlanche[]>([]);
+  let { couleur }: { couleur: CouleurListe } = $props();
+  const textes = {
+    blanche: {
+      titre: 'Liste blanche',
+      description:
+        'Les termes de cette liste restent visibles dans les prochaines préparations PDF. La relecture permet toujours d’ajouter un masque.',
+      labelAjout: 'Ajouter un terme',
+      labelListe: 'Termes autorisés',
+      ajoute: 'Terme ajouté.',
+      vide: 'Aucun terme. Ajoutez-en un ci-dessus.',
+    },
+    noire: {
+      titre: 'Liste noire',
+      description:
+        'Les termes de cette liste seront masqués dans les nouvelles préparations seulement. Leurs masques restent obligatoires à la relecture. La liste ne change pas les transcripts déjà enregistrés ni leurs métadonnées.',
+      labelAjout: 'Ajouter un terme à masquer',
+      labelListe: 'Termes à masquer',
+      ajoute: 'Terme ajouté à la liste noire.',
+      vide: 'Aucun terme à masquer. Ajoutez-en un ci-dessus.',
+    },
+  } as const;
+  const texte = $derived(textes[couleur]);
+  let termes = $state<TermeListe[]>([]);
   let termeNouveau = $state('');
   let editionId = $state<number | null>(null);
   let editionTerme = $state('');
@@ -20,7 +42,7 @@
 
   async function charger() {
     try {
-      termes = await listerListeBlanche();
+      termes = await listerTermes(couleur);
     } catch (cause) {
       erreur =
         cause instanceof Error
@@ -37,9 +59,9 @@
     message = '';
     erreur = '';
     try {
-      await ajouterTermeListeBlanche(termeNouveau);
+      await ajouterTerme(couleur, termeNouveau);
       termeNouveau = '';
-      message = 'Terme ajouté.';
+      message = texte.ajoute;
       await charger();
     } catch (cause) {
       erreur =
@@ -49,19 +71,19 @@
     }
   }
 
-  function commencerEdition(terme: TermeListeBlanche) {
+  function commencerEdition(terme: TermeListe) {
     editionId = terme.id;
     editionTerme = terme.terme;
     message = '';
     erreur = '';
   }
 
-  async function enregistrerEdition(terme: TermeListeBlanche) {
+  async function enregistrerEdition(terme: TermeListe) {
     enCours = true;
     erreur = '';
     message = '';
     try {
-      await modifierTermeListeBlanche(terme.id, editionTerme, terme.revision);
+      await modifierTerme(couleur, terme.id, editionTerme, terme.revision);
       editionId = null;
       message = 'Terme modifié.';
       await charger();
@@ -78,12 +100,12 @@
     }
   }
 
-  async function supprimer(terme: TermeListeBlanche) {
+  async function supprimer(terme: TermeListe) {
     enCours = true;
     erreur = '';
     message = '';
     try {
-      await supprimerTermeListeBlanche(terme.id, terme.revision);
+      await supprimerTerme(couleur, terme.id, terme.revision);
       message = 'Terme supprimé.';
       await charger();
     } catch (cause) {
@@ -99,25 +121,23 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
+    couleur;
     void charger();
   });
 </script>
 
-<section aria-labelledby="titre-liste-blanche">
+<section aria-labelledby="titre-liste">
   <div class="titre-page">
     <div>
-      <h1 id="titre-liste-blanche">Liste blanche</h1>
-      <p class="chapo">
-        Les termes de cette liste restent visibles dans les prochaines préparations
-        PDF. La relecture permet toujours d’ajouter un masque.
-      </p>
+      <h1 id="titre-liste">{texte.titre}</h1>
+      <p class="chapo">{texte.description}</p>
     </div>
     <a class="fr-btn fr-btn--secondary" href="#/">Retour à l’accueil</a>
   </div>
 
   <form class="ajout fr-form-group" onsubmit={ajouter}>
-    <label class="fr-label" for="nouveau-terme">Ajouter un terme</label>
+    <label class="fr-label" for="nouveau-terme">{texte.labelAjout}</label>
     <p class="fr-hint-text">
       120 caractères maximum. Les doublons sans distinction de casse sont refusés.
     </p>
@@ -141,7 +161,7 @@
     <p class="fr-text--success" role="status">{message}</p>
   {/if}
 
-  <ul class="termes" aria-label="Termes autorisés" aria-live="polite">
+  <ul class="termes" aria-label={texte.labelListe} aria-live="polite">
     {#if !chargee}
       <li class="vide" aria-live="polite">Chargement des termes…</li>
     {:else if termes.length}
@@ -200,7 +220,7 @@
         </li>
       {/each}
     {:else}
-      <li class="vide">Aucun terme. Ajoutez-en un ci-dessus.</li>
+      <li class="vide">{texte.vide}</li>
     {/if}
   </ul>
 </section>

@@ -1,39 +1,37 @@
 from threading import RLock
 
-from liste_noire.depot import (
-    DepotListeNoire,
+from termes_liste import (
+    DepotListeTermes,
     RevisionObsolete,
     TermeAbsent,
     TermeDejaPresent,
-    TermeListeNoire,
+    TermeListe,
 )
 
 
-class DepotListeNoireMemoire(DepotListeNoire):
+class DepotListeTermesMemoire(DepotListeTermes):
     def __init__(self) -> None:
-        self._termes: dict[int, tuple[TermeListeNoire, str]] = {}
+        self._termes: dict[int, tuple[TermeListe, str]] = {}
         self._prochain_id = 1
         self._verrou = RLock()
 
-    def lister(self) -> list[TermeListeNoire]:
+    def lister(self) -> list[TermeListe]:
         with self._verrou:
             return sorted(
                 (terme for terme, _ in self._termes.values()),
                 key=lambda terme: terme.terme.casefold(),
             )
 
-    def ajouter(self, terme: str, cle: str) -> TermeListeNoire:
+    def ajouter(self, terme: str, cle: str) -> TermeListe:
         with self._verrou:
             if any(cle == existante for _, existante in self._termes.values()):
                 raise TermeDejaPresent
-            element = TermeListeNoire(self._prochain_id, terme, 1)
+            element = TermeListe(self._prochain_id, terme, 1)
             self._termes[element.id] = (element, cle)
             self._prochain_id += 1
             return element
 
-    def modifier(
-        self, identifiant: int, terme: str, cle: str, revision: int
-    ) -> TermeListeNoire:
+    def modifier(self, identifiant: int, terme: str, cle: str, revision: int) -> TermeListe:
         with self._verrou:
             element = self._termes.get(identifiant)
             if element is None:
@@ -41,11 +39,11 @@ class DepotListeNoireMemoire(DepotListeNoire):
             if element[0].revision != revision:
                 raise RevisionObsolete
             if any(
-                existant_id != identifiant and cle == existante
-                for existant_id, (_, existante) in self._termes.items()
+                autre_id != identifiant and cle == existante
+                for autre_id, (_, existante) in self._termes.items()
             ):
                 raise TermeDejaPresent
-            resultat = TermeListeNoire(identifiant, terme, revision + 1)
+            resultat = TermeListe(identifiant, terme, revision + 1)
             self._termes[identifiant] = (resultat, cle)
             return resultat
 
