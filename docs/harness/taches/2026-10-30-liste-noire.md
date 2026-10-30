@@ -1,6 +1,6 @@
 # Tâche : liste noire et masques obligatoires
 
-Statut : prête pour PR
+Statut : refactor de sobriété validé par contrôles ciblés, prêt à mettre à jour la PR
 
 ## Objectif
 
@@ -19,8 +19,8 @@ Permettre de définir des termes sensibles qui sont toujours pseudonymisés dans
 - [x] Les masques noirs sont obligatoires dans la relecture : désactivation/clic et états restaurés ne peuvent enlever leur couverture; catégorie et révélation temporaire restent possibles.
 - [x] Confirmation et modification valident les textes finaux avec le snapshot persisté côté serveur. Un snapshot ou historique client falsifié, une plage UTF-16 invalide, une couverture manquante ou la réintroduction d’un terme retourne 422 sans mutation partielle.
 - [x] Tests ciblés couvrent Unicode, apostrophes, chevauchements, offsets UTF-16, snapshots asynchrones, maintien des termes à travers confirmation/PUT, migration PostgreSQL et états undo/redo.
-- [x] La baseline liste blanche et les parcours liste noire/relecture avec données synthétiques sont vérifiés dans le navigateur à 390×844 et au moins 1280 px.
-- [x] `bash scripts/harness.sh complet` et l’intégration PostgreSQL sur base dédiée passent avant PR.
+- [ ] La baseline liste blanche et les parcours liste noire/relecture avec données synthétiques sont vérifiés dans le navigateur à 390×844 et au moins 1280 px. Ces preuves précèdent le refactor de sobriété et n’ont pas été rejouées.
+- [ ] `bash scripts/harness.sh complet` passe avant PR. Le harness complet n’a pas été relancé après le refactor de sobriété, conformément à la demande utilisateur de limiter les contrôles longs.
 
 ## Plan
 
@@ -32,13 +32,14 @@ Permettre de définir des termes sensibles qui sont toujours pseudonymisés dans
 
 ## Validation
 
-- `uv run ruff check src tests` : réussi.
-- `uv run mypy` : réussi sur 73 fichiers source.
-- `uv run pytest -q tests/test_transcripts_pdf_liste_noire.py tests/test_validation_relecture.py` : 9 tests réussis après ajout du cas de terme chevauchant le préfixe locuteur.
-- `RULA_TEST_DATABASE_URL=postgresql://… uv run pytest -q tests/test_migrations.py::test_migration_liste_noire_conserve_les_snapshots_et_est_idempotente` : réussi sur PostgreSQL jetable, ajout réel du snapshot `('Alice',)`, lecture JSONB en tuple, listing et conservation après `modifier`.
-- Premier `bash scripts/harness.sh complet` : backend réussi (144 tests), tests/check/lint UI réussis; `format:check` a demandé le formatage Prettier de 5 fichiers UI. Aucun problème logique.
-- Dernier `NODE_OPTIONS=--experimental-global-webcrypto RULA_TEST_DATABASE_URL=postgresql://… bash scripts/harness.sh complet` : réussi, code 0. `ruff check .`, mypy, 144 tests backend (5 tests de migrations), 42 tests frontend, `pnpm check`, `pnpm lint:check`, `pnpm format:check` et `pnpm build` réussis. `svelte-check` : 0 erreur/avertissement. Un avertissement préexistant de dépréciation Starlette/httpx apparaît pendant pytest.
-- Intégration PostgreSQL : base dédiée `rula-liste-noire-pgtest`, image `pgvector/pgvector:pg17`, port local `65432`; migrations et tests lancés par le harness.
+- Refactor PR44 : domaine, dépôt mémoire, dépôt PostgreSQL et handlers CRUD communs paramétrés par la couleur; routes et factories d’injection gardées distinctes. Une page Svelte configurée par couleur remplace les deux pages, avec remount keyed au changement de route. La fusion des positions et le calcul des obligations de relecture sont mutualisés; les comportements snapshot et masques obligatoires restent inchangés.
+- `ruff check src tests` : réussi après le refactor.
+- `ruff format --check` sur les fichiers Python modifiés : réussi après formatage de cinq fichiers.
+- `UV_PROJECT_ENVIRONMENT=/tmp/rula-liste-noire-venv uv run --no-sync mypy` : réussi, 67 fichiers source.
+- `UV_PROJECT_ENVIRONMENT=/tmp/rula-liste-noire-venv uv run --no-sync pytest -q tests/api/test_listes.py tests/test_liste_blanche.py tests/test_transcripts_pdf_liste_noire.py tests/test_validation_relecture.py tests/api/test_transcripts_pdf.py` : 38 tests réussis, Python 3.13.11.
+- `RULA_TEST_DATABASE_URL=postgresql://… UV_PROJECT_ENVIRONMENT=/tmp/rula-liste-noire-venv uv run --no-sync pytest -q tests/test_migrations.py` : 5 tests réussis sur PostgreSQL jetable `pgvector/pgvector:pg17`, port 65432. Le test de séparation confirme le même terme présent dans les deux tables et inchangé lors d’une modification blanche. Conteneur arrêté après contrôle.
+- `pnpm exec vitest run src/transcripts/ListeTermes.test.ts` : 2 tests réussis sur une copie de validation ext4 `/tmp/rula-liste-noire-ui-qa` construite depuis HEAD + diff candidat identique. Le lancement direct depuis `/mnt/c` était bloqué plus de deux minutes en attente `p9_client_rpc`; cette tentative a été interrompue. Aucun `svelte-check`, lint, format UI, build ou harness complet relancé à la demande utilisateur de ne pas rejouer les contrôles UI longs.
+- `git diff --check` : réussi.
 - Baseline navigateur liste blanche : captures à 1280×900 et 390×844; backend indisponible, réponses 500, donc apparence seule et aucun parcours CRUD prétendu.
 - Interface liste noire : parcours réel contre FastAPI et PostgreSQL synthétiques. Ajout desktop à 1280×900; création, modification, conflit de révision obsolète (409) et suppression desktop à 1278×888; création/modification/suppression mobile à 390×844. Sur mobile, `scrollWidth=375` pour `innerWidth=390`.
 - Relecture réelle desktop 1280×900 et mobile 390×844 depuis un brouillon synthétique préparé par `ServicePreparationTranscript`/`AdaptateurAlbertDeTest` via bootstrap temporaire même origine. Le bouton « Masque obligatoire — liste noire » est désactivé et les deux occurrences restent masquées; catégorie Secret, annuler/rétablir, sauvegarde API 200 et reprise après rechargement vérifiés. La modal de confirmation affiche que le snapshot de termes reste associé à la source.
@@ -50,16 +51,17 @@ Permettre de définir des termes sensibles qui sont toujours pseudonymisés dans
 
 - ADR associée : 0005 — snapshot immuable des termes noirs par préparation.
 - Base : `3d7c2e965a1ca22212132ada85ccb9567311b473`, branche `feature/liste-noire`.
+- Comparaison cumulative à `origin/main` après refactor (détection de renommages Git normale) : production `+806/-341`, tests `+719/-150`, documentation `+84/-0`; total `+1609/-491`. Avant refactor, le diff était `+1823/-54` (production `+1093`, tests `+648`, documentation `+82`). La baisse nette cumulative est de 651 lignes.
 
 ## Handoff
 
-- État du code : implémentation, contrôles et revue Sol terminés; prêt pour commit/PR.
-- Prochaine action : ouvrir la PR vers `main`, attendre sa revue et sa CI, puis laisser la décision de fusion à l’utilisateur.
+- État du code : refactor intégré au candidat PR44; revue Sol acceptée sous réserve des tests Vitest ciblé et PostgreSQL, tous deux réussis.
+- Prochaine action : mettre à jour PR44, puis attendre sa CI et sa revue; la fusion reste une décision humaine.
 - Risques ou limites : le workflow d’import de fichier n’a pas été exercé dans le navigateur; la préparation synthétique, la relecture, la sauvegarde, la reprise et la confirmation ont été exercées. La liste noire ne remplace pas la relecture humaine ni les autres protections contre la divulgation.
 
 ## Revue indépendante
 
-- Diff examiné par Sol; les constats ont été corrigés : le préfixe structurel `SPEAKER_XX:` reste intact tandis que le texte noir qui le suit est masqué; la confirmation précise que le snapshot reste associé à la source; le pragma de couverture ajouté a été retiré.
-- Critères vérifiés : tests pipeline et garde finale pour le chevauchement préfixe/terme, roundtrip PG non vide, état de relecture obligatoire en direct et API.
-- Remarques : le formatage Prettier a été appliqué aux cinq fichiers UI demandés par `format:check`.
-- Verdict : ACCEPTE — code et preuves; harness complet final réussi, code 0.
+- Revue initiale du code et preuves de PR44 : ACCEPTE; la revue de sobriété a également accepté le code, sous réserve des tests ciblés.
+- Critères revérifiés : tests CRUD paramétrés sur les deux couleurs, isolation Postgres des tables, pipeline noir et validation relecture; Vitest ciblé et cinq tests PostgreSQL réussis.
+- Limite : la baseline et le parcours navigateur ainsi que le harness complet n’ont pas été rejoués sur la révision refactorisée, selon la demande utilisateur.
+- Verdict : ACCEPTE pour mise à jour de PR44 après tests ciblés; contrôles UI complets/harness non rejoués.

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from infra.memoire.depot_liste_blanche import DepotListeBlancheMemoire
-from liste_blanche.service import ServiceListeBlanche
+from infra.memoire.depot_termes import DepotListeTermesMemoire
+from termes_liste import ServiceListeTermes
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.test_transcripts_pdf import _pdf, _reponses_preparation
 from transcripts_pdf.service import ServicePreparationTranscript
@@ -20,8 +20,8 @@ def test_filtre_apres_albert_soustrait_les_seeds_et_garde_les_masques_autour() -
     albert = AdaptateurAlbertDeTest().avec_reponses(
         _reponses_preparation(texte, contexte, detections)
     )
-    depot = DepotListeBlancheMemoire()
-    liste = ServiceListeBlanche(depot)
+    depot = DepotListeTermesMemoire()
+    liste = ServiceListeTermes(depot)
     liste.ajouter("MSS")
     liste.ajouter("LAB")
     liste.ajouter("Laboratoire d’innovation de l’ANSSI")
@@ -61,8 +61,8 @@ def test_preparation_sans_depot_ne_change_pas_les_messages_albert() -> None:
     )
     direct = AdaptateurAlbertDeTest().avec_reponses(reponses)
     avec_liste = AdaptateurAlbertDeTest().avec_reponses(reponses)
-    depot = DepotListeBlancheMemoire()
-    ServiceListeBlanche(depot).ajouter("MSS")
+    depot = DepotListeTermesMemoire()
+    ServiceListeTermes(depot).ajouter("MSS")
     pdf = _pdf(texte)
     ServicePreparationTranscript(direct, "prompt générique").preparer(
         "test.pdf", pdf, "produit", ""

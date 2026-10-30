@@ -4,8 +4,7 @@
   import ImportTranscriptPdf from './ImportTranscriptPdf.svelte';
   import PseudonymiserHistorique from './PseudonymiserHistorique.svelte';
   import PseudonymiserDetail from './PseudonymiserDetail.svelte';
-  import ListeBlanche from './ListeBlanche.svelte';
-  import ListeNoire from './ListeNoire.svelte';
+  import ListeTermes from './ListeTermes.svelte';
 
   let produits = $state<Produit[]>([]);
   let erreur = $state('');
@@ -94,13 +93,11 @@
     </div>
   </header>
 
-  {#if estListeBlanche}
+  {#if estListeBlanche || estListeNoire}
     <main class="page">
-      <ListeBlanche />
-    </main>
-  {:else if estListeNoire}
-    <main class="page">
-      <ListeNoire />
+      {#key estListeNoire ? 'noire' : 'blanche'}
+        <ListeTermes couleur={estListeNoire ? 'noire' : 'blanche'} />
+      {/key}
     </main>
   {:else if erreur}
     <main class="message" role="alert">{erreur}</main>

@@ -2,9 +2,9 @@ import unicodedata
 
 import pytest
 
-from infra.memoire.depot_liste_blanche import DepotListeBlancheMemoire
-from liste_blanche.depot import RevisionObsolete, TermeDejaPresent
-from liste_blanche.service import ServiceListeBlanche, normaliser_terme
+from infra.memoire.depot_termes import DepotListeTermesMemoire
+from termes_liste import RevisionObsolete, TermeDejaPresent
+from termes_liste import ServiceListeTermes, normaliser_terme
 from transcripts_pdf.protection_liste_blanche import (
     normaliser_pour_comparaison,
     positions_liste_blanche,
@@ -24,8 +24,8 @@ def test_normalisation_trim_compresse_nfc_et_casefold() -> None:
 
 
 def test_service_depot_refuse_cle_dupliquee_et_revision_obsolete() -> None:
-    depot = DepotListeBlancheMemoire()
-    service = ServiceListeBlanche(depot)
+    depot = DepotListeTermesMemoire()
+    service = ServiceListeTermes(depot)
     terme = service.ajouter("Mon terme")
     with pytest.raises(TermeDejaPresent):
         service.ajouter(" MON   TERME ")

@@ -1,7 +1,5 @@
-from infra.memoire.depot_liste_blanche import DepotListeBlancheMemoire
-from infra.memoire.depot_liste_noire import DepotListeNoireMemoire
-from liste_blanche.service import ServiceListeBlanche
-from liste_noire.service import ServiceListeNoire
+from infra.memoire.depot_termes import DepotListeTermesMemoire
+from termes_liste import ServiceListeTermes
 from tests.adaptateurs.albert_de_test import AdaptateurAlbertDeTest
 from tests.test_transcripts_pdf import _pdf, _reponses_preparation
 from transcripts_pdf.service import ServicePreparationTranscript
@@ -12,13 +10,13 @@ def test_masque_tous_les_termes_noirs_sans_detection_albert() -> None:
     albert = AdaptateurAlbertDeTest().avec_reponses(
         _reponses_preparation(texte, detections=[])
     )
-    liste = DepotListeNoireMemoire()
-    service = ServiceListeNoire(liste)
+    liste = DepotListeTermesMemoire()
+    service = ServiceListeTermes(liste)
     service.ajouter("Paul")
     service.ajouter("SPEAKER_01")
 
     preparation = ServicePreparationTranscript(
-        albert, "prompt", depot_liste_blanche=DepotListeBlancheMemoire()
+        albert, "prompt", depot_liste_blanche=DepotListeTermesMemoire()
     ).preparer(
         "synthetique.pdf",
         _pdf(texte),
@@ -50,8 +48,8 @@ def test_blanc_est_soustrait_avant_union_noire() -> None:
     albert = AdaptateurAlbertDeTest().avec_reponses(
         _reponses_preparation(texte, detections=detections)
     )
-    blancs = DepotListeBlancheMemoire()
-    ServiceListeBlanche(blancs).ajouter("MSS")
+    blancs = DepotListeTermesMemoire()
+    ServiceListeTermes(blancs).ajouter("MSS")
 
     preparation = ServicePreparationTranscript(
         albert, "prompt", depot_liste_blanche=blancs
