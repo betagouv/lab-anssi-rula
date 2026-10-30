@@ -49,6 +49,7 @@
   let texteSelectionne = $state('');
   let categorieSelection = $state<CategorieRelecture>('donnee_sensible');
   let refusSelection = $state(false);
+  let messageMasqueObligatoire = $state('');
   let positionPopup = $state<{ gauche: number; haut: number } | null>(null);
   let popupSelection = $state<HTMLElement>();
   let plageSelectionnee: Range | null = null;
@@ -127,7 +128,11 @@
 
   function basculer(valeur: string) {
     valeurSelectionnee = valeur;
-    modele.basculer(valeur);
+    if (!modele.basculer(valeur)) {
+      messageMasqueObligatoire = 'Masque obligatoire — liste noire';
+      return;
+    }
+    messageMasqueObligatoire = '';
     valeurRevelee = null;
     rafraichir();
   }
@@ -521,10 +526,18 @@
         <button
           type="button"
           class="fr-btn fr-btn--secondary"
+          disabled={masqueSelectionne.impose && masqueSelectionne.actif}
           onclick={() => basculer(masqueSelectionne.identifiant)}
-          >{masqueSelectionne.actif ? 'Désactiver' : 'Activer'}</button
+          >{masqueSelectionne.impose
+            ? 'Masque obligatoire — liste noire'
+            : masqueSelectionne.actif
+              ? 'Désactiver'
+              : 'Activer'}</button
         >
       </div>
+      {#if messageMasqueObligatoire}<p role="alert">
+          {messageMasqueObligatoire}
+        </p>{/if}
       <p>
         {compteSelection} occurrences · {masqueSelectionne.actif
           ? masqueSelectionne.valeur_anonyme

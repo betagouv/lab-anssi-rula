@@ -28,6 +28,8 @@ from produits.depot import DepotProduits
 from adaptateurs.exceptions import DelaiAlbertDepasse, ReponseAlbertInvalide
 from configuration import charge_configuration
 from infra.postgres.depot_liste_blanche import DepotListeBlanchePostgres
+from infra.postgres.depot_liste_noire import DepotListeNoirePostgres
+from liste_noire.depot import DepotListeNoire
 from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from transcripts_pdf.depot import (
     DepotTranscriptsPdf,
@@ -36,6 +38,10 @@ from transcripts_pdf.depot import (
 from transcripts_pdf.extraction import ErreurPdf, TAILLE_MAXIMALE
 from transcripts_pdf.export import generer_pdf
 from transcripts_pdf.noms import nom_pseudonymise
+from transcripts_pdf.validation_relecture import (
+    verifier_etat_relecture,
+    verifier_projection_finale,
+)
 from transcripts_pdf.orchestration import (
     ServiceTranscriptsPdf,
     SourcePdfInvalide,
@@ -146,6 +152,10 @@ def fabrique_depot_transcripts_pdf() -> DepotTranscriptsPdf:
     return DepotTranscriptsPdfPostgres(charge_configuration().base_de_donnees)
 
 
+def fabrique_depot_liste_noire() -> DepotListeNoire:
+    return DepotListeNoirePostgres(charge_configuration().base_de_donnees)
+
+
 def fabrique_service_preparation_pdf() -> ServicePreparationTranscript:
     return ServicePreparationTranscript(
         None,
@@ -229,6 +239,7 @@ async def preparer(
     service: ServicePreparationTranscript = Depends(fabrique_service_preparation_pdf),
     executeur: Executor = Depends(fabrique_executeur_preparation),
     depot_produits: DepotProduits = Depends(fabrique_depot_produits),
+    depot_liste_noire: DepotListeNoire = Depends(fabrique_depot_liste_noire),
 ) -> dict:
     response.headers["Cache-Control"] = "no-store"
     _verifier_origine(request)
@@ -243,12 +254,14 @@ async def preparer(
     ):
         raise HTTPException(status_code=429, detail="Trop de préparations en cours.")
     contenu = await fichier.read(TAILLE_MAXIMALE + 1)
+    termes_imposes = tuple(terme.terme for terme in depot_liste_noire.lister())
     identifiant = uuid4().hex
     secret = secrets.token_urlsafe(32)
     _PREPARATIONS[identifiant] = {
         "statut": "en_cours",
         "type_source": type_source,
         "produit_id": produit_id,
+        "termes_imposes": termes_imposes,
         "empreinte_cookie": sha256(secret.encode()).hexdigest(),
         "expire": datetime.now(timezone.utc) + _TTL_PREPARATION,
         "soumis_monotonic": time.monotonic(),
@@ -268,6 +281,7 @@ async def preparer(
         type_source,
         contexte,
         produit_id,
+        termes_imposes,
     )
     response.set_cookie(
         _nom_cookie(identifiant),
@@ -342,6 +356,23 @@ def mettre_a_jour_relecture(
             detail="Liste de locuteurs invalide.",
             headers={"Cache-Control": "no-store"},
         )
+    termes_imposes = preparation.get("termes_imposes", ())
+    occurrences_imposees = preparation.get("occurrences_imposees", [])
+    if termes_imposes or occurrences_imposees:
+        try:
+            verifier_etat_relecture(
+                preparation["resultat"]["contenu_original"],
+                preparation["resultat"]["contexte_original"],
+                occurrences_imposees,
+                termes_imposes,
+                body.etat_relecture.model_dump(),
+            )
+        except ValueError as erreur:
+            raise HTTPException(
+                status_code=422,
+                detail="L’état de relecture est incompatible avec les masques obligatoires.",
+                headers={"Cache-Control": "no-store"},
+            ) from erreur
     preparation.update(
         etat_relecture=body.etat_relecture.model_dump(),
         locuteurs=locuteurs,
@@ -382,6 +413,7 @@ def _executer_preparation(
     type_source: str,
     contexte: str,
     produit_id: int,
+    termes_imposes: tuple[str, ...] = (),
 ) -> None:
     phase_diagnostic = "en_attente"
 
@@ -406,7 +438,12 @@ def _executer_preparation(
 
     try:
         preparation = service.preparer(
-            nom_fichier, fichier, type_source, contexte, actualiser_progression
+            nom_fichier,
+            fichier,
+            type_source,
+            contexte,
+            actualiser_progression,
+            termes_imposes,
         )
         resultat = {
             "type_source": preparation.type_source,
@@ -432,6 +469,15 @@ def _executer_preparation(
             ],
         }
         if jeton in _PREPARATIONS:
+            _PREPARATIONS[jeton]["occurrences_imposees"] = [
+                {
+                    "champ": occurrence.champ,
+                    "debut": occurrence.debut,
+                    "fin": occurrence.fin,
+                }
+                for occurrence in preparation.occurrences
+                if occurrence.impose
+            ]
             actualiser_progression(
                 "termine",
                 _PREPARATIONS[jeton]["progression"]["groupes_termines"],
@@ -545,6 +591,21 @@ def confirmer(
             detail="Le produit ou le type ne correspond pas à la préparation.",
         )
     try:
+        termes_imposes = preparation.get("termes_imposes", ())
+        etat_relecture = preparation.get("etat_relecture")
+        if etat_relecture is not None and (
+            termes_imposes or preparation.get("occurrences_imposees", [])
+        ):
+            projection = verifier_etat_relecture(
+                preparation["resultat"]["contenu_original"],
+                preparation["resultat"]["contexte_original"],
+                preparation.get("occurrences_imposees", []),
+                termes_imposes,
+                etat_relecture,
+            )
+            if projection != (body.contenu, body.contexte):
+                raise ValueError
+        verifier_projection_finale(body.contenu, body.contexte, termes_imposes)
         source = service.confirmer(
             body.type_source,
             body.nom_source,
@@ -553,8 +614,9 @@ def confirmer(
             body.contenu,
             body.contexte,
             [Locuteur(**locuteur.model_dump()) for locuteur in body.locuteurs],
+            termes_imposes,
         )
-    except SourcePdfInvalide as erreur:
+    except (SourcePdfInvalide, ValueError) as erreur:
         raise HTTPException(status_code=422, detail=str(erreur)) from erreur
     del _PREPARATIONS[body.preparation_id]
     response.delete_cookie(
@@ -646,4 +708,6 @@ def supprimer(
 
 
 def _source_dict(source: SourceTranscriptPdf) -> dict:
-    return source._replace(nom_source=nom_pseudonymise(source.nom_source))._asdict()
+    resultat = source._replace(nom_source=nom_pseudonymise(source.nom_source))._asdict()
+    resultat.pop("termes_imposes")
+    return resultat

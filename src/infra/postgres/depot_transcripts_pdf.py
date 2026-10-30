@@ -9,7 +9,8 @@ from transcripts_pdf.depot import DepotTranscriptsPdf, SourceTranscriptPdf
 
 _COLONNES_SOURCE = """
     t.id, t.type_source, t.produit_id, t.nom_fichier,
-    t.date_entretien, t.contenu, t.contexte, t.locuteurs, t.cree_le
+    t.date_entretien, t.contenu, t.contexte, t.locuteurs, t.cree_le,
+    t.termes_imposes
 """
 
 
@@ -28,13 +29,14 @@ class DepotTranscriptsPdfPostgres(DepotTranscriptsPdf):
         contenu: str,
         contexte: str,
         locuteurs: list[dict[str, str]],
+        termes_imposes: tuple[str, ...] = (),
     ) -> SourceTranscriptPdf:
         with self._connexion.cursor() as cur:
             cur.execute(
                 """INSERT INTO transcripts
                    (type_source, produit_id, nom_fichier, date_entretien,
-                    contenu, contexte, locuteurs, confirme)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
+                    contenu, contexte, locuteurs, confirme, termes_imposes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, %s)
                    RETURNING id""",
                 (
                     type_source,
@@ -44,6 +46,7 @@ class DepotTranscriptsPdfPostgres(DepotTranscriptsPdf):
                     contenu,
                     contexte,
                     Json(locuteurs),
+                    Json(list(termes_imposes)),
                 ),
             )
             return self._source(cur, cur.fetchone()[0])
@@ -57,7 +60,7 @@ class DepotTranscriptsPdfPostgres(DepotTranscriptsPdf):
                 (transcript_id,),
             )
             row = cur.fetchone()
-            return SourceTranscriptPdf(*row) if row else None
+            return self._source_row(row) if row else None
 
     @avec_connexion
     def lister(self, produit_id: int) -> list[SourceTranscriptPdf]:
@@ -69,7 +72,7 @@ class DepotTranscriptsPdfPostgres(DepotTranscriptsPdf):
                 "ORDER BY t.cree_le DESC, t.id DESC",
                 (produit_id,),
             )
-            return [SourceTranscriptPdf(*row) for row in cur.fetchall()]
+            return [self._source_row(row) for row in cur.fetchall()]
 
     @avec_connexion
     def modifier(
@@ -107,4 +110,19 @@ class DepotTranscriptsPdfPostgres(DepotTranscriptsPdf):
             "WHERE t.id = %s AND t.type_source IN ('produit', 'bizdev') AND t.confirme",
             (transcript_id,),
         )
-        return SourceTranscriptPdf(*cur.fetchone())
+        return DepotTranscriptsPdfPostgres._source_row(cur.fetchone())
+
+    @staticmethod
+    def _source_row(row: tuple) -> SourceTranscriptPdf:
+        return SourceTranscriptPdf(
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            row[6],
+            row[7],
+            row[8],
+            tuple(row[9]),
+        )

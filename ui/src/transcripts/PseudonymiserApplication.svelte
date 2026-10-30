@@ -5,6 +5,7 @@
   import PseudonymiserHistorique from './PseudonymiserHistorique.svelte';
   import PseudonymiserDetail from './PseudonymiserDetail.svelte';
   import ListeBlanche from './ListeBlanche.svelte';
+  import ListeNoire from './ListeNoire.svelte';
 
   let produits = $state<Produit[]>([]);
   let erreur = $state('');
@@ -14,6 +15,7 @@
   let transcriptId = $state<number | null>(null);
   let hash = $state(window.location.hash);
   const estListeBlanche = $derived(hash === '#/liste-blanche');
+  const estListeNoire = $derived(hash === '#/liste-noire');
   const produitId = $derived(Number(hash.match(/^#\/produits\/(\d+)/)?.[1]));
   const produit = $derived(produits.find((item) => item.id === produitId));
 
@@ -72,6 +74,13 @@
         >
           Liste blanche
         </a>
+        <a
+          class="liste-blanche"
+          href="#/liste-noire"
+          aria-current={estListeNoire ? 'page' : undefined}
+        >
+          Liste noire
+        </a>
         <button
           class="fr-btn fr-btn--tertiary-no-outline theme"
           type="button"
@@ -88,6 +97,10 @@
   {#if estListeBlanche}
     <main class="page">
       <ListeBlanche />
+    </main>
+  {:else if estListeNoire}
+    <main class="page">
+      <ListeNoire />
     </main>
   {:else if erreur}
     <main class="message" role="alert">{erreur}</main>

@@ -15,6 +15,7 @@ export type OccurrenceSource = {
   champ: ChampRelecture;
   categorie: CategorieRelecture;
   valeur_anonyme: string;
+  impose?: boolean;
 };
 
 export type Masque = {
@@ -23,6 +24,7 @@ export type Masque = {
   categorie: CategorieRelecture;
   valeur_anonyme: string;
   actif: boolean;
+  impose: boolean;
 };
 
 export type PlageEtatRelecture = {
@@ -33,7 +35,7 @@ export type PlageEtatRelecture = {
   fin: number;
 };
 
-export type MasqueEtatRelecture = Omit<Masque, 'valeur_originale'>;
+export type MasqueEtatRelecture = Omit<Masque, 'valeur_originale' | 'impose'>;
 
 export type InstantaneRelecture = {
   masques: MasqueEtatRelecture[];
@@ -63,6 +65,7 @@ export class ModeleRelecture {
   private plages: Plage[];
   private annulations: Instantane[] = [];
   private retablissements: Instantane[] = [];
+  private readonly occurrencesImposees: Pick<Plage, 'champ' | 'debut' | 'fin'>[];
   selection: string | null;
   revelation: string | null = null;
 
@@ -87,6 +90,11 @@ export class ModeleRelecture {
               categorie: occurrence.categorie,
               valeur_anonyme: occurrence.valeur_anonyme,
               actif: true,
+              impose: occurrences.some(
+                (candidate) =>
+                  candidate.valeur_originale === occurrence.valeur_originale &&
+                  candidate.impose
+              ),
             },
           ];
         })
@@ -107,6 +115,9 @@ export class ModeleRelecture {
         valeur_originale: occurrence.valeur_originale,
       };
     });
+    this.occurrencesImposees = occurrences
+      .filter((occurrence) => occurrence.impose)
+      .map(({ champ, debut, fin }) => ({ champ, debut, fin }));
     this.selection = this.masques[0]?.identifiant ?? null;
     if (etat) {
       const instantane = this.restaurerInstantane(etat);
@@ -140,6 +151,7 @@ export class ModeleRelecture {
         valeur_affichee: masque.actif
           ? masque.valeur_anonyme
           : masque.valeur_originale,
+        impose: masque.impose,
       };
     });
   }
@@ -172,6 +184,10 @@ export class ModeleRelecture {
   }
 
   basculer(identifiant: string) {
+    const masque = this.masques.find(
+      (element) => element.identifiant === identifiant
+    );
+    if (!masque || (masque.impose && masque.actif)) return false;
     this.modifier((masques) =>
       masques.map((masque) =>
         masque.identifiant === identifiant
@@ -180,6 +196,7 @@ export class ModeleRelecture {
       )
     );
     this.selectionner(identifiant);
+    return true;
   }
 
   categoriser(identifiant: string, categorie: CategorieRelecture) {
@@ -217,6 +234,7 @@ export class ModeleRelecture {
         categorie,
         valeur_anonyme: this.nouveauPseudonyme(categorie),
         actif: true,
+        impose: false,
       },
     ]);
     this.plages = [
@@ -233,6 +251,8 @@ export class ModeleRelecture {
 
   annuler() {
     if (!this.annulations.length) return false;
+    const precedent = this.annulations[this.annulations.length - 1];
+    this.verifierInstantane(precedent);
     this.retablissements.push(this.instantane());
     ({ masques: this.masques, plages: this.plages } = this.annulations.pop()!);
     return true;
@@ -240,6 +260,8 @@ export class ModeleRelecture {
 
   retablir() {
     if (!this.retablissements.length) return false;
+    const suivant = this.retablissements[this.retablissements.length - 1];
+    this.verifierInstantane(suivant);
     this.annulations.push(this.instantane());
     ({ masques: this.masques, plages: this.plages } = this.retablissements.pop()!);
     return true;
@@ -319,6 +341,13 @@ export class ModeleRelecture {
   }
 
   private restaurerInstantane(etat: InstantaneRelecture): Instantane {
+    if (
+      new Set(etat.masques.map((masque) => masque.identifiant)).size !==
+        etat.masques.length ||
+      new Set(etat.plages.map((plage) => plage.identifiant)).size !==
+        etat.plages.length
+    )
+      throw new Error('État de relecture incompatible.');
     const plages = etat.plages.map((plage) => {
       const valeur_originale = this.source(plage.champ).slice(
         plage.debut,
@@ -341,7 +370,11 @@ export class ModeleRelecture {
         )
       )
         throw new Error('Masque de relecture invalide.');
-      return { ...masque, valeur_originale: plage.valeur_originale };
+      return {
+        ...masque,
+        valeur_originale: plage.valeur_originale,
+        impose: false,
+      };
     });
     if (
       plages.some(
@@ -350,7 +383,52 @@ export class ModeleRelecture {
       )
     )
       throw new Error('Plage de relecture invalide.');
+    this.verifierInstantane({ masques, plages });
+    for (const masque of masques) {
+      masque.impose = plages.some(
+        (plage) =>
+          plage.masque_identifiant === masque.identifiant &&
+          this.occurrencesImposees.some(
+            (occurrence) =>
+              occurrence.champ === plage.champ &&
+              occurrence.debut < plage.fin &&
+              plage.debut < occurrence.fin
+          )
+      );
+    }
     return { masques, plages };
+  }
+
+  private verifierInstantane(instantane: Instantane) {
+    const actives = instantane.plages.filter((plage) =>
+      instantane.masques.some(
+        (masque) => masque.identifiant === plage.masque_identifiant && masque.actif
+      )
+    );
+    if (
+      instantane.plages.some((plage, index) =>
+        instantane.plages
+          .slice(index + 1)
+          .some(
+            (autre) =>
+              plage.champ === autre.champ &&
+              plage.debut < autre.fin &&
+              autre.debut < plage.fin
+          )
+      ) ||
+      this.occurrencesImposees.some((obligatoire) => {
+        let curseur = obligatoire.debut;
+        for (const plage of actives
+          .filter((element) => element.champ === obligatoire.champ)
+          .sort((a, b) => a.debut - b.debut)) {
+          if (plage.debut <= curseur && curseur < plage.fin)
+            curseur = Math.max(curseur, plage.fin);
+          if (curseur >= obligatoire.fin) break;
+        }
+        return curseur < obligatoire.fin;
+      })
+    )
+      throw new Error('État de relecture incompatible avec un masque obligatoire.');
   }
 
   private source(champ: ChampRelecture) {

@@ -9,9 +9,12 @@ import pytest
 
 from configuration import BaseDeDonnees
 from infra.postgres.depot_liste_blanche import DepotListeBlanchePostgres
+from infra.postgres.depot_liste_noire import DepotListeNoirePostgres
+from infra.postgres.depot_transcripts_pdf import DepotTranscriptsPdfPostgres
 from infra.postgres.migrations import execute_migrations
 from liste_blanche.depot import RevisionObsolete, TermeDejaPresent
 from liste_blanche.service import ServiceListeBlanche
+from liste_noire.service import ServiceListeNoire
 
 
 @pytest.fixture
@@ -64,6 +67,7 @@ def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) 
         "001_schema_unifie.sql",
         "002_pseudonymisation_seule.sql",
         "003_liste_blanche.sql",
+        "004_liste_noire_et_termes_imposes.sql",
     ]
     assert execute_migrations(base_temporaire, repertoire) == []
     assert _verifier(base_temporaire, "SELECT nom FROM produits ORDER BY nom") == [
@@ -71,6 +75,9 @@ def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) 
         ("MSS",),
     ]
     assert _verifier(base_temporaire, "SELECT count(*) FROM transcripts")[0][0] == 0
+    assert _verifier(base_temporaire, "SELECT count(*) FROM termes_liste_noire") == [
+        (0,)
+    ]
     assert _verifier(
         base_temporaire,
         "SELECT terme FROM termes_liste_blanche ORDER BY terme_normalise",
@@ -91,6 +98,93 @@ def test_migrations_vide_et_relance_idempotente(base_temporaire: BaseDeDonnees) 
         base_temporaire,
         "SELECT count(*) FROM termes_liste_blanche WHERE terme = 'MSS'",
     ) == [(0,)]
+
+
+def test_migration_liste_noire_conserve_les_snapshots_et_est_idempotente(
+    base_temporaire: BaseDeDonnees, tmp_path: Path
+) -> None:
+    migrations = Path(__file__).parents[1] / "migrations"
+    avant = tmp_path / "avant"
+    apres = tmp_path / "apres"
+    avant.mkdir()
+    apres.mkdir()
+    for nom in (
+        "001_schema_unifie.sql",
+        "002_pseudonymisation_seule.sql",
+        "003_liste_blanche.sql",
+    ):
+        (avant / nom).write_text(
+            (migrations / nom).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    (apres / "004_liste_noire_et_termes_imposes.sql").write_text(
+        (migrations / "004_liste_noire_et_termes_imposes.sql").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    execute_migrations(base_temporaire, avant)
+    with (
+        psycopg2.connect(
+            host=base_temporaire.hote,
+            port=base_temporaire.port,
+            dbname=base_temporaire.nom,
+            user=base_temporaire.utilisateur,
+            password=base_temporaire.mot_de_passe,
+        ) as connexion,
+        connexion.cursor() as curseur,
+    ):
+        curseur.execute(
+            "INSERT INTO transcripts (type_source, produit_id, contenu, date_entretien) "
+            "SELECT 'bizdev', id, 'Ancien transcript', '2025-01-01' "
+            "FROM produits WHERE nom = 'MSS' RETURNING id"
+        )
+        row = curseur.fetchone()
+        assert row is not None
+        transcript_id = row[0]
+    assert execute_migrations(base_temporaire, apres) == [
+        "004_liste_noire_et_termes_imposes.sql"
+    ]
+    assert execute_migrations(base_temporaire, apres) == []
+    assert _verifier(
+        base_temporaire,
+        "SELECT termes_imposes FROM transcripts WHERE id = " + str(transcript_id),
+    ) == [([],)]
+    depot = DepotTranscriptsPdfPostgres(base_temporaire)
+    source = depot.obtenir(transcript_id)
+    assert source is not None and source.date_entretien is not None
+    assert source.termes_imposes == ()
+    depot.modifier(
+        transcript_id,
+        source.date_entretien,
+        "Transcript modifié",
+        source.contexte,
+        source.locuteurs,
+    )
+    modifiee = depot.obtenir(transcript_id)
+    assert modifiee is not None and modifiee.termes_imposes == ()
+    date_capture = date(2026, 10, 30)
+    capture = depot.ajouter(
+        "bizdev",
+        source.produit_id,
+        "capture.pdf",
+        date_capture,
+        "[DONNEE_SENSIBLE_01] est arrivé.",
+        "",
+        [],
+        ("Alice",),
+    )
+    assert depot.obtenir(capture.id) == capture
+    assert capture in depot.lister(source.produit_id)
+    capture_modifiee = depot.modifier(
+        capture.id,
+        date_capture,
+        "Contenu modifié",
+        capture.contexte,
+        capture.locuteurs,
+    )
+    assert capture_modifiee is not None
+    assert capture_modifiee.termes_imposes == ("Alice",)
+    assert ServiceListeNoire(DepotListeNoirePostgres(base_temporaire)).lister() == []
 
 
 def test_migration_ne_garde_que_les_transcripts_pdf_confirmes_mss_msc(
@@ -166,6 +260,7 @@ def test_migration_ne_garde_que_les_transcripts_pdf_confirmes_mss_msc(
     assert execute_migrations(base_temporaire, migrations) == [
         "002_pseudonymisation_seule.sql",
         "003_liste_blanche.sql",
+        "004_liste_noire_et_termes_imposes.sql",
     ]
     assert _verifier(
         base_temporaire,

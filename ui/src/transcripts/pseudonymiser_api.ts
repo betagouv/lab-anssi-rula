@@ -2,6 +2,7 @@ import { requete } from '../api/requete';
 
 export type Produit = { id: number; nom: string };
 export type TermeListeBlanche = { id: number; terme: string; revision: number };
+export type TermeListeNoire = { id: number; terme: string; revision: number };
 export type TranscriptPdf = {
   id: number;
   type_source: 'produit' | 'bizdev';
@@ -38,6 +39,27 @@ export const modifierTermeListeBlanche = (
   });
 export const supprimerTermeListeBlanche = (id: number, revision: number) =>
   requete<void>(`/api/liste-blanche/${id}?revision=${revision}`, {
+    method: 'DELETE',
+  });
+export const listerListeNoire = () => requete<TermeListeNoire[]>('/api/liste-noire');
+export const ajouterTermeListeNoire = (terme: string) =>
+  requete<TermeListeNoire>('/api/liste-noire', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ terme }),
+  });
+export const modifierTermeListeNoire = (
+  id: number,
+  terme: string,
+  revision: number
+) =>
+  requete<TermeListeNoire>(`/api/liste-noire/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ terme, revision }),
+  });
+export const supprimerTermeListeNoire = (id: number, revision: number) =>
+  requete<void>(`/api/liste-noire/${id}?revision=${revision}`, {
     method: 'DELETE',
   });
 export const listerTranscriptsPdf = (produitId: number) =>

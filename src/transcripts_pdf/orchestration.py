@@ -3,6 +3,7 @@ from datetime import date
 
 from transcripts_pdf.depot import DepotTranscriptsPdf, SourceTranscriptPdf
 from transcripts_pdf.service import Locuteur
+from transcripts_pdf.validation_relecture import verifier_projection_finale
 
 
 class SourcePdfInvalide(ValueError):
@@ -22,6 +23,7 @@ class ServiceTranscriptsPdf:
         contenu: str,
         contexte: str,
         locuteurs: list[Locuteur],
+        termes_imposes: tuple[str, ...] = (),
     ) -> SourceTranscriptPdf:
         if type_source not in {"produit", "bizdev"}:
             raise SourcePdfInvalide("Le type de source est invalide.")
@@ -40,6 +42,12 @@ class ServiceTranscriptsPdf:
         date_validee = self._verifier(
             type_source, produit_id, date_entretien, contenu, locuteurs
         )
+        try:
+            verifier_projection_finale(contenu, contexte, termes_imposes)
+        except ValueError as erreur:
+            raise SourcePdfInvalide(
+                "La projection contient une valeur à masquer."
+            ) from erreur
         return self._depot.ajouter(
             type_source,
             produit_id,
@@ -48,6 +56,7 @@ class ServiceTranscriptsPdf:
             contenu,
             contexte,
             [locuteur._asdict() for locuteur in locuteurs],
+            termes_imposes,
         )
 
     def obtenir(self, transcript_id: int) -> SourceTranscriptPdf | None:
@@ -74,6 +83,12 @@ class ServiceTranscriptsPdf:
             contenu,
             locuteurs,
         )
+        try:
+            verifier_projection_finale(contenu, contexte, source.termes_imposes)
+        except ValueError as erreur:
+            raise SourcePdfInvalide(
+                "La projection contient une valeur à masquer."
+            ) from erreur
         return self._depot.modifier(
             transcript_id,
             date_validee,

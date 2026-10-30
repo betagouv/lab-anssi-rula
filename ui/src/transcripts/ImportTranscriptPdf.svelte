@@ -233,6 +233,7 @@
           conflitsCategoriesFusionnes = resultat.conflits_categories_fusionnes;
           etatSynchronisation = 'enregistre';
           versionEnregistree = versionEtat;
+          programmerSauvegarde();
           arreterHorloge();
           return;
         }
