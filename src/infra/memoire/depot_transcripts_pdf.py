@@ -17,6 +17,7 @@ class DepotTranscriptsPdfMemoire(DepotTranscriptsPdf):
         contenu: str,
         contexte: str,
         locuteurs: list[dict[str, str]],
+        termes_imposes: tuple[str, ...] = (),
     ) -> SourceTranscriptPdf:
         source = SourceTranscriptPdf(
             self._prochain_id,
@@ -28,6 +29,7 @@ class DepotTranscriptsPdfMemoire(DepotTranscriptsPdf):
             contexte,
             locuteurs,
             datetime.now(),
+            termes_imposes,
         )
         self.sources.append(source)
         self._prochain_id += 1

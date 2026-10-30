@@ -13,6 +13,7 @@ class SourceTranscriptPdf(NamedTuple):
     contexte: str
     locuteurs: list[dict[str, str]]
     cree_le: datetime
+    termes_imposes: tuple[str, ...] = ()
 
 
 class DepotTranscriptsPdf(ABC):
@@ -26,6 +27,7 @@ class DepotTranscriptsPdf(ABC):
         contenu: str,
         contexte: str,
         locuteurs: list[dict[str, str]],
+        termes_imposes: tuple[str, ...] = (),
     ) -> SourceTranscriptPdf: ...
 
     @abstractmethod

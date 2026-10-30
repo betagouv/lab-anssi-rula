@@ -4,7 +4,7 @@ import logging
 import re
 from time import perf_counter
 from threading import Event, Lock
-from typing import Callable, NamedTuple, TypedDict, cast
+from typing import Callable, NamedTuple, NotRequired, TypedDict, cast
 from uuid import uuid4
 
 from adaptateurs.albert import AdaptateurAlbert
@@ -17,6 +17,7 @@ from transcripts_pdf.extraction import (
 )
 from transcripts_pdf.protection_liste_blanche import (
     positions_liste_blanche,
+    positions_liste_blanche_sans_locuteurs,
     soustraire_intervalle,
 )
 
@@ -187,6 +188,7 @@ class RemplacementResolu(TypedDict):
     champ: str
     debut: int
     fin: int
+    impose: NotRequired[bool]
 
 
 class LocuteurPrepare(TypedDict):
@@ -219,6 +221,7 @@ class OccurrencePseudonymisation(NamedTuple):
     champ: str
     categorie: str
     valeur_anonyme: str
+    impose: bool = False
 
 
 class PreparationLue(TypedDict):
@@ -266,6 +269,7 @@ class ServicePreparationTranscript:
         type_source: str,
         contexte: str,
         progression: Callable[[str, int, int | None, list[int]], None] | None = None,
+        termes_imposes: tuple[str, ...] = (),
     ) -> PreparationTranscript:
         debut_preparation = perf_counter()
         if type_source not in {"produit", "bizdev"}:
@@ -491,7 +495,7 @@ class ServicePreparationTranscript:
             repere.span()
             for repere in re.finditer(r"(?m)^SPEAKER_[0-9]{2}:[ \t]*", texte)
         ]
-        positions_source: dict[str, list[tuple[int, int, str]]] = {
+        positions_source: dict[str, list[tuple[int, int, str, bool]]] = {
             champ: [] for champ in sources
         }
         for remplacement, _, _ in remplacements:
@@ -507,13 +511,15 @@ class ServicePreparationTranscript:
                     position = (champ, debut, fin)
                     if position not in positions_vues:
                         positions_vues.add(position)
-                        positions_source[champ].append((debut, fin, categorie))
-        positions_fusionnees: dict[str, list[tuple[int, int, str]]] = {
+                        positions_source[champ].append(
+                            (debut, fin, categorie, remplacement.get("impose", False))
+                        )
+        positions_fusionnees: dict[str, list[tuple[int, int, str, bool]]] = {
             champ: [] for champ in sources
         }
         conflits_expansion = 0
         for champ, candidates in positions_source.items():
-            composantes: list[list[tuple[int, int, str]]] = []
+            composantes: list[list[tuple[int, int, str, bool]]] = []
             fin_composante = 0
             for candidate in sorted(candidates, key=lambda position: position[0]):
                 if composantes and candidate[0] < fin_composante:
@@ -524,15 +530,17 @@ class ServicePreparationTranscript:
                     fin_composante = candidate[1]
             for composante in composantes:
                 categories = {candidate[2] for candidate in composante}
+                impose = any(candidate[3] for candidate in composante)
                 debut = min(candidate[0] for candidate in composante)
                 fin = max(candidate[1] for candidate in composante)
                 positions_fusionnees[champ].append(
                     (
                         debut,
                         fin,
-                        next(iter(categories))
-                        if len(categories) == 1
-                        else "donnee_sensible",
+                        "donnee_sensible"
+                        if impose or len(categories) > 1
+                        else next(iter(categories)),
+                        impose,
                     )
                 )
                 conflits_expansion += len(categories) > 1
@@ -543,21 +551,64 @@ class ServicePreparationTranscript:
         )
         for champ, positions in positions_fusionnees.items():
             source = sources[champ]
-            protections = positions_liste_blanche(source, termes_proteges)
-            positions_filtrees: list[tuple[int, int, str]] = []
-            for debut, fin, categorie in positions:
+            protections = (
+                positions_liste_blanche_sans_locuteurs(source, termes_proteges)
+                if champ == "transcript"
+                else positions_liste_blanche(source, termes_proteges)
+            )
+            positions_filtrees: list[tuple[int, int, str, bool]] = []
+            for debut, fin, categorie, impose in positions:
                 if not any(caractere.isalnum() for caractere in source[debut:fin]):
                     continue
+                if impose:
+                    positions_filtrees.append((debut, fin, categorie, True))
+                    continue
                 positions_filtrees.extend(
-                    (debut_restant, fin_restant, categorie)
+                    (debut_restant, fin_restant, categorie, False)
                     for debut_restant, fin_restant in soustraire_intervalle(
                         source, debut, fin, protections
                     )
                 )
             positions_fusionnees[champ] = positions_filtrees
+        for champ, source in sources.items():
+            positions_fusionnees[champ].extend(
+                (debut, fin, "donnee_sensible", True)
+                for debut, fin in (
+                    positions_liste_blanche_sans_locuteurs(source, list(termes_imposes))
+                    if champ == "transcript"
+                    else positions_liste_blanche(source, list(termes_imposes))
+                )
+            )
+            composantes_finales: list[list[tuple[int, int, str, bool]]] = []
+            fin_composante = 0
+            for position_finale in sorted(
+                positions_fusionnees[champ], key=lambda valeur: valeur[0]
+            ):
+                if composantes_finales and position_finale[0] < fin_composante:
+                    composantes_finales[-1].append(position_finale)
+                    fin_composante = max(fin_composante, position_finale[1])
+                else:
+                    composantes_finales.append([position_finale])
+                    fin_composante = position_finale[1]
+            positions_fusionnees[champ] = []
+            for composante_finale in composantes_finales:
+                impose = any(position[3] for position in composante_finale)
+                categories = {position[2] for position in composante_finale}
+                debut = min(position[0] for position in composante_finale)
+                fin = max(position[1] for position in composante_finale)
+                positions_fusionnees[champ].append(
+                    (
+                        debut,
+                        fin,
+                        "donnee_sensible"
+                        if impose or len(categories) > 1
+                        else next(iter(categories)),
+                        impose,
+                    )
+                )
         categories_par_valeur_finale: dict[str, set[str]] = {}
         for champ, positions in positions_fusionnees.items():
-            for debut, fin, categorie in positions:
+            for debut, fin, categorie, _ in positions:
                 categories_par_valeur_finale.setdefault(
                     sources[champ][debut:fin], set()
                 ).add(categorie)
@@ -572,12 +623,17 @@ class ServicePreparationTranscript:
         )
         visibles: set[tuple[str, str, str]] = set()
         for champ, positions in positions_fusionnees.items():
-            for debut, fin, _ in positions:
+            for debut, fin, _, impose in positions:
                 valeur = sources[champ][debut:fin]
                 categorie = categories_finales_union[valeur]
                 cle = (categorie, valeur)
                 if cle not in anonymises:
                     compteurs[categorie] = compteurs.get(categorie, 0) + 1
+                    anonymises[cle] = (
+                        f"[{categorie.upper()}_{compteurs[categorie]:02d}]"
+                    )
+                while positions_liste_blanche(anonymises[cle], list(termes_imposes)):
+                    compteurs[categorie] += 1
                     anonymises[cle] = (
                         f"[{categorie.upper()}_{compteurs[categorie]:02d}]"
                     )
@@ -595,6 +651,7 @@ class ServicePreparationTranscript:
                         champ,
                         categorie,
                         anonyme,
+                        impose,
                     )
                 )
                 visible = (valeur, categorie, champ)
@@ -920,19 +977,26 @@ def _positions_valides(
                 fin_composante = position[2]
         for composante in composantes:
             categories = {position[0]["categorie"] for position in composante}
-            if len(categories) == 1:
+            impose = any(position[0].get("impose", False) for position in composante)
+            if len(categories) == 1 and not impose:
                 triees.extend(composante)
                 continue
             debut = min(position[1] for position in composante)
             fin = max(position[2] for position in composante)
+            categorie = (
+                "donnee_sensible"
+                if impose or len(categories) > 1
+                else next(iter(categories))
+            )
             triees.append(
                 (
                     {
                         "valeur": champs[champ][debut:fin],
-                        "categorie": "donnee_sensible",
+                        "categorie": categorie,
                         "champ": champ,
                         "debut": debut,
                         "fin": fin,
+                        "impose": impose,
                     },
                     debut,
                     fin,

@@ -82,9 +82,10 @@
             </h2>
             <p id={`${modalId}-description`}>
               Après confirmation, le transcript et le contexte pseudonymisés seront
-              enregistrés. Les valeurs d’origine remplacées et leurs correspondances
-              ne seront pas conservées : vous ne pourrez plus révéler ni décaviarder
-              les éléments masqués.
+              enregistrés. Les correspondances entre les valeurs d’origine et leurs
+              libellés ne seront pas conservées : vous ne pourrez plus révéler ni
+              décaviarder les éléments masqués. Les termes de la liste noire restent
+              associés à la source pour protéger ses futures modifications.
             </p>
             {#if erreur}<p class="fr-error-text" role="alert">{erreur}</p>{/if}
             {#if enCours}<p role="status" aria-live="polite">Enregistrement…</p>{/if}

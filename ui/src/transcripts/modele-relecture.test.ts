@@ -158,4 +158,59 @@ describe('modèle de relecture pseudonymisation', () => {
       restaure.lireMasques().some((masque) => masque.valeur_originale === 'choisi')
     ).toBe(false);
   });
+
+  it('préserve les masques obligatoires au toggle, dans l’historique et à la reprise', () => {
+    const texte = 'Secret et Secret';
+    const occurrences = occurrencesDans(texte, '', ['Secret']).map((occurrence) => ({
+      ...occurrence,
+      impose: true,
+    }));
+    const modele = new ModeleRelecture(texte, '', occurrences);
+    const identifiant = modele.lireMasques()[0].identifiant;
+
+    expect(modele.lireMasques()[0].impose).toBe(true);
+    expect(modele.basculer(identifiant)).toBe(false);
+    expect(modele.annuler()).toBe(false);
+    expect(modele.projeter('transcript')).toBe('[IDENTITE_01] et [IDENTITE_01]');
+    modele.categoriser(identifiant, 'secret');
+    expect(modele.lireMasques()[0].impose).toBe(true);
+    expect(modele.annuler()).toBe(true);
+    expect(modele.lireMasques()[0].impose).toBe(true);
+    expect(modele.retablir()).toBe(true);
+    expect(modele.lireMasques()[0].impose).toBe(true);
+
+    const etat = modele.lireEtat();
+    expect(JSON.stringify(etat)).not.toContain('impose');
+    const reprise = new ModeleRelecture(texte, '', occurrences, etat);
+    expect(reprise.lireMasques()[0].impose).toBe(true);
+    expect(reprise.basculer(identifiant)).toBe(false);
+  });
+
+  it('refuse une sélection partiellement chevauchante sans entrée d’historique', () => {
+    const texte = 'Secret et public';
+    const occurrences = occurrencesDans(texte, '', ['Secret']).map((occurrence) => ({
+      ...occurrence,
+      impose: true,
+    }));
+    const modele = new ModeleRelecture(texte, '', occurrences);
+
+    expect(modele.ajouterValeur('ecre')).toBe(false);
+    expect(modele.lireMasques()).toHaveLength(1);
+    expect(modele.annuler()).toBe(false);
+    expect(modele.projeter('transcript')).toBe('[IDENTITE_01] et public');
+  });
+
+  it('refuse un état de reprise qui tronque la couverture obligatoire', () => {
+    const texte = 'Secret';
+    const occurrences = occurrencesDans(texte, '', ['Secret']).map((occurrence) => ({
+      ...occurrence,
+      impose: true,
+    }));
+    const etat = initialiserEtatRelecture(texte, '', occurrences);
+    etat.plages[0].debut = 1;
+
+    expect(() => new ModeleRelecture(texte, '', occurrences, etat)).toThrow(
+      'État de relecture incompatible avec un masque obligatoire.'
+    );
+  });
 });

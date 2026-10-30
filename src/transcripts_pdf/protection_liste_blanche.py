@@ -1,4 +1,5 @@
 import unicodedata
+import re
 
 
 def normaliser_pour_comparaison(texte: str) -> str:
@@ -23,6 +24,19 @@ def positions_liste_blanche(texte: str, termes: list[str]) -> list[tuple[int, in
                 protegees.append((debut, fin))
             depart = normalise.find(recherche, depart + 1)
     return _fusionner(protegees)
+
+
+def positions_liste_blanche_sans_locuteurs(
+    texte: str, termes: list[str]
+) -> list[tuple[int, int]]:
+    locuteurs = [
+        repere.span() for repere in re.finditer(r"(?m)^SPEAKER_\d{2,}:[ \t]*", texte)
+    ]
+    return [
+        morceau
+        for debut, fin in positions_liste_blanche(texte, termes)
+        for morceau in soustraire_intervalle(texte, debut, fin, locuteurs)
+    ]
 
 
 def soustraire_intervalle(
