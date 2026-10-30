@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { ErreurApi } from '../api/requete';
   import {
     ajouterTerme,
@@ -121,8 +122,7 @@
     }
   }
 
-  $effect(() => {
-    couleur;
+  onMount(() => {
     void charger();
   });
 </script>
