@@ -34,6 +34,8 @@ docker compose up --build
 
 Le frontend de développement est disponible sur `http://localhost:5173`; l’API est sur `http://localhost:3001`.
 
+Les ports publiés par Docker Compose sont liés à `127.0.0.1` : ni le serveur de dev Vite, ni l’API, ni PostgreSQL ne sont joignables depuis le réseau. `server.host: true` reste nécessaire dans le conteneur.
+
 ## Migration et exploitation
 
 Le hook Clever Cloud `scripts/clever-cloud/post-build-clever.sh` exécute les migrations avant le démarrage du nouveau runtime. La migration `002` est destructive pour les données hors périmètre. Avant de lancer un build sur une base active, l’exploitation doit coordonner une fenêtre de maintenance, arrêter les anciennes instances et réaliser la sauvegarde opérationnelle applicable. Après le build, vérifier la version de migration, MSS/MSC, les lignes conservées et l’endpoint de santé. En cas d’échec, restaurer la sauvegarde avant de relancer l’application. Les sauvegardes Clever Cloud ne sont pas modifiées par cette migration.

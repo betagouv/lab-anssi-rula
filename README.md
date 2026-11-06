@@ -15,6 +15,8 @@ docker compose up --build
 
 L’interface de développement est disponible à `http://localhost:5173` et l’API à `http://localhost:3001`.
 
+Les ports PostgreSQL, API et frontend sont publiés uniquement sur `127.0.0.1` dans `docker-compose.yml`. Pour les ouvrir au réseau, retirer ce préfixe, en connaissance du risque : le serveur de dev Vite et la base ne sont pas durcis.
+
 ## Vérifier
 
 ```bash
