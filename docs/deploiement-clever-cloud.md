@@ -18,11 +18,11 @@ Configurer les variables non secrètes suivantes dans l'application :
 ```text
 CC_PYTHON_VERSION=3.13
 CC_NODE_VERSION=24
-CC_RUN_COMMAND=uv run --no-dev uvicorn serveur:app --host 0.0.0.0 --port 9000 --app-dir src
+CC_RUN_COMMAND=uv run --no-dev uvicorn serveur:app --host $PALA_HOTE --port $PALA_PORT --app-dir src
 CC_POST_BUILD_HOOK=sh scripts/clever-cloud/post-build-clever.sh
 CC_HEALTH_CHECK_PATH=/api/sante
-RULA_HOTE=0.0.0.0
-RULA_PORT=9000
+PALA_HOTE=0.0.0.0
+PALA_PORT=9000
 ```
 
 Configurer exclusivement dans Clever Cloud les secrets `ALBERT_CLE_API` et

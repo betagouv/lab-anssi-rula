@@ -52,8 +52,8 @@ def _valider_parallelisme_anonymisation(valeur: int) -> int:
 def charge_configuration() -> Configuration:
     return Configuration(
         rula=Rula(
-            port=int(os.environ.get("RULA_PORT", "3001")),
-            hote=os.environ.get("RULA_HOTE", "localhost"),
+            port=int(os.environ.get("PALA_PORT", "3001")),
+            hote=os.environ.get("PALA_HOTE", "localhost"),
             max_requetes_par_minute=int(
                 os.environ.get("RULA_MAX_REQUETES_PAR_MINUTE", "100")
             ),
